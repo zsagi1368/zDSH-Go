@@ -175,7 +175,7 @@ function mount(ctx: AutopilotHostContext): MountedRuntime {
     adapters: {
       workspaceRoot: () => process.cwd(),
       homePath: () => process.env['USERPROFILE'] ?? process.env['HOME'] ?? '.',
-      dshHomePath: () => process.env['DSH_HOME'] ?? '.dsh-zdsh',
+      dshHomePath: () => process.env['DSH_HOME'] ?? '.dsh-zdsh-go',
       fsProbe: nodeFsProbe,
       classifierTransport: () => {
         const llm = getService('llm') as { stream(options: Record<string, unknown>): AsyncIterable<{ type: string; text?: string }> } | undefined

@@ -67,7 +67,7 @@ describe('storage root resolution', () => {
     expect(resolveBranchStorageRoot()).toBe(resolve(join(tmpdir(), 'branch-home')))
   })
 
-  it('keeps the legacy ~/.dsh-zdsh default when neither variable is set', () => {
+  it('keeps the legacy ~/.dsh-zdsh-go default when neither variable is set', () => {
     expect(resolveBranchStorageRoot()).toBe(join(homedir(), DSH_BRANCH_DIR_NAME))
   })
 
@@ -84,11 +84,11 @@ describe('storage root resolution', () => {
     expect(resolveBranchStorageRoot()).toBe(join(resolve(dshHome), 'zdsh'))
   })
 
-  it('ignores blank env values and defaults to ~/.dsh-zdsh under the user home', () => {
+  it('ignores blank env values and defaults to ~/.dsh-zdsh-go under the user home', () => {
     process.env[DSH_BRANCH_HOME_ENV] = '   '
     const persistence = createDefaultPersistence(deadRegistry)
     expect(persistence.storagePath).toBe(join(homedir(), DSH_BRANCH_DIR_NAME))
-    expect(DSH_BRANCH_DIR_NAME).toBe('.dsh-zdsh')
+    expect(DSH_BRANCH_DIR_NAME).toBe('.dsh-zdsh-go')
   })
 })
 

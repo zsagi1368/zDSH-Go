@@ -9,7 +9,7 @@
 export interface PathRoots {
   workspaceRoot: string
   homePath: string
-  /** DSH config home, e.g. ~/.dsh-zdsh */
+  /** DSH config home, e.g. ~/.dsh-zdsh-go */
   dshHomePath: string
 }
 

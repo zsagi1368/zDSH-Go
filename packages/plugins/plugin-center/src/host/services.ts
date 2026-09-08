@@ -83,8 +83,8 @@ export function resolveProfileDir(config: PluginCenterConfig): string {
 }
 
 function defaultDshHome(): string {
-  // The zDSH branch stores its home under .dsh-zdsh; upstream uses .dsh.
-  const zdsh = join(homedir(), '.dsh-zdsh')
+  // The zDSH branch stores its home under .dsh-zdsh-go; upstream uses .dsh.
+  const zdsh = join(homedir(), '.dsh-zdsh-go')
   if (existsSync(zdsh)) return zdsh
   return join(homedir(), '.dsh')
 }

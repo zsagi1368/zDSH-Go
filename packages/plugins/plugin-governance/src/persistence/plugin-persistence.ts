@@ -2,7 +2,7 @@
  * PluginPersistence - 插件持久化管理
  *
  * 将PluginRegistry的状态持久化到文件系统。
- * 默认使用用户主目录下的 .dsh-zdsh 子目录（~/.dsh-zdsh），与官方的 ~/.dsh/ 平行且互不干扰；
+ * 默认使用用户主目录下的 .dsh-zdsh-go 子目录（~/.dsh-zdsh-go），与官方的 ~/.dsh/ 平行且互不干扰；
  * 环境变量 DSH_BRANCH_HOME 的覆盖优先级最高。
  */
 
@@ -12,10 +12,10 @@ import os from 'node:os'
 import { PluginRegistry, PluginManifest } from '../spec/index.js'
 
 /**
- * 默认数据存储目录名称（位于用户主目录下，即 ~/.dsh-zdsh）
+ * 默认数据存储目录名称（位于用户主目录下，即 ~/.dsh-zdsh-go）
  * 与官方的 ~/.dsh 对应，但完全独立，不会冲突
  */
-export const DSH_BRANCH_DIR_NAME = '.dsh-zdsh'
+export const DSH_BRANCH_DIR_NAME = '.dsh-zdsh-go'
 
 /**
  * 环境变量名称（用于自定义存储位置）
@@ -30,7 +30,7 @@ export const DSH_BRANCH_HOME_ENV = 'DSH_BRANCH_HOME'
  * 1. `DSH_BRANCH_HOME` 环境变量（兼容保留的显式覆盖入口）
  * 2. `DSH_HOME` 环境变量派生：`<DSH_HOME>/zdsh` —— 单变量统一入口，设置一个
  *    DSH_HOME 即可让官方数据与 zDSH 数据全部收拢到同一安装目录内
- * 3. `~/.dsh-zdsh`（历史默认，行为与未引入 DSH_HOME 派生前完全一致）
+ * 3. `~/.dsh-zdsh-go`（历史默认，行为与未引入 DSH_HOME 派生前完全一致）
  *
  * 镜像实现方（修改时同步）：plugin-governance/src/invariant.ts、
  * plugin-project-root/src/invariant.ts（经本包导出复用）、
@@ -55,7 +55,7 @@ export function resolveBranchStorageRoot(env: NodeJS.ProcessEnv = process.env): 
  * 插件持久化配置
  */
 export interface PluginPersistenceConfig {
-  /** 数据根目录（默认：~/.dsh-zdsh，可用 DSH_BRANCH_HOME 覆盖） */
+  /** 数据根目录（默认：~/.dsh-zdsh-go，可用 DSH_BRANCH_HOME 覆盖） */
   storageRoot?: string | undefined
   /** 是否自动保存 */
   autoSave?: boolean | undefined
@@ -88,11 +88,11 @@ interface ResolvedPersistenceConfig {
 /**
  * PluginPersistence - 插件持久化管理器
  *
- * 所有插件配置、缓存、日志都存储在用户主目录的 .dsh-zdsh 子目录中，
+ * 所有插件配置、缓存、日志都存储在用户主目录的 .dsh-zdsh-go 子目录中，
  * 完全独立于官方的 ~/.dsh/ 目录，不会冲突。
  *
  * 目录结构：
- * ~/.dsh-zdsh/
+ * ~/.dsh-zdsh-go/
  * ├── registry.json      # 插件注册表
  * ├── cache/             # 缓存目录
  * ├── logs/              # 日志目录
@@ -120,11 +120,11 @@ export class PluginPersistence {
    * 2. 环境变量 DSH_BRANCH_HOME（覆盖优先级最高的环境入口，兼容保留）
    * 3. 环境变量 DSH_HOME 派生：$DSH_HOME/zdsh（单变量统一入口，官方数据与
    *    zDSH 数据同根，整个安装目录自包含）
-   * 4. 用户主目录下的 .dsh-zdsh
+   * 4. 用户主目录下的 .dsh-zdsh-go
    *
    * 与官方的 DSH_HOME 机制对应：
    * - 官方: DSH_HOME -> ~/.dsh
-   * - 我们: DSH_HOME -> <DSH_HOME>/zdsh（新）或 DSH_BRANCH_HOME -> ~/.dsh-zdsh（兼容）
+   * - 我们: DSH_HOME -> <DSH_HOME>/zdsh（新）或 DSH_BRANCH_HOME -> ~/.dsh-zdsh-go（兼容）
    */
   private resolveDefaultStorageRoot(): string {
     return resolveBranchStorageRoot(process.env)
@@ -251,7 +251,7 @@ export class PluginPersistence {
 
 /**
  * 创建默认的PluginPersistence实例
- * 使用用户主目录 ~/.dsh-zdsh 作为存储根目录
+ * 使用用户主目录 ~/.dsh-zdsh-go 作为存储根目录
  * @param registry - 持久化要关联的插件注册表。
  * @returns 默认的插件持久化实例。
  */

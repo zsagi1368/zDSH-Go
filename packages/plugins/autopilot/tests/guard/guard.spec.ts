@@ -20,7 +20,7 @@ import { createKernel } from '../../src/kernel/facade.js'
 const ROOTS = {
   workspaceRoot: 'G:\\work\\proj',
   homePath: 'C:\\Users\\dev',
-  dshHomePath: 'C:\\Users\\dev\\.dsh-zdsh',
+  dshHomePath: 'C:\\Users\\dev\\.dsh-zdsh-go',
 }
 
 describe('path hardening', () => {

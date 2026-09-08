@@ -1657,7 +1657,7 @@ export interface Config {
   /**
    * Persistence root for the registry snapshot, approvals ledger, presets,
    * and npm-installed plugin trees; defaults to the governance package's own
-   * root (`~/.dsh-zdsh`, overridden by `DSH_BRANCH_HOME`, or derived as
+   * root (`~/.dsh-zdsh-go`, overridden by `DSH_BRANCH_HOME`, or derived as
    * `<DSH_HOME>/zdsh` when only `DSH_HOME` is set — see resolveBranchStorageRoot).
    */
   storageRoot?: string

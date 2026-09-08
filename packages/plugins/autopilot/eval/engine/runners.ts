@@ -175,7 +175,7 @@ async function runGuard(
     adapters: {
       workspaceRoot: () => 'G:\\work\\proj',
       homePath: () => 'C:\\Users\\dev',
-      dshHomePath: () => 'C:\\Users\\dev\\.dsh-zdsh',
+      dshHomePath: () => 'C:\\Users\\dev\\.dsh-zdsh-go',
       fsProbe: () => ({
         lstat: () => undefined,
         listDir: () => [],

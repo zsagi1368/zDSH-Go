@@ -11,7 +11,7 @@ against the `web` profile.
 |---|---|---|---|
 | `defaultProfile` | string | `"web"` | Profile name used when staging plans. |
 | `profileDir` | string | resolved | Explicit profile directory override; skips home resolution. |
-| `dshHome` | string | auto | Storage home root; resolution order: this key → `$DSH_BRANCH_HOME` → `$DSH_HOME` → `~/.dsh-zdsh` → `~/.dsh`. |
+| `dshHome` | string | auto | Storage home root; resolution order: this key → `$DSH_BRANCH_HOME` → `$DSH_HOME` → `~/.dsh-zdsh-go` → `~/.dsh`. |
 | `dataRoot` | string | `~/.zdsh-plugin-center` | Backups, audit log, catalog cache, guardian state. |
 | `remoteCatalogUrl` | string \| null | `null` | Remote signed-snapshot catalog URL. `null` = seed + cache only (offline-first). |
 | `catalogSeedPath` | string | bundled | Seed catalog override for custom distributions/tests. |
