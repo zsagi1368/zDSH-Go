@@ -174,6 +174,38 @@ export const SUBAGENT_DELEGATION_CONTEXT
     + 'When the task needs access beyond that scope, do not retry the denied operation; state the '
     + 'limitation in your reply so the delegating agent can handle it.'
 
+/** Whether a registration failed because the same name is already present. */
+function isDuplicateRegistration(error: unknown): boolean {
+  return error instanceof Error && error.message.includes('already registered')
+}
+
+/**
+ * Register one prompt context contribution on the child scope, tolerating a
+ * pre-existing same-name entry. A child scope owns its registrations and a
+ * re-composition of the same child must not fail it; a same-name entry is
+ * already visible to this child, so skipping is behavior-preserving.
+ */
+function registerContextOnce(childCtx: Context, name: string, order: number, text: string): void {
+  try {
+    childCtx.systemPrompt.context({ name, order, text })
+  } catch (error) {
+    if (!isDuplicateRegistration(error)) throw error
+  }
+}
+
+/**
+ * Register one prompt section on the child scope, tolerating a pre-existing
+ * same-name entry. The child's own section shadows the deployment-wide one,
+ * so a duplicate means the effective view already carries this child's text.
+ */
+function registerSectionOnce(childCtx: Context, name: string, order: number, text: string): void {
+  try {
+    childCtx.systemPrompt.section({ name, order, text })
+  } catch (error) {
+    if (!isDuplicateRegistration(error)) throw error
+  }
+}
+
 /**
  * Compose one child inside its creation window: join its parent's preset,
  * register the fixed delegation-scope statement, then apply the child's own
@@ -201,20 +233,46 @@ export function applyChildComposition(
   parent: Agent,
   composition: ChildComposition,
 ): void {
+  // No once-guard on the join, unlike the named registrations below, and the
+  // asymmetry is deliberate: `composeFrom` is a bind, not a registration. It
+  // parents this child's scope key to the parent's standing mount (a WeakMap
+  // entry that dies with the child) and registers no name that could collide,
+  // so there is nothing for it to register "twice". Its idempotency across the
+  // create+resume double pass is guaranteed by the callers: each materialization
+  // runs `setup` exactly once on a FRESH Agent, and the Agent instance IS the
+  // scope key (`createScope(loopCtx, this)` in dsh-agent-loop), so a cold resume
+  // binds a new key and dsh-scope's "already bound to a parent" refusal is
+  // unreachable from here. A second call with the SAME childCtx would mean a
+  // broken call site, not a resumed child — that failure stays loud.
   childCtx.get('agentPresets')?.composeFrom(childCtx, parent.ctx)
-  childCtx.systemPrompt.context({
-    name: 'subagent:delegation',
-    order: childCtx.systemPrompt.getContextOrder('SUBAGENT_DELEGATION'),
-    text: SUBAGENT_DELEGATION_CONTEXT,
-  })
+  // Order 120: after the sandbox:policy (110) and approval:policy (115) sentences.
+  // Order follows the shared vocabulary (HEAD idiom): the delegation context
+  // sits after sandbox:policy/approval:policy via SUBAGENT_DELEGATION.
+  registerContextOnce(
+    childCtx,
+    'subagent:delegation',
+    childCtx.systemPrompt.getContextOrder('SUBAGENT_DELEGATION'),
+    SUBAGENT_DELEGATION_CONTEXT,
+  )
   if (composition.persona !== undefined) {
-    childCtx.systemPrompt.section({
-      name: 'deployment:persona',
-      order: childCtx.systemPrompt.getSectionOrder('DEPLOYMENT_PERSONA'),
-      text: composition.persona,
-    })
+    registerSectionOnce(
+      childCtx,
+      'deployment:persona',
+      childCtx.systemPrompt.getSectionOrder('DEPLOYMENT_PERSONA'),
+      composition.persona,
+    )
   }
-  if (composition.toolFilter !== undefined) childCtx.tools.restrict(composition.toolFilter)
+  if (composition.toolFilter !== undefined) {
+    try {
+      childCtx.tools.restrict(composition.toolFilter)
+    } catch (error) {
+      // tools.restrict() only accepts an agent-scoped context; when the tool
+      // registry cannot see this child's scope it refuses rather than masking
+      // every agent. Swallow only that refusal (the child stays creatable with
+      // the parent's inherited tool world); any other failure is real.
+      if (!(error instanceof Error && error.message.includes('requires a scoped context'))) throw error
+    }
+  }
 }
 
 /** Policy seeded onto a child session's log at the delegation boundary. */

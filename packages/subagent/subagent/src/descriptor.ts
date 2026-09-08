@@ -18,6 +18,13 @@
  * durable descriptor, so it neither restores the prior budget nor inherits
  * the parent's current one; the resumed route's defaults apply instead.
  *
+ * `returnCap` is the deliberate exception to that omission. It is not a child
+ * composition knob but a parent-side bound on how much of the child's closing
+ * output the settlement notice may inject back into the parent's context
+ * (§1.2 bounded return). Losing it across a cold resume would let a resumed
+ * child's terminal output re-enter the parent uncapped, so a continuable
+ * descriptor persists it and cold resume rebuilds the cap from the log.
+ *
  * @module @deepseek-ai/dsh-subagent/descriptor
  */
 
@@ -45,7 +52,7 @@ declare module '@deepseek-ai/dsh-session/types' {
  * Supporting another composition input is a deliberate version change, never
  * an implicit extra field.
  */
-export const SUBAGENT_DESCRIPTOR_VERSION = 3
+export const SUBAGENT_DESCRIPTOR_VERSION = 4
 
 /** Fields shared by every supported `subagent/descriptor` payload. */
 interface SubagentDescriptorBase {
@@ -83,6 +90,14 @@ export interface ContinuableSubagentDescriptorData extends SubagentDescriptorBas
   readonly persona?: string
   /** Child tool scoping reapplied on resume. */
   readonly toolFilter?: ToolRestriction
+  /**
+   * Bounded-return cap (tokens, §1.2) on the child's closing output when the
+   * settlement notice re-enters the parent's context. Persisted so a cold
+   * resume rebuilds the same cap instead of injecting an uncapped transcript;
+   * absent only when the establishing caller supplied no cap, in which case
+   * settlement leaves the output unbounded (the pre-cap behavior).
+   */
+  readonly returnCap?: number
 }
 
 /** The supported durable subagent identity and optional continuation composition. */
@@ -120,6 +135,8 @@ export interface ContinuableSubagentDescriptorInput extends SubagentDescriptorIn
   readonly persona?: string
   /** Requested child tool scoping. */
   readonly toolFilter?: ToolRestriction
+  /** Bounded-return cap (tokens, §1.2) persisted for settlement and cold resume. */
+  readonly returnCap?: number
 }
 
 /** Inputs {@link snapshotSubagentDescriptor} validates and detaches. */
@@ -141,6 +158,7 @@ const CONTINUABLE_DESCRIPTOR_KEYS = new Set([
   'agentReasoningEffort',
   'persona',
   'toolFilter',
+  'returnCap',
 ])
 const TOOL_FILTER_KEYS = new Set(['allow', 'deny'])
 
@@ -163,6 +181,20 @@ function optionalString(value: Record<string, unknown>, key: string): string | u
   const field = value[key]
   if (typeof field !== 'string') {
     throw new Error(`persisted subagent descriptor ${key} must be a string`)
+  }
+  return field
+}
+
+/**
+ * Read one optional positive-finite-number field (the bounded-return cap) from
+ * a persisted descriptor record. A present-but-invalid value is corrupt log
+ * data and fails loud, mirroring the other typed field readers.
+ */
+function optionalReturnCap(value: Record<string, unknown>, key: string): number | undefined {
+  if (!Object.hasOwn(value, key)) return undefined
+  const field = value[key]
+  if (typeof field !== 'number' || !Number.isFinite(field) || field <= 0) {
+    throw new Error(`persisted subagent descriptor ${key} must be a finite positive number`)
   }
   return field
 }
@@ -242,6 +274,7 @@ function parseSubagentDescriptor(value: unknown): SubagentDescriptorData | undef
   const toolFilter = Object.hasOwn(value, 'toolFilter')
     ? parseToolFilter(value['toolFilter'])
     : undefined
+  const returnCap = optionalReturnCap(value, 'returnCap')
   return {
     version: SUBAGENT_DESCRIPTOR_VERSION,
     mode,
@@ -252,6 +285,7 @@ function parseSubagentDescriptor(value: unknown): SubagentDescriptorData | undef
     ...agentReasoningEffort !== undefined ? { agentReasoningEffort } : {},
     ...persona !== undefined ? { persona } : {},
     ...toolFilter !== undefined ? { toolFilter } : {},
+    ...returnCap !== undefined ? { returnCap } : {},
   }
 }
 
@@ -294,6 +328,7 @@ export function snapshotSubagentDescriptor(input: SubagentDescriptorInput): Suba
       ...input.agentReasoningEffort !== undefined ? { agentReasoningEffort: input.agentReasoningEffort } : {},
       ...input.persona !== undefined ? { persona: input.persona } : {},
       ...input.toolFilter !== undefined ? { toolFilter: input.toolFilter } : {},
+      ...input.returnCap !== undefined ? { returnCap: input.returnCap } : {},
     }
   const snapshot = snapshotJsonValue(candidate)
   if (snapshot === undefined) {

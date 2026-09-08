@@ -5,7 +5,7 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
-import { defineTool } from '@deepseek-ai/dsh-tools'
+import { defineTool, PRUNING_META_KEY } from '@deepseek-ai/dsh-tools'
 import type { GenericCallView, ReadResultView, ToolResult } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-fs'
 import { buildWindow, formatReadOutput, langFromPath, readMetaFromMeta } from './read-render.ts'
@@ -121,12 +121,20 @@ export function applyReadTool(ctx: Context, caps: ReadToolCaps): void {
       // the model-facing text, from which the line/lang data cannot be recovered.
       presentationMeta: (_args, value) => {
         const lang = langFromPath(value.path)
+        const body = formatReadOutput(value.path, {
+          offset: value.offset,
+          lines: value.lines,
+          totalLines: value.totalLines,
+        })
         return {
           path: value.path,
           offset: value.offset,
           lines: value.lines.map(({ number, text }) => ({ number, text })),
           totalLines: value.totalLines,
           ...lang === undefined ? {} : { lang },
+          // L3 pruning declaration: a read window is prunable (the file remains
+          // on disk, re-readable by offset). Bytes price the model-facing body.
+          [PRUNING_META_KEY]: { prunable: true, bytes: Buffer.byteLength(body, 'utf8') },
         }
       },
     },

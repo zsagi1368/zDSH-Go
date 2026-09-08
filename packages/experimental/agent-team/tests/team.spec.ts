@@ -220,7 +220,8 @@ describe('Team identity and provisioning', () => {
     const fresh = await spawn(ctx, lead, 'fresh-worker')
     await waitNoAgent(ctx, fresh.member.id)
 
-    expect((await ctx.sessionPersistence.stat(forked.member.id))?.header.isSeeded).toBe(true)
+    // The context-cache patch removes fork seeding; forked members are no longer seeded.
+    expect((await ctx.sessionPersistence.stat(forked.member.id))?.header.isSeeded).toBe(false)
     expect((await ctx.sessionPersistence.stat(fresh.member.id))?.header.isSeeded).toBe(false)
     expect(ctx.agentTeams.listMembers(lead).map(row => [row.name, row.context, row.status])).toEqual([
       ['lead', undefined, 'idle'],

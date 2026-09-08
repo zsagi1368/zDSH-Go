@@ -114,10 +114,12 @@ describe('in-process policy inheritance', () => {
       const request = child.session.snapshotEvents().find(
         (event): event is SessionEvent<'request/header'> => event.type === 'request/header',
       )
+      // v2.3 L2 delta protocol: the runtime context no longer rides a standalone
+      // plugin snapshot message; it is folded into the first real user message's
+      // text prefix, which must precede the request header.
       const runtimeContext = child.session.snapshotEvents().find(
         (event): event is SessionEvent<'user/message'> => event.type === 'user/message'
-          && event.data.source.kind === 'plugin'
-          && event.data.source.plugin === '@deepseek-ai/dsh-system-prompt',
+          && event.data.source.kind === 'user',
       )
       if (request === undefined || runtimeContext === undefined) throw new Error('child request lacks its runtime policy context')
       expect(runtimeContext.seq).toBeLessThan(request.seq)

@@ -39,6 +39,7 @@ import type { SessionObservation, SessionQueryEngine } from '@deepseek-ai/dsh-se
 import type { ToolRestriction } from '@deepseek-ai/dsh-tools'
 import { foldSubagentDescriptor, snapshotSubagentDescriptor } from './descriptor.ts'
 import type { SubagentDescriptorData } from './descriptor.ts'
+import { truncateSubagentOutput } from './return-cap.ts'
 import {
   appendDelegatedPolicyOverrides,
   applyChildComposition,
@@ -106,6 +107,14 @@ export interface ContinuableStartSpec {
   readonly request: Omit<SubagentStartRequest, 'label' | 'signal' | 'outputSchema'>
   /** Caller cancellation, owning the operation only until inbox acceptance. */
   readonly signal: AbortSignal
+  /**
+   * Bounded-return cap (tokens, §1.2) the tool computed for this delegation.
+   * Persisted into the durable descriptor so the settlement notice truncates
+   * the child's closing output to it, and a cold resume rebuilds the same cap
+   * rather than injecting an uncapped transcript into the parent. Omission
+   * leaves settlement unbounded (the pre-cap behavior for direct API callers).
+   */
+  readonly returnCap?: number
 }
 
 /** Identities returned once a continuable child accepted its initial prompt. */
@@ -196,6 +205,13 @@ interface Activation {
   readonly parentSession: SessionId
   /** The provider name recorded in the durable descriptor. */
   readonly provider: string
+  /**
+   * Bounded-return cap (tokens, §1.2) rebuilt from the durable descriptor.
+   * `notifySettlement` truncates the child's closing output to it before the
+   * `subagent-settled` notice re-enters the parent's context. `undefined` when
+   * the establishing caller supplied no cap, leaving settlement unbounded.
+   */
+  readonly returnCap: number | undefined
   /** The retained live Agent handle, disposed exactly once at settlement. */
   readonly handle: AgentHandle
   /**
@@ -257,6 +273,12 @@ interface MaterializeInputs {
   }
   agentOptions: AgentOptions
   composition: { persona?: string | undefined; toolFilter?: ToolRestriction | undefined }
+  /**
+   * Bounded-return cap (tokens, §1.2) for this child's settlement. Fresh
+   * creation takes it from the caller's start spec; cold resume rebuilds it
+   * from the durable descriptor, so the same cap governs the notice either way.
+   */
+  returnCap: number | undefined
   signal: AbortSignal
 }
 
@@ -459,6 +481,7 @@ export class SubagentContinuationManager {
       ...agentReasoningEffort !== undefined ? { agentReasoningEffort } : {},
       ...request.persona !== undefined ? { persona: request.persona } : {},
       ...request.toolFilter !== undefined ? { toolFilter: request.toolFilter } : {},
+      ...spec.returnCap !== undefined ? { returnCap: spec.returnCap } : {},
     })
     // Capture before the first await: a later parent switch belongs to the
     // parent's future, not to this child.
@@ -507,6 +530,7 @@ export class SubagentContinuationManager {
           },
           agentOptions,
           composition: { persona: request.persona, toolFilter: request.toolFilter },
+          returnCap: spec.returnCap,
           signal: spec.signal,
         })
         return this.submitMaterialized(
@@ -1111,6 +1135,7 @@ export class SubagentContinuationManager {
             : {},
         },
         composition: { persona: descriptor.persona, toolFilter: descriptor.toolFilter },
+        returnCap: descriptor.returnCap,
         signal: options.signal,
       })
     } catch (error: unknown) {
@@ -1258,6 +1283,7 @@ export class SubagentContinuationManager {
       // the persisted header before materializing.
       parentSession: parent.id,
       provider,
+      returnCap: inputs.returnCap,
       handle,
       ancestry: new WeakSet([handle.agent, ...parentLineage]),
       ownedChildren: new Set(),
@@ -1634,12 +1660,23 @@ export class SubagentContinuationManager {
       const parent = this.ctx.agents.get(activation.parentSession)
       if (parent === undefined) return
       const summary = settlementSummary(activation.childId, terminal.stopReason)
+      // Bounded return (§1.2): the child's closing output re-enters the parent's
+      // context through this notice, so it is truncated to the durable cap the
+      // delegation carried. `activation.returnCap` is rebuilt from the descriptor
+      // on cold resume, so a resumed child's transcript is capped identically.
+      // An undefined cap (a direct API caller that supplied none) preserves the
+      // pre-cap behavior and leaves the output unbounded.
+      const closingOutput = terminal.output === undefined
+        ? undefined
+        : activation.returnCap === undefined
+          ? terminal.output
+          : truncateSubagentOutput(terminal.output, activation.returnCap)
       const message = createUserMessage({
         content: [
           { type: 'text' as const, text: summary },
-          ...terminal.output === undefined
+          ...closingOutput === undefined
             ? [{ type: 'text' as const, text: 'It left no closing message.' }]
-            : [{ type: 'text' as const, text: 'Its closing message:' }, ...terminal.output],
+            : [{ type: 'text' as const, text: 'Its closing message:' }, ...closingOutput],
         ],
         source: {
           kind: 'subagent-settled' as const,

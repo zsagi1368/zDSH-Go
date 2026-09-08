@@ -152,9 +152,12 @@ describe('dsh-tool-team', () => {
     expect(renderPrompt(childAssembly)).toContain('Your Team role is teammate; your Team name is tool-worker')
     const initialPrompt = child.session.snapshotEvents().find(event => event.type === 'user/message'
       && event.data.source.kind === 'user')
+    // The runtime-context snapshot block is prepended to the initial prompt text.
     expect(initialPrompt?.type === 'user/message'
       ? initialPrompt.data.content.flatMap(block => block.type === 'text' ? [block.text] : [])
-      : []).toEqual(['stay available'])
+      : []).toEqual([
+      expect.stringMatching(/Current runtime context\. This snapshot supersedes earlier runtime-context snapshots\.[\s\S]*stay available$/),
+    ])
 
     const denied = await execute(ctx, child, 'spawn_teammate', {
       name: 'nested', description: 'not allowed', prompt: 'no',

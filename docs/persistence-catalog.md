@@ -247,6 +247,29 @@ Types: [TokenUsage](subsystems/llm-streaming.md)
 
 Source: [`packages/core/session/src/types.ts:299`](../packages/core/session/src/types.ts)
 
+### `cache/*`
+
+<a id="cacheledger--log-only"></a>
+
+#### `cache/ledger` — log-only
+
+```ts persistence-catalog
+/**
+ * L5 缓存重置台账快照（Phase 6 遗留收口）：`tailMerge`/`compaction`
+ * 重置登记后追加，序列化 cache-guardian `ResetLedger`（events +
+ * generation）与累计重置写入成本。log-only，辅助缓存豁免窗口与
+ * 记账重建，不参与消息历史重构。
+ */
+'cache/ledger': {
+  /** 序列化的重置台账 JSON（`serializeLedger` 输出）。 */
+  ledger: string
+  /** 累计重置写入成本（token 当量，Σ η×contextTokens）。 */
+  resetWriteTokens: number
+}
+```
+
+Source: [`packages/core/agent-loop/src/agent.ts:65`](../packages/core/agent-loop/src/agent.ts)
+
 ### `command/*`
 
 <a id="commanddone--log-only"></a>

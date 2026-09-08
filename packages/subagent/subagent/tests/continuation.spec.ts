@@ -120,9 +120,30 @@ function message(text: string) {
   return [{ type: 'text' as const, text }]
 }
 
+/**
+ * Runtime-context delta header (system-prompt's `joinContextSections`): the
+ * v2.3 L2 protocol folds the runtime context as a prefix into the next real
+ * user message's text (`<delta>\n\n<user text>`), so no standalone plugin
+ * snapshot message exists on the wire anymore.
+ */
+const RUNTIME_CONTEXT_HEADER = 'Current runtime context. This snapshot supersedes earlier runtime-context snapshots.'
+
+/**
+ * Strip the folded runtime-context delta prefix from a real user message text,
+ * returning the caller-supplied text. The delta joins its own sections with
+ * `\n\n` but never ends with one, so the fold separator is the last `\n\n`;
+ * text that does not carry the delta (follow-ups, non-folded messages) is
+ * returned unchanged.
+ */
+function stripRuntimeContextPrefix(text: string): string {
+  if (!text.startsWith(RUNTIME_CONTEXT_HEADER)) return text
+  const separator = text.lastIndexOf('\n\n')
+  return separator >= 0 ? text.slice(separator + 2) : text
+}
+
 function hasUserText(events: readonly SessionEvent[], text: string): boolean {
   return events.some(event => event.type === 'user/message'
-    && event.data.content.some(block => block.type === 'text' && block.text === text))
+    && event.data.content.some(block => block.type === 'text' && stripRuntimeContextPrefix(block.text) === text))
 }
 
 /** Caller-supplied user message texts in log order (runtime-context snapshots excluded). */
@@ -130,7 +151,7 @@ function userTexts(events: readonly SessionEvent[]): string[] {
   return events.flatMap(event => event.type === 'user/message' && event.data.source.kind !== 'plugin'
     ? event.data.content.flatMap(block => block.type === 'text'
       && !block.text.startsWith('Your parent agent id is ')
-      ? [block.text]
+      ? [stripRuntimeContextPrefix(block.text)]
       : [])
     : [])
 }
@@ -464,6 +485,32 @@ describe('SubagentRuntime.startContinuable', () => {
     await drainManager(ctx)
   })
 
+  it('records the delegation returnCap in the durable descriptor', async () => {
+    const { ctx, parent } = await setup([textResponse('answer')])
+    const started = await ctx.subagents.startContinuable({
+      ...startSpec(parent),
+      returnCap: 4321,
+    })
+    await waitNoActivation(ctx, started.childId)
+
+    const loaded = await loadStoredSession(ctx.sessionPersistence, started.childId)
+    // The cap is persisted verbatim so a cold resume can rebuild it.
+    expect(loaded.events.find(event => event.type === 'subagent/descriptor')?.data)
+      .toMatchObject({ version: SUBAGENT_DESCRIPTOR_VERSION, returnCap: 4321 })
+  })
+
+  it('omits returnCap from the descriptor when the caller supplied none', async () => {
+    const { ctx, parent } = await setup([textResponse('answer')])
+    const started = await ctx.subagents.startContinuable(startSpec(parent))
+    await waitNoActivation(ctx, started.childId)
+
+    const loaded = await loadStoredSession(ctx.sessionPersistence, started.childId)
+    const descriptor = loaded.events.find(event => event.type === 'subagent/descriptor')?.data
+    // No cap means settlement stays unbounded; the field is absent, not zero.
+    expect(descriptor).toBeDefined()
+    expect('returnCap' in (descriptor as object)).toBe(false)
+  })
+
   it('cold-resumes without inventing a model route the descriptor never declared', async () => {
     const { ctx, root } = await setup([textResponse('first')])
     const routeless = await ctx.agentLoop.create(SessionId('routeless-resume'), {})
@@ -499,12 +546,13 @@ describe('SubagentRuntime.startContinuable', () => {
     await drainManager(fresh)
   })
 
-  it('continues turn numbering after an inherited fork prefix and pre-turn descriptor', async () => {
+  it('starts turn numbering fresh after the pre-turn descriptor (no inherited fork prefix)', async () => {
     const { ctx, parent } = await setup([
       textResponse('parent turn'),
       textResponse('forked child'),
     ])
-    // Complete one parent turn so fork has a prefix to contribute.
+    // Complete one parent turn; a fork child must NOT inherit it (L6 minimal
+    // contract: no parent-history seed).
     parent.followup(createUserMessage({ content: message('parent work'), source: { kind: 'user' } }))
     await parent.whenIdle()
 
@@ -515,12 +563,12 @@ describe('SubagentRuntime.startContinuable', () => {
     const descriptorIndex = loaded.events.findIndex(event => event.type === 'subagent/descriptor')
     const childTurn = loaded.events.slice(descriptorIndex + 1)
       .find(event => event.type === 'turn/start')
-    // The first child turn after the descriptor continues the inherited prefix
-    // rather than restarting at 1, so the replayed child log stays balanced.
+    // The first child turn starts at 1: there is no inherited prefix to
+    // continue, so the replayed child log is balanced.
     expect(descriptorIndex).toBeGreaterThanOrEqual(0)
-    expect(childTurn?.type === 'turn/start' && childTurn.data.turn).toBe(2)
-    expect(loaded.meta.isSeeded).toBe(true)
-    expect(loaded.inheritedEventCount).toBeGreaterThan(0)
+    expect(childTurn?.type === 'turn/start' && childTurn.data.turn).toBe(1)
+    expect(loaded.meta.isSeeded).toBe(false)
+    expect(loaded.inheritedEventCount).toBe(0)
   })
 
   it('records the declared persona in the descriptor and reapplies it on cold resume', async () => {
@@ -2032,6 +2080,82 @@ describe('continuable settlement delivery', () => {
     expect(notice.summary).toBe(
       `Background subagent ${started.childId} finished and will do no further work unless you send it more.`,
     )
+  })
+
+  it('truncates the child closing output to the returnCap the delegation carried', async () => {
+    // §1.2 bounded return: the settlement notice re-enters the parent's context,
+    // so an over-budget closing transcript must be structurally truncated to the
+    // cap — the same guarantee the foreground result path already gives.
+    const long = 'head ' + 'x'.repeat(9000) + ' tail'
+    const { ctx, parent } = await setup([textResponse(long), textResponse('parent ack')])
+    const started = await ctx.subagents.startContinuable({
+      ...startSpec(parent),
+      returnCap: 100,
+    })
+    await waitNoActivation(ctx, started.childId)
+
+    await vi.waitFor(() => { expect(settlementNotices(parent)).toHaveLength(1) })
+    const notice = settlementNotices(parent)[0]!
+    const label = 'Its closing message:\n'
+    expect(notice.text).toContain(label)
+    const body = notice.text.slice(notice.text.indexOf(label) + label.length)
+    // Bounded to the cap (chars/3): 100 tokens → 300 chars, and genuinely
+    // truncated — head and tail survive, the middle transcript is dropped.
+    expect(body.length).toBeLessThanOrEqual(100 * 3)
+    expect(body.length).toBeGreaterThan(100 * 3 - 40)
+    expect(body).toContain('head ')
+    expect(body).toContain('tail')
+    expect(body).toContain('中间工作转录已截断')
+    expect(body.length).toBeLessThan(long.length)
+  })
+
+  it('leaves the closing output unbounded when the delegation carried no cap', async () => {
+    // Backward-compatible default: a direct API caller that supplied no cap gets
+    // the pre-cap behavior — the full transcript delivered intact.
+    const long = 'head ' + 'y'.repeat(9000) + ' tail'
+    const { ctx, parent } = await setup([textResponse(long), textResponse('parent ack')])
+    const started = await ctx.subagents.startContinuable(startSpec(parent))
+    await waitNoActivation(ctx, started.childId)
+
+    await vi.waitFor(() => { expect(settlementNotices(parent)).toHaveLength(1) })
+    const notice = settlementNotices(parent)[0]!
+    expect(notice.text).toContain(long)
+    expect(notice.text).not.toContain('中间工作转录已截断')
+  })
+
+  it('reapplies the returnCap cap to settlement after a cold resume', async () => {
+    // The whole point of persisting the cap: a resumed child's closing output
+    // must still be bounded, because the cap is rebuilt from the durable
+    // descriptor rather than the (now-absent) live activation.
+    const first = 'head1 ' + 'a'.repeat(9000) + ' tail1'
+    const second = 'head2 ' + 'b'.repeat(9000) + ' tail2'
+    const { ctx, parent } = await setup([
+      textResponse(first),
+      textResponse('parent ack 1'),
+      textResponse(second),
+      textResponse('parent ack 2'),
+    ])
+    const started = await ctx.subagents.startContinuable({
+      ...startSpec(parent),
+      returnCap: 100,
+    })
+    await waitNoActivation(ctx, started.childId)
+    await vi.waitFor(() => { expect(settlementNotices(parent)).toHaveLength(1) })
+
+    // Cold resume: the child has no live Activation, so delivering a new prompt
+    // reconstructs it from the persisted descriptor (which carries returnCap).
+    await queuePrompt(ctx, parent, started.childId, message('resume it'))
+    await waitNoActivation(ctx, started.childId)
+    await vi.waitFor(() => { expect(settlementNotices(parent)).toHaveLength(2) })
+
+    const resumed = settlementNotices(parent)[1]!
+    const label = 'Its closing message:\n'
+    const body = resumed.text.slice(resumed.text.indexOf(label) + label.length)
+    // The resumed settlement is capped identically (proves the descriptor path).
+    expect(body).toContain('head2 ')
+    expect(body).toContain('tail2')
+    expect(body).toContain('中间工作转录已截断')
+    expect(body.length).toBeLessThanOrEqual(100 * 3)
   })
 
   it('delivers settlement even when the child already sent a message', async () => {

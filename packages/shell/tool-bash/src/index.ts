@@ -11,7 +11,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { isAbsolute, resolve as resolvePath } from 'node:path'
-import { defineTool, TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
+import { defineTool, PRUNING_META_KEY, TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
 import type { GenericCallView, TerminalCallView, ToolExecution, ToolResult, ToolResultView } from '@deepseek-ai/dsh-tools'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
 import type { Agent } from '@deepseek-ai/dsh-agent'
@@ -325,6 +325,16 @@ export function apply(ctx: Context, config: Config = {}): void {
           ? `started background job ${value.jobId}`
           : renderResult(value as { kind: 'foreground' } & ShellRunResult, escalationModes),
       }],
+      // L3 pruning declaration: a foreground result body is prunable (the full
+      // output is spilled to a file on truncation), so the compaction layer can
+      // replace it with a pointer stub. Background acknowledgements are tiny and
+      // never pruned (empty meta, no declaration).
+      presentationMeta: (_args, value) => value.kind === 'background'
+        ? {}
+        : { [PRUNING_META_KEY]: {
+          prunable: true,
+          bytes: Buffer.byteLength(renderResult(value as { kind: 'foreground' } & ShellRunResult, escalationModes), 'utf8'),
+        } },
     },
     async execute(args: BashToolArgs, exec) {
       validateBashArgs(args)
