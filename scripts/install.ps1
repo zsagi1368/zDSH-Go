@@ -71,8 +71,16 @@ try {
     # dsh-guard integrity check of the web profile (read-only). Non-blocking by
     # design (PLAN D5): a fresh install has no profile yet, so any non-zero
     # exit here is a warning only; the report is the guard's console output.
+    # The check is pinned to THIS installation's data face, never the real
+    # main tree (~\.dsh): dsh-guard.mjs findDshHome honors an explicit
+    # DSH_HOME only when it already exists, so the data directory is created
+    # here first (step [3/4] below re-runs idempotently).
     Write-Host '[2b/4] dsh-guard check (profile web, non-blocking)'
+    New-Item -ItemType Directory -Path (Join-Path $ROOT 'data') -Force | Out-Null
+    $env:DSH_HOME = Join-Path $ROOT 'data'
+    $env:DSH_BRANCH_HOME = Join-Path $ROOT 'data\zdsh'
     & node (Join-Path $ROOT 'packages\plugins\dsh-guard\dsh-guard.mjs') check --profile web
+    Remove-Item Env:\DSH_HOME, Env:\DSH_BRANCH_HOME -ErrorAction SilentlyContinue
     if ($LASTEXITCODE -ne 0) {
         Write-Host "[WARN] dsh-guard check failed (exit code $LASTEXITCODE); continuing (non-blocking)." -ForegroundColor Yellow
     }
