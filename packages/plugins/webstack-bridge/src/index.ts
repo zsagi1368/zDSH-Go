@@ -52,8 +52,14 @@ export interface PluginConfig {
  * 本包唯一的运行时依赖预算给了 ws（Node 无内置 WS 服务端），而配置面只有
  * 一个布尔开关——字面校验器足够，且让本包保持「monorepo 外可编译、零
  * 深路径耦合」的 W-B-05 姿态。
+ *
+ * 以 `const configSchema` + `export { configSchema as Config }` 形态导出：
+ * 运行时与 `export const Config = …` 完全等价（同一冻结对象、同一导出名，
+ * cordis fiber 仍按 `Config['~standard'].validate` 校验）；re-export 形态只是
+ * 让 gen-config-catalog 的入口扫描不再把这份非 schemastery schema 误当
+ * schemastery 调用走查（tester-gate-fix，vendored 适配）。
  */
-export const Config = Object.freeze({
+const configSchema = Object.freeze({
   '~standard': {
     version: 1,
     validate(value: unknown): { value: PluginConfig } | { issues: { message: string }[] } {
@@ -65,6 +71,8 @@ export const Config = Object.freeze({
     },
   },
 })
+
+export { configSchema as Config }
 
 /**
  * 日志解析三级回落（与 webstack apply 同款姿态）：

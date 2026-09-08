@@ -132,10 +132,15 @@ export interface SystemPromptRegistryLike {
 
 /** Per-format character budgets (FR-C6 defaults; configurable). */
 export interface ReadingBudgets {
+  /** Character budget for plain-text documents. Default 8 000. */
   text: number
+  /** Character budget for spreadsheet (xlsx) documents. Default 6 000. */
   xlsx: number
+  /** Character budget for PDF documents. Default 4 000. */
   pdf: number
+  /** Character budget for Word (docx) documents. Default 4 000. */
   docx: number
+  /** Character budget for unrecognized binary blobs. Default 2 000. */
   binary: number
 }
 

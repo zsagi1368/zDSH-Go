@@ -453,6 +453,18 @@ export interface BasicCompactionConfig extends CompactionPolicyConfig {
 export interface CompactionPolicyConfig {
   /** Compact at this fraction of the model's context window. Defaults to `0.8`. */
   thresholdRatio?: number
+  /**
+   * Use the proactive L4 trigger line `W − R_pess` instead of
+   * `thresholdRatio × W` (CONTEXT-CACHE-MANAGEMENT.md §1.2/§2 L4). Defaults to
+   * `false` so the legacy ratio mode stays the fallback; when enabled it is the
+   * recommended trigger. Below the legal domain (`W < 32768`) it falls back to
+   * `thresholdRatio` mode with a warning.
+   */
+  proactiveTrigger?: boolean
+  /** Parallel tool-result batch cap (BATCH_CAP) for the proactive trigger. Defaults to `2`. */
+  batchCap?: number
+  /** Max output hard cap (C) of the model, used by the proactive trigger. Defaults to `32768`. */
+  outputCap?: number
   /** Recent context retained as a fraction of the model's window. Defaults to `0.16`. */
   retainRatio?: number
   /** Absolute recent-context budget; mutually exclusive with `retainRatio`. */
@@ -478,7 +490,7 @@ export interface ModelCompactPolicyConfig extends CompactionPolicyConfig {
 }
 ```
 
-Source: [`packages/compaction/compaction-basic/src/types.ts:38`](../packages/compaction/compaction-basic/src/types.ts)
+Source: [`packages/compaction/compaction-basic/src/types.ts:50`](../packages/compaction/compaction-basic/src/types.ts)
 
 <a id="deepseek-aidsh-compaction-tool-result-pruner"></a>
 
@@ -1566,7 +1578,7 @@ export interface ModelSlotRouteConfig {
 }
 ```
 
-Source: [`packages/llm/model-slots/src/index.ts:89`](../packages/llm/model-slots/src/index.ts)
+Source: [`packages/llm/model-slots/src/index.ts:118`](../packages/llm/model-slots/src/index.ts)
 
 <a id="deepseek-aidsh-permission-presets"></a>
 
@@ -2537,7 +2549,7 @@ export interface Config {
 }
 ```
 
-Source: [`packages/subagent/subagent-fork-in-process/src/index.ts:31`](../packages/subagent/subagent-fork-in-process/src/index.ts)
+Source: [`packages/subagent/subagent-fork-in-process/src/index.ts:38`](../packages/subagent/subagent-fork-in-process/src/index.ts)
 
 <a id="deepseek-aidsh-subagent-spawn-in-process"></a>
 
@@ -3035,12 +3047,24 @@ export interface Config {
    * budget belongs to the child runtime or its own deployment.
    */
   maxDepth?: number | 'provider-managed'
+  /**
+   * Token cap for the subagent result returned into the parent's context
+   * (bounded return, §1.2 / L6 of CONTEXT-CACHE-MANAGEMENT.md v2.3). When
+   * omitted, the default is computed from the calling parent agent's
+   * `maxTokens` via the budget formula
+   * `max(2048, floor(0.25 × (reserve − maxTokens)))` (reserve =
+   * `ceil(maxTokens × 1.25) + 4096`); when the parent's `maxTokens` is
+   * unavailable, the formula floor {@link MIN_SUBAGENT_RETURN_CAP} applies.
+   * Outputs over the cap are structurally truncated (conclusion + changed
+   * files + unfinished items kept, middle work transcript dropped).
+   */
+  maxReturnTokens?: number
 }
 ```
 
 Depends on: [`AgentOptions`](subsystems/core.md)
 
-Source: [`packages/subagent/tool-subagent/src/index.ts:47`](../packages/subagent/tool-subagent/src/index.ts)
+Source: [`packages/subagent/tool-subagent/src/index.ts:51`](../packages/subagent/tool-subagent/src/index.ts)
 
 <a id="deepseek-aidsh-tool-terminal"></a>
 
@@ -3411,6 +3435,235 @@ export interface Config {
 
 Source: [`packages/workflow/workflow-worker-thread/src/index.ts:32`](../packages/workflow/workflow-worker-thread/src/index.ts)
 
+<a id="dsh-webstack"></a>
+
+## `dsh-webstack`
+
+Requires: `web`
+
+```ts config-catalog
+export interface PluginConfig {
+  /** 总开关；false 时聚合器 available()=false，行为等价回落原生。 */
+  enabled?: boolean
+  /** 默认路由层（开箱 `free`：免 Key 引擎池）。 */
+  layer?: SearchLayer
+  /** 候选展开开关；false 只用首选单引擎。 */
+  autoFallback?: boolean
+  /** 结果条数上限（seam 仍握有最终截断权 W-B-95）。 */
+  maxResults?: number
+  /** 查询复杂度分档路由开关。 */
+  complexityRouting?: boolean
+  /** 多引擎 RRF 融合总开关。 */
+  fusionEnabled?: boolean
+  /** 抓取渲染视图字符上限（canonical 预算 ×4 派生封顶 8 MiB）。 */
+  maxContentChars?: number
+  /** SSRF G2 豁免清单（host:port / CIDR；永不影响 G1/G3/G4）。 */
+  ssrfExempts?: string[]
+  /** 自托管 SearXNG 实例根地址；空串 = 未配置（不注册该引擎）。 */
+  searxngBaseUrl?: string
+  /** 会话联网模式（mode.sessionOnline）：`on` 时搜索强制 fresh 跳缓存读。 */
+  sessionOnline?: SessionOnlineMode
+  /** 缓存持久层档位（cache.persist）：`durable` 启用 L1（storage seam 或文件）。 */
+  cachePersist?: 'memory' | 'durable'
+  /**
+   * Windows 系统代理兜底（advanced.winProxyFallback，默认 false）：开启时
+   * activate 早期探测系统代理并注入 HTTPS_PROXY/HTTP_PROXY（尽力而为层）。
+   */
+  winProxyFallback?: boolean
+  /** 引擎级配置节点（engines.<id>.key / credentialRef / enabled）。 */
+  engines?: Record<string, EngineNodeSettings>
+  /** MCP 服务器条目；过 validateMcpEntry 的才注册为 McpSearchEngine。 */
+  mcpServers?: McpServerEntry[]
+  /** 垂直卫星包总闸（实验性；默认 false）。 */
+  verticalsPackEnabled?: boolean
+  /** X 垂直频道开关键（受 verticalsPackEnabled 约束；默认 false）。 */
+  verticalsChannelX?: boolean
+}
+
+/** 路由层。`native` = 直接委托宿主内置 provider（不停用、不重写）。 */
+export type SearchLayer = 'native' | 'free' | 'api' | 'selfhosted' | 'mcp'
+
+/** 会话联网模式（W-B-94）：Host-owned 状态机的三态词汇。 */
+export type SessionOnlineMode = 'off' | 'on' | 'ask'
+
+/** 单引擎设置节点（`engines.<id>`）。缺字段 = 用全局默认。 */
+export interface EngineNodeSettings {
+  /** 引擎总开关（缺省 true，随注册表默认）。 */
+  enabled?: boolean
+  /**
+   * 遗留字面值密钥（三级解析链第 1 级；占位符保存时阻断）。
+   * `key` 是规范键位；`apiKey` 为历史别名，读取侧 `key ?? apiKey` 兼容。
+   */
+  key?: string
+  /** 历史别名字面值密钥（与 `key` 同层；新配置一律写 `key`）。 */
+  apiKey?: string
+  /** 宿主 credentials 域引用名（三级解析链第 2 级）。 */
+  credentialRef?: string
+}
+
+/** MCP 服务器条目（F-108）：预设目录承载样板、用户条目只存差异（W-B-72）。 */
+export interface McpServerEntry {
+  /** Stable unique identifier of this server entry (preset catalog key or user-defined slug). */
+  readonly id: string
+  /** Transport kind: `stdio` launches a local child process, `http` dials a remote endpoint. */
+  readonly transport: 'stdio' | 'http'
+  /** stdio 启动命令；必须含 `@version` 锁定形态，裸 npx 在校验层拒绝（W-A-02）。 */
+  readonly command?: string
+  /** Argument vector appended to `command` for the stdio transport. */
+  readonly args?: readonly string[]
+  /** Remote endpoint URL dialed for the http transport (ignored for stdio). */
+  readonly url?: string
+  /** 凭据引用名列表（经 credentials 域每操作解析，绝不存明文）。 */
+  readonly credentialRefs?: readonly string[]
+  /** Extra environment variables overlaid onto the child process env for the stdio transport. */
+  readonly env?: Readonly<Record<string, string>>
+}
+```
+
+Source: [`packages/plugins/webstack/src/index.ts:100`](../packages/plugins/webstack/src/index.ts)
+
+<a id="dsh-webstack-bridge"></a>
+
+## `dsh-webstack-bridge`
+
+```ts config-catalog
+export interface PluginConfig {
+  /** 总开关；false 时本卫星完全不启动（不占端口、不提供服务）。 */
+  enabled?: boolean
+}
+```
+
+Source: [`packages/plugins/webstack-bridge/src/index.ts:45`](../packages/plugins/webstack-bridge/src/index.ts)
+
+<a id="zdsh-filehub"></a>
+
+## `zdsh-filehub`
+
+Requires: `fs` · `sessions` · `storage` · `webServer` · `tools` · `systemPrompt`
+
+```ts config-catalog
+/** Loader-facing config shape: every group optional, defaults filled by `resolveConfig`. */
+export type FileHubPluginConfig = Partial<FileHubConfig>
+
+export interface FileHubConfig {
+  /** Session-workspace subdirectory name created under the session cwd. */
+  storageDirName: string
+  /** Upload domain knobs: per-file size cap, concurrency, and per-session quota. */
+  upload: UploadDomainConfig
+  /** Lifecycle knobs: session data TTL and the sweep cadence that enforces it. */
+  lifecycle: LifecycleDomainConfig
+  /** M2 mention domain; defaults apply when omitted (additive, M1-safe). */
+  mention?: Partial<MentionDomainConfig>
+  /**
+   * M3 document-reading domain; defaults apply when omitted (additive,
+   * M1/M2-safe). `budgets` overrides per-format character budgets,
+   * `cacheEntries`/`cacheBytes` the parse-cache LRU bounds.
+   */
+  reading?: {
+    /** Per-format character budget overrides; defaults live in `resolveBudgets`. */
+    budgets?: Partial<ReadingBudgets>
+    /** Parse-cache LRU entry bound. Default 64. */
+    cacheEntries?: number
+    /** Parse-cache LRU byte bound. Default 256 MiB. */
+    cacheBytes?: number
+  }
+  /**
+   * M5 console domain; defaults apply when omitted (additive, M1–M4-safe).
+   * `maxEntries` bounds one library/usage aggregation page.
+   */
+  console?: {
+    /** One library/usage aggregation page cap. Default 2000. */
+    maxEntries?: number
+  }
+  /** M4 vision waterfall; defaults apply when omitted (additive, M1–M3-safe). */
+  vision?: VisionDomainConfig
+}
+
+export interface UploadDomainConfig {
+  /** Per-file byte ceiling. Default 50 MiB. */
+  maxBytes: number
+  /** Simultaneous uploads admitted server-wide. Default 4. */
+  maxConcurrent: number
+  /** Per-session stored-bytes ceiling. Default 512 MiB. */
+  perSessionQuotaBytes: number
+  /** Override of the dangerous-extension deny list (lowercase, no dots). */
+  dangerousExtensions?: readonly string[]
+}
+
+export interface LifecycleDomainConfig {
+  /** Upload expiry age. Default 7 days. */
+  ttlMs: number
+  /** Sweep cadence. Default 1 hour. */
+  sweepIntervalMs: number
+}
+
+/** M2 mention pipeline knobs (P01 §6-B). */
+export interface MentionDomainConfig {
+  /** Hard entry ceiling of one workspace walk. Default 5000. */
+  indexMaxFiles: number
+  /** Fallback freshness window for the index cache. Default 30 s. */
+  indexTtlMs: number
+  /** Search response page cap. Default 50. */
+  searchLimit: number
+}
+
+/** Per-format character budgets (FR-C6 defaults; configurable). */
+export interface ReadingBudgets {
+  /** Character budget for plain-text documents. Default 8 000. */
+  text: number
+  /** Character budget for spreadsheet (xlsx) documents. Default 6 000. */
+  xlsx: number
+  /** Character budget for PDF documents. Default 4 000. */
+  pdf: number
+  /** Character budget for Word (docx) documents. Default 4 000. */
+  docx: number
+  /** Character budget for unrecognized binary blobs. Default 2 000. */
+  binary: number
+}
+
+/**
+ * M4 vision waterfall knobs (P01 §6-D). All optional; defaults live in the
+ * service. Mode/privacy toggles are NOT here — they ride the settings center
+ * (`vision.mode`, `privacy.localFirstVision`).
+ */
+export interface VisionDomainConfig {
+  /**
+   * Level 1: explicit caption endpoint (http/https, public-only per
+   * urlPolicy). Absent = level skipped.
+   */
+  endpoint?: string
+  /**
+   * Privacy opt-in counterpart of the panel toggle: when settings
+   * privacy.localFirstVision is true (the default) this must be explicitly
+   * true before the outbound endpoint ever dials. Default false.
+   */
+  allowExternalVision?: boolean
+  /** Level 2 toggle: local Ollama probe. Default true. */
+  ollamaProbe?: boolean
+  /** Probe base URL; loopback-locked. Default http://127.0.0.1:11434. */
+  ollamaEndpoint?: string
+  /** Outbound/generate timeout in ms. Default 20 000. */
+  timeoutMs?: number
+  /** Tags-probe timeout in ms. Default 3 000. */
+  probeTimeoutMs?: number
+  /** Memory caption-cache bound (KV-backed caches are unbounded). Default 512. */
+  cacheEntries?: number
+  /**
+   * FR-D1 route hint: exact provider/model interrogated through the host llm
+   * face for inputModalities. Absent/faceless = non-native (waterfall runs).
+   * TODO(integration): replace with the host session-route seam once exposed.
+   */
+  nativeRoute?: {
+    /** Provider identifier interrogated through the host llm face (e.g. `openai`). */
+    readonly provider: string
+    /** Model identifier sent alongside the provider for the inputModalities probe. */
+    readonly model: string
+  }
+}
+```
+
+Source: [`packages/plugins/filehub/src/index.ts:185`](../packages/plugins/filehub/src/index.ts)
+
 ## Loadable plugins with no config
 
 These load from a `cordis.yml` entry with no `config:` block; they declare no configuration API.
@@ -3494,6 +3747,7 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 - `@deepseek-ai/dsh-user-questions` ([`packages/interaction/user-questions/src/index.ts`](../packages/interaction/user-questions/src/index.ts))
 - `@deepseek-ai/dsh-webhook` — requires `agents` · `agentDefaultModel` · `agentPresets` · `permissionPresets` · `sessionTitle` · `workspaceRegistry` ([`packages/webhook/webhook/src/index.ts`](../packages/webhook/webhook/src/index.ts))
 - `@deepseek-ai/dsh-workspace` — requires `storageDomain` · `sessionPersistence` ([`packages/workspace/workspace/src/index.ts`](../packages/workspace/workspace/src/index.ts))
+- `zdsh-autopilot` ([`packages/plugins/autopilot/src/index.ts`](../packages/plugins/autopilot/src/index.ts))
 
 ## Seam packages (not directly loadable)
 
@@ -3570,3 +3824,7 @@ Imported as libraries by other packages; a `cordis.yml` cannot load them.
 - `@deepseek-ai/dsh-util-values` ([`packages/util/values/src/index.ts`](../packages/util/values/src/index.ts))
 - `@deepseek-ai/dsh-util-workspace-path` ([`packages/util/workspace-path/src/index.ts`](../packages/util/workspace-path/src/index.ts))
 - `@deepseek-ai/dsh-win32-process` ([`packages/subprocess/win32-process/src/index.ts`](../packages/subprocess/win32-process/src/index.ts))
+- `dsh-omnivision` ([`packages/plugins/omnivision/src/index.ts`](../packages/plugins/omnivision/src/index.ts))
+- `dsh-webstack-verticals` ([`packages/plugins/webstack-verticals/src/index.ts`](../packages/plugins/webstack-verticals/src/index.ts))
+- `zdsh-dsh-guard` ([`packages/plugins/dsh-guard/src/index.ts`](../packages/plugins/dsh-guard/src/index.ts))
+- `zdsh-plugin-center` ([`packages/plugins/plugin-center/src/index.ts`](../packages/plugins/plugin-center/src/index.ts))

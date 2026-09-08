@@ -594,14 +594,19 @@ export interface FusionParams {
 
 /** MCP 服务器条目（F-108）：预设目录承载样板、用户条目只存差异（W-B-72）。 */
 export interface McpServerEntry {
+  /** Stable unique identifier of this server entry (preset catalog key or user-defined slug). */
   readonly id: string
+  /** Transport kind: `stdio` launches a local child process, `http` dials a remote endpoint. */
   readonly transport: 'stdio' | 'http'
   /** stdio 启动命令；必须含 `@version` 锁定形态，裸 npx 在校验层拒绝（W-A-02）。 */
   readonly command?: string
+  /** Argument vector appended to `command` for the stdio transport. */
   readonly args?: readonly string[]
+  /** Remote endpoint URL dialed for the http transport (ignored for stdio). */
   readonly url?: string
   /** 凭据引用名列表（经 credentials 域每操作解析，绝不存明文）。 */
   readonly credentialRefs?: readonly string[]
+  /** Extra environment variables overlaid onto the child process env for the stdio transport. */
   readonly env?: Readonly<Record<string, string>>
 }
 

@@ -30,7 +30,7 @@ import { createWorkspaceIndexer, createWorkspaceResolver } from './server/worksp
 import type { SessionsLike, WorkspaceIndexer } from './server/workspace.js'
 import { ParseCache } from './server/parse/cache.js'
 import { registerReadingTools } from './server/tools.js'
-import type { ReadingBudgets, SystemPromptRegistryLike, ToolsRegistryLike } from './server/tools.js'
+import type { ReadingBudgets, SystemPromptRegistryLike, ToolsRegistryLike } from './server/tools.ts'
 import {
   createLibraryHandler,
   createLibraryService,
@@ -139,13 +139,20 @@ export interface VisionDomainConfig {
    * face for inputModalities. Absent/faceless = non-native (waterfall runs).
    * TODO(integration): replace with the host session-route seam once exposed.
    */
-  nativeRoute?: { readonly provider: string; readonly model: string }
+  nativeRoute?: {
+    /** Provider identifier interrogated through the host llm face (e.g. `openai`). */
+    readonly provider: string
+    /** Model identifier sent alongside the provider for the inputModalities probe. */
+    readonly model: string
+  }
 }
 
 export interface FileHubConfig {
   /** Session-workspace subdirectory name created under the session cwd. */
   storageDirName: string
+  /** Upload domain knobs: per-file size cap, concurrency, and per-session quota. */
   upload: UploadDomainConfig
+  /** Lifecycle knobs: session data TTL and the sweep cadence that enforces it. */
   lifecycle: LifecycleDomainConfig
   /** M2 mention domain; defaults apply when omitted (additive, M1-safe). */
   mention?: Partial<MentionDomainConfig>
@@ -155,8 +162,11 @@ export interface FileHubConfig {
    * `cacheEntries`/`cacheBytes` the parse-cache LRU bounds.
    */
   reading?: {
+    /** Per-format character budget overrides; defaults live in `resolveBudgets`. */
     budgets?: Partial<ReadingBudgets>
+    /** Parse-cache LRU entry bound. Default 64. */
     cacheEntries?: number
+    /** Parse-cache LRU byte bound. Default 256 MiB. */
     cacheBytes?: number
   }
   /**
@@ -164,11 +174,15 @@ export interface FileHubConfig {
    * `maxEntries` bounds one library/usage aggregation page.
    */
   console?: {
+    /** One library/usage aggregation page cap. Default 2000. */
     maxEntries?: number
   }
   /** M4 vision waterfall; defaults apply when omitted (additive, M1–M3-safe). */
   vision?: VisionDomainConfig
 }
+
+/** Loader-facing config shape: every group optional, defaults filled by `resolveConfig`. */
+export type FileHubPluginConfig = Partial<FileHubConfig>
 
 const MIB = 1024 * 1024
 
@@ -615,7 +629,7 @@ export function createFileHubDomain(ctx: HostContext, overrides?: Partial<FileHu
  * stays stable — smoke tests assert the `[filehub]` prefix plus the effective
  * storageDirName.
  */
-export function apply(ctx: HostContext, config?: Partial<FileHubConfig>): FileHubDomain {
+export function apply(ctx: HostContext, config?: FileHubPluginConfig): FileHubDomain {
   const resolved = resolveConfig(config)
   ctx.logger.info(`[filehub] ready (storageDirName=${resolved.storageDirName})`)
   return createFileHubDomain(ctx, config)
