@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "WebStack Bridge",
+  "version": "0.1.0",
+  "description": "WebStack 渲染兜底桥：借真实浏览器会话为 dsh-webstack-bridge 宿主渲染站点正文，cookie 永不离开浏览器。",
+  "permissions": ["scripting", "tabs", "storage"],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "WebStack Bridge"
+  }
+}

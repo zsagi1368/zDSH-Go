@@ -36,10 +36,14 @@
   // in turn. `exclude` wins over `include`, so the test glob above stays broad.
   "exclude": [
     "packages/client/*/tests/**/*.host.spec.ts",
-    // Vendored plugins (T2a): package-local suites, see tsconfig.host.json.
+    // Vendored plugins (T2a/T2b): package-local suites, see tsconfig.host.json.
     "packages/plugins/filehub/tests/**",
     "packages/plugins/plugin-center/tests/**",
-    "packages/plugins/autopilot/tests/**"
+    "packages/plugins/autopilot/tests/**",
+    "packages/plugins/webstack/tests/**",
+    "packages/plugins/webstack-bridge/tests/**",
+    "packages/plugins/webstack-verticals/tests/**",
+    "packages/plugins/omnivision/tests/**"
   ],
   "references": [
     // Shared leaf: web e2e boots the real host webserver (fixture + real-host
@@ -112,6 +116,7 @@
     { "path": "./packages/plugins/filehub/tsconfig.client.json" },
     { "path": "./packages/plugins/plugin-center/tsconfig.client.json" },
     { "path": "./packages/plugins/autopilot/tsconfig.client.json" },
+    { "path": "./packages/plugins/webstack/tsconfig.client.json" },
     { "path": "./apps/web" }
   ]
 }

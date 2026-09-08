@@ -30,9 +30,9 @@ function packageReadmes(): string[] {
 }
 
 /**
- * T2a vendored ecosystem plugins keep upstream READMEs as shipped (mirroring
- * the `vendor/**` / `native/**` policy); the dsh-doc skeleton and frontmatter
- * standard applies to packages authored in this repository.
+ * T2a/T2b vendored ecosystem plugins keep upstream READMEs as shipped
+ * (mirroring the `vendor/**` / `native/**` policy); the dsh-doc skeleton and
+ * frontmatter standard applies to packages authored in this repository.
  */
 const VENDORED_PLUGIN_READMES = [
   'packages/plugins/autopilot/README.md',
@@ -40,8 +40,14 @@ const VENDORED_PLUGIN_READMES = [
   'packages/plugins/dsh-guard/README.md',
   'packages/plugins/filehub/README.md',
   'packages/plugins/filehub/README.zh.md',
+  'packages/plugins/omnivision/README.md',
+  'packages/plugins/omnivision/README.zh.md',
   'packages/plugins/plugin-center/README.md',
   'packages/plugins/plugin-center/README.zh.md',
+  'packages/plugins/webstack-bridge/README.md',
+  'packages/plugins/webstack-verticals/README.md',
+  'packages/plugins/webstack/README.md',
+  'packages/plugins/webstack/README.zh.md',
 ] as const
 
 /**

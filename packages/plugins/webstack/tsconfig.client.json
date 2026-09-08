@@ -1,0 +1,16 @@
+{
+  "extends": "../../../tsconfig.base.client.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types",
+    "tsBuildInfoFile": "lib/tsconfig.client.tsbuildinfo"
+  },
+  // workbench precedent: the client half's imports reach shared host-side
+  // leaves (kernel/types, settings/schema); include them in this project.
+  "include": ["src/client", "src/kernel/types.ts", "src/settings/schema.ts"],
+  "references": [
+    { "path": "../../client/store" },
+    { "path": "../../client/ui-settings-plugins" },
+    { "path": "../../client/ui-slots" }
+  ]
+}

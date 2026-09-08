@@ -97,16 +97,20 @@ export interface InstalledEntry {
 }
 
 /**
- * Vendored ecosystem plugins (T2a) keep upstream identity and independent
+ * Vendored ecosystem plugins (T2a/T2b) keep upstream identity and independent
  * versioning; they are mounted as workspace packages, not published by any
- * release family. Their upstream names (`zdsh-*`) would fail the
+ * release family. Their upstream names (`zdsh-*` / `dsh-*`) would fail the
  * `@deepseek-ai/` name check below, so they are excluded at glob time.
  */
 const VENDORED_PLUGIN_MANIFESTS = [
   'packages/plugins/autopilot/package.json',
   'packages/plugins/dsh-guard/package.json',
   'packages/plugins/filehub/package.json',
+  'packages/plugins/omnivision/package.json',
   'packages/plugins/plugin-center/package.json',
+  'packages/plugins/webstack-bridge/package.json',
+  'packages/plugins/webstack-verticals/package.json',
+  'packages/plugins/webstack/package.json',
 ] as const
 
 /** A release sequence: its members, its version baseline, and its tag naming. */

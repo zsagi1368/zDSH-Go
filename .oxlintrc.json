@@ -24,13 +24,17 @@
     "website/.generated/**",
     "vendor/**", // Vendored source keeps upstream style and idioms.
     "native/**", // The imported landlock-run subtree has its own gates; see native/README.md.
-    // T2a vendored plugins keep upstream style too (same clean-room import as
-    // vendor/**); package-local vitest suites are their quality gate. Only
+    // T2a/T2b vendored plugins keep upstream style too (same clean-room import
+    // as vendor/**); package-local vitest suites are their quality gate. Only
     // the TS packages need listing — dsh-guard is a .mjs-only tree already
     // covered by the **/*.mjs ignore above.
     "packages/plugins/filehub/**",
     "packages/plugins/plugin-center/**",
     "packages/plugins/autopilot/**",
+    "packages/plugins/webstack/**",
+    "packages/plugins/webstack-bridge/**",
+    "packages/plugins/webstack-verticals/**",
+    "packages/plugins/omnivision/**",
     "**/*.js",
     "**/*.mjs",
     "**/*.config.ts", // Tool and app configs are outside the repository TypeScript programs.

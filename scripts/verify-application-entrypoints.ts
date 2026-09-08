@@ -38,6 +38,7 @@ const EXECUTABLE_SOURCE_ALLOWLIST = new Map<string, string>([
   ['packages/plugins/autopilot/bin/contracts.ts', 'vendored plugin test-only contract runner'],
   ['packages/plugins/dsh-guard/dsh-guard.mjs', 'vendored plugin self-guard tool'],
   ['packages/plugins/dsh-guard/test/run.mjs', 'vendored plugin test-only guard suite'],
+  ['packages/plugins/webstack/bench/pipeline.bench.mjs', 'vendored plugin benchmark driver'],
   ['packages/sdk/client/tests/fake-runtime.ts', 'test-only SDK runtime peer'],
   ['packages/session/session-telemetry-otel/tests/fixtures/driver.ts', 'test-only subprocess driver'],
   ['packages/shell/tool-pwsh/tests/fixtures/loader/driver.ts', 'test-only subprocess driver'],

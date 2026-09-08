@@ -1,0 +1,27 @@
+# WebStack (dsh-webstack) cordis patch — COEXIST MODE BY DEFAULT (本期默认共存档).
+#
+# This file is intentionally an EMPTY patch list: WebStack registers itself as
+# an optional provider via ctx.web.registerSearchProvider/registerFetchProvider
+# and never rewrites the upstream `web.searchProvider` / `web.fetchProvider`
+# selectors unless the user explicitly opts into takeover mode.
+#
+# The only takeover patch we will EVER ship is the minimal selector-pointing
+# block below (plan 02 §3): it changes nothing else on the upstream row
+# (W-A-01 countermeasure), leaves the built-in providers untouched so
+# `mode:native` keeps delegating to them, and rolls back naturally on uninstall.
+#
+# To enable takeover mode in a fork bundle build, replace the `[]` below with:
+#
+# - patch:
+#     - path: web
+#       set:
+#         searchProvider: webstack
+#         fetchProvider: webstack
+# - insert:
+#     - id: webstack
+#       name: dsh-webstack
+#
+# M0/M1 spike still owes one empirical check: whether this host's patch
+# semantics are key-level merge or whole-row replacement. Until proven, the
+# takeover block stays disabled; the capability ladder degrades to coexist.
+[]

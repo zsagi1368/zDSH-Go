@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>WebStack Bridge</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main>
+      <h1>WebStack Bridge</h1>
+      <p id="status" class="status unknown">检查中…</p>
+
+      <label for="port">宿主端口（来自 dsh-webstack-bridge 日志）</label>
+      <input id="port" type="number" min="1" max="65535" placeholder="例如 52731" />
+
+      <label for="ticket">一次性 ticket</label>
+      <input
+        id="ticket"
+        type="text"
+        autocomplete="off"
+        spellcheck="false"
+        placeholder="粘贴宿主日志中的 ticket"
+      />
+
+      <div class="row">
+        <button id="pair" type="button">配对</button>
+        <button id="unpair" type="button" class="secondary">解除配对</button>
+      </div>
+
+      <p id="message" class="message"></p>
+    </main>
+    <script src="popup.js" type="module"></script>
+  </body>
+</html>

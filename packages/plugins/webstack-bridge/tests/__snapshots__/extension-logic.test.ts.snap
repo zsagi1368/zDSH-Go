@@ -1,0 +1,41 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`shared-protocol.js 镜像 ↔ 宿主 protocol.ts 一致性 > 协议常量面整体快照（新增常量未同步镜像时此快照先红） 1`] = `
+{
+  "BRIDGE_PROTOCOL": "webstack-bridge/1",
+  "CLOSE_AUTH_FAILED": 4003,
+  "CLOSE_PAIR_REJECTED": 4001,
+  "CLOSE_PROTOCOL_VIOLATION": 4002,
+  "DEFAULT_HEARTBEAT_INTERVAL_MS": 20000,
+  "DEFAULT_PONG_TIMEOUT_MS": 60000,
+  "DEFAULT_TICKET_TTL_MS": 60000,
+}
+`;
+
+exports[`出站帧构造与 ACK id 回显 > 消息形状快照：四类出站帧的线格式冻结（字段集与取值词汇漂移即红） 1`] = `
+[
+  {
+    "id": 1,
+    "ticket": "one-time-ticket",
+    "type": "pair",
+  },
+  {
+    "id": 2,
+    "key": "long-term-key",
+    "type": "auth",
+  },
+  {
+    "content": "extracted content",
+    "id": 3,
+    "ok": true,
+    "statusCode": 200,
+    "type": "render-res",
+  },
+  {
+    "error": "boom",
+    "id": 4,
+    "ok": false,
+    "type": "render-res",
+  },
+]
+`;

@@ -119,12 +119,16 @@
     "scripts/client-bundle-css.spec.ts",
     "packages/typert/generator/tests/fixtures/**",
     "scripts/client-bundle-purity.spec.ts",
-    // Vendored plugins (T2a): their suites are package-local (own vitest +
+    // Vendored plugins (T2a/T2b): their suites are package-local (own vitest +
     // tsconfig, R13 arrangement); the root programs compile their src through
     // project references instead.
     "packages/plugins/filehub/tests/**",
     "packages/plugins/plugin-center/tests/**",
-    "packages/plugins/autopilot/tests/**"
+    "packages/plugins/autopilot/tests/**",
+    "packages/plugins/webstack/tests/**",
+    "packages/plugins/webstack-bridge/tests/**",
+    "packages/plugins/webstack-verticals/tests/**",
+    "packages/plugins/omnivision/tests/**"
   ],
   "references": [
     { "path": "./vendor/cosmokit" },
@@ -352,6 +356,9 @@
     { "path": "./packages/plugins/filehub/tsconfig.host.json" },
     { "path": "./packages/plugins/plugin-center/tsconfig.host.json" },
     { "path": "./packages/plugins/autopilot/tsconfig.host.json" },
+    { "path": "./packages/plugins/webstack/tsconfig.host.json" },
+    { "path": "./packages/plugins/webstack-bridge/tsconfig.host.json" },
+    { "path": "./packages/plugins/webstack-verticals/tsconfig.host.json" },
     { "path": "./apps/cli" }
   ]
 }

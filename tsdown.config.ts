@@ -23,6 +23,13 @@ export default defineConfig(({ env }) => {
       // dsh-guard (T2a) is a single self-contained .mjs file consumed as-is by
       // the install guard script — no TS program, no lib/types entries.
       '!packages/plugins/dsh-guard',
+      // dsh-omnivision (T2b) is vite-only (R4): its runtime artifact is built
+      // package-locally (`pnpm --filter dsh-omnivision build` -> dist/index.js,
+      // its upstream main field); it has no cordis Context merge or Typert
+      // face, so it stays out of the host graph entirely — registering it
+      // would also feed its exported types into the cordis-catalog scan, where
+      // ToolDefinition/ToolResult/PluginContext collide with packages/core/tools.
+      '!packages/plugins/omnivision',
     ],
     entry: client ? '' : ['lib/types/{index,invariant,startup}.js'],
     outDir: 'lib',
