@@ -311,6 +311,23 @@ export interface FileHubDomain {
 }
 
 /**
+ * Optional host llm runtime face, probed defensively. `llm` is deliberately
+ * NOT in the plugin's `inject` list (inject entries are hard requirements —
+ * the plugin would never load where the host does not provide the face), but
+ * under a live cordis proxy a bare `ctx.llm` read throws
+ * `cannot get property "llm" without inject`. Same guarded-peek pattern as
+ * webstack's `peekService`: absent face → `undefined` → the M4 caption
+ * waterfall stays off, per the {@link HostContext.llm} design contract.
+ */
+function peekLlm(ctx: HostContext): LlmRuntimeFaceLike | undefined {
+  try {
+    return ctx.llm
+  } catch {
+    return undefined
+  }
+}
+
+/**
  * Compose the M1 upload domain onto a host context. Exported separately from
  * {@link apply} so tests can drive the real handlers against fake services.
  *
@@ -455,7 +472,7 @@ export function createFileHubDomain(ctx: HostContext, overrides?: Partial<FileHu
     logWarn,
     storage: ctx.storage,
     resolveImageCapable: createImageCapableGate({
-      llm: ctx.llm,
+      llm: peekLlm(ctx),
       nativeRoute: resolved.vision.nativeRoute,
       logWarn,
     }),
