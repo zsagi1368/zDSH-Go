@@ -16,7 +16,14 @@ function isBuildFaceClient(value: unknown): boolean {
 export default defineConfig(({ env }) => {
   const client = isBuildFaceClient(env?.DSH_BUILD_FACE)
   return {
-    workspace: ['vendor/*', 'packages/*/*', 'apps/cli'],
+    workspace: [
+      'vendor/*',
+      'packages/*/*',
+      'apps/cli',
+      // dsh-guard (T2a) is a single self-contained .mjs file consumed as-is by
+      // the install guard script — no TS program, no lib/types entries.
+      '!packages/plugins/dsh-guard',
+    ],
     entry: client ? '' : ['lib/types/{index,invariant,startup}.js'],
     outDir: 'lib',
     format: ['esm'],

@@ -96,6 +96,19 @@ export interface InstalledEntry {
   readonly binPath: string
 }
 
+/**
+ * Vendored ecosystem plugins (T2a) keep upstream identity and independent
+ * versioning; they are mounted as workspace packages, not published by any
+ * release family. Their upstream names (`zdsh-*`) would fail the
+ * `@deepseek-ai/` name check below, so they are excluded at glob time.
+ */
+const VENDORED_PLUGIN_MANIFESTS = [
+  'packages/plugins/autopilot/package.json',
+  'packages/plugins/dsh-guard/package.json',
+  'packages/plugins/filehub/package.json',
+  'packages/plugins/plugin-center/package.json',
+] as const
+
 /** A release sequence: its members, its version baseline, and its tag naming. */
 export abstract class ReleaseFamily {
   /** Workflow-facing `--family` identifier. */
@@ -120,7 +133,7 @@ export abstract class ReleaseFamily {
    * @returns Members sorted by directory, with names validated and deduplicated.
    */
   members(root: string): ReleaseMember[] {
-    const manifestPaths = globSync([...this.patterns], { cwd: root }).sort()
+    const manifestPaths = globSync([...this.patterns], { cwd: root, exclude: [...VENDORED_PLUGIN_MANIFESTS] }).sort()
     if (manifestPaths.length === 0) throw new Error(`release family ${this.id} matched no manifests`)
 
     const members: ReleaseMember[] = []

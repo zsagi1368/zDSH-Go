@@ -1,0 +1,166 @@
+{
+  "name": "zdsh-autopilot",
+  "version": "0.1.0",
+  "description": "zDSH AutoPilot — unified automation engine for DeepSeek Harness: interruption auto-resume, sandbox-first auto permission policy, and second-model approval review behind one kernel and one console.",
+  "license": "MIT",
+  "author": {
+    "name": "zsagi1368"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zsagi1368/deepseek-harness-zDSH.git",
+    "directory": "packages/plugins/autopilot"
+  },
+  "keywords": [
+    "deepseek",
+    "deepseek-harness",
+    "dsh",
+    "zdsh",
+    "automation",
+    "auto-continue",
+    "approval",
+    "permission",
+    "plugin"
+  ],
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./client": "./dist/client.cjs",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "dist",
+    "corpus",
+    "cordis.patch.yml",
+    "README.md",
+    "README.zh.md",
+    "docs/DESIGN.md",
+    "LICENSE"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-settings-plugins"
+      ]
+    }
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-agent": ">=0.1.0-rc.2",
+    "@deepseek-ai/dsh-client-connection": ">=0.1.0-rc.2",
+    "@deepseek-ai/dsh-client-locale": ">=0.1.0-rc.2",
+    "@deepseek-ai/dsh-client-ui-settings": ">=0.1.0-rc.2",
+    "@deepseek-ai/dsh-client-ui-settings-plugins": ">=0.1.0-rc.2",
+    "@deepseek-ai/dsh-commands": ">=0.1.0-rc.2",
+    "@deepseek-ai/dsh-invariants": ">=0.1.0-rc.2",
+    "@deepseek-ai/dsh-llm": ">=0.1.0-rc.2",
+    "@deepseek-ai/dsh-session": ">=0.1.0-rc.2",
+    "@deepseek-ai/dsh-session-projection": ">=0.1.0-rc.2",
+    "@deepseek-ai/dsh-subagent": ">=0.1.0-rc.2",
+    "@deepseek-ai/dsh-tools": ">=0.1.0-rc.2",
+    "@deepseek-ai/dsh-user-approval": ">=0.1.0-rc.2"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/cordis": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-agent": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-client-connection": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-client-locale": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-client-ui-settings": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-client-ui-settings-plugins": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-commands": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-invariants": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-llm": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-session": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-session-projection": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-subagent": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-tools": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-user-approval": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/cordis-plugin-include": "workspace:^",
+    "@deepseek-ai/cordis-plugin-loader": "workspace:^",
+    "@deepseek-ai/dsh-agent": "workspace:^",
+    "@deepseek-ai/dsh-client-connection": "workspace:^",
+    "@deepseek-ai/dsh-client-locale": "workspace:^",
+    "@deepseek-ai/dsh-client-ui-settings": "workspace:^",
+    "@deepseek-ai/dsh-client-ui-settings-plugins": "workspace:^",
+    "@deepseek-ai/dsh-commands": "workspace:^",
+    "@deepseek-ai/dsh-invariants": "workspace:^",
+    "@deepseek-ai/dsh-llm": "workspace:^",
+    "@deepseek-ai/schemastery": "^3.18.0",
+    "@deepseek-ai/dsh-session": "workspace:^",
+    "@deepseek-ai/dsh-session-projection": "workspace:^",
+    "@deepseek-ai/dsh-subagent": "workspace:^",
+    "@deepseek-ai/dsh-tools": "workspace:^",
+    "@deepseek-ai/dsh-user-approval": "workspace:^",
+    "@types/node": "^24.0.0",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "jsdom": "^29.1.1",
+    "oxlint": "^1.0.0",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "tsdown": "^0.22.14",
+    "tsx": "^4.19.0",
+    "typescript": "^7.0.2",
+    "vitest": "^4.0.0",
+    "yaml": "^2.8.2",
+    "zod": "^4.4.3"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && tsdown",
+    "build:client": "tsdown",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.client.json --noEmit && tsc -p tsconfig.tests.json --noEmit",
+    "test": "vitest run",
+    "lint": "node scripts/check-boundaries.mjs && oxlint src tests eval scripts",
+    "eval": "tsx bin/contracts.ts",
+    "verify": "pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm eval"
+  },
+  "packageManager": "pnpm@11.17.0+sha512.cca3cea332ad254bb84145f966d19f4879615210346fc92c79a047f23a0d7b3cca3c3792f0076ba1f1831d277efbcf0a9119b31a9a60eca7fb3d6231f331ef72"
+}

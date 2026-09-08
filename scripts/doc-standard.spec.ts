@@ -24,10 +24,25 @@ const PACKAGE_README_GLOBS = [
 
 function packageReadmes(): string[] {
   return PACKAGE_README_GLOBS
-    .flatMap(pattern => globSync(pattern, { cwd: root, exclude: ['**/node_modules/**'] }))
+    .flatMap(pattern => globSync(pattern, { cwd: root, exclude: ['**/node_modules/**', ...VENDORED_PLUGIN_READMES] }))
     .map(file => file.replaceAll('\\', '/'))
     .sort()
 }
+
+/**
+ * T2a vendored ecosystem plugins keep upstream READMEs as shipped (mirroring
+ * the `vendor/**` / `native/**` policy); the dsh-doc skeleton and frontmatter
+ * standard applies to packages authored in this repository.
+ */
+const VENDORED_PLUGIN_READMES = [
+  'packages/plugins/autopilot/README.md',
+  'packages/plugins/autopilot/README.zh.md',
+  'packages/plugins/dsh-guard/README.md',
+  'packages/plugins/filehub/README.md',
+  'packages/plugins/filehub/README.zh.md',
+  'packages/plugins/plugin-center/README.md',
+  'packages/plugins/plugin-center/README.zh.md',
+] as const
 
 /**
  * The kind system: each label maps to exactly one template in the dsh-doc

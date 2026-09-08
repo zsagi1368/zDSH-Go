@@ -118,7 +118,13 @@
     "scripts/*.client.spec.ts",
     "scripts/client-bundle-css.spec.ts",
     "packages/typert/generator/tests/fixtures/**",
-    "scripts/client-bundle-purity.spec.ts"
+    "scripts/client-bundle-purity.spec.ts",
+    // Vendored plugins (T2a): their suites are package-local (own vitest +
+    // tsconfig, R13 arrangement); the root programs compile their src through
+    // project references instead.
+    "packages/plugins/filehub/tests/**",
+    "packages/plugins/plugin-center/tests/**",
+    "packages/plugins/autopilot/tests/**"
   ],
   "references": [
     { "path": "./vendor/cosmokit" },
@@ -343,6 +349,9 @@
     { "path": "./packages/lsp/lsp-stdio" },
     { "path": "./packages/lsp/tool-lsp" },
     { "path": "./packages/compat/dsh-compat" },
+    { "path": "./packages/plugins/filehub/tsconfig.host.json" },
+    { "path": "./packages/plugins/plugin-center/tsconfig.host.json" },
+    { "path": "./packages/plugins/autopilot/tsconfig.host.json" },
     { "path": "./apps/cli" }
   ]
 }

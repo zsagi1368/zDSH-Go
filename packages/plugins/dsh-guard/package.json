@@ -1,0 +1,16 @@
+{
+  "name": "zdsh-dsh-guard",
+  "version": "0.1.0",
+  "description": "zDSH dsh-guard — self-guarding middleware for the DSH plugin ecosystem: detects and repairs known breakage patterns (duplicate core packages, double-mount) on the profile layer (single self-contained file, zero dependencies)",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "main": "./dsh-guard.mjs",
+  "exports": {
+    ".": "./dsh-guard.mjs",
+    "./package.json": "./package.json"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

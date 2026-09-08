@@ -1,0 +1,23 @@
+# zdsh-autopilot bundle patch.
+#
+# Contract notes (see PluginR&D plan/03):
+# - This file only INSERTS our own row into the installing profile's loader
+#   table. It never overrides upstream rows.
+# - Row activation is service-availability driven; row order carries no load
+#   semantics.
+# - `config` here holds DEPLOYMENT defaults only. User-level configuration lives
+#   in the `autopilot:` namespace of the DSH settings file and always wins.
+#
+# Install (local checkout):
+#   dsh plugin --profile web add link:<path-to-this-checkout>
+- insert:
+    - id: autopilot
+      name: zdsh-autopilot
+      config:
+        modules:
+          continue:
+            enabled: true
+          guard:
+            enabled: true
+          review:
+            enabled: true

@@ -1,0 +1,59 @@
+name: review-allows-low-risk-verdict
+module: review
+setup:
+  reviewer: { decision: "allow", reason: "safe test run", riskLevel: "low" }
+steps:
+  - approvalRequest: { callId: call-1, toolName: bash, reason: "run tests" }
+expect:
+  - id: allowed once on low-risk verdict
+    of: lastOutcome
+    is: allowed-once
+
+---
+name: review-deny-injects-marker-carrying-feedback
+module: review
+setup:
+  reviewer: { decision: "deny", reason: "destructive operation", riskLevel: "high" }
+steps:
+  - approvalRequest: { callId: call-1, toolName: bash, reason: "wipe the db" }
+expect:
+  - id: rejected outcome
+    of: lastOutcome
+    is: rejected
+  - id: injected text carries the audit marker
+    of: injectedText
+    contains: "[autopilot:ap/verdict/"
+  - id: injected text carries the denial reason
+    of: injectedText
+    contains: destructive operation
+
+---
+name: review-broken-audit-correlation-fails-closed
+module: review
+setup:
+  pendingApprovalAsked: false
+steps:
+  - approvalRequest: { callId: call-1, toolName: bash, reason: "anything" }
+expect:
+  - id: correlation break is rejection, never authorization
+    of: lastOutcome
+    is: rejected
+  - id: unavailability surfaced in feedback
+    of: injectedText
+    contains: unavailable
+
+---
+name: review-cancellation-settles-without-fallback-text
+module: review
+setup:
+  reviewerFails: true
+steps:
+  - approvalRequest:
+      callId: call-1
+      toolName: bash
+      reason: "never completes"
+      agentSessionId: cancelled-agent
+expect:
+  - id: outcome recorded
+    of: outcomesJoined
+    contains: ""

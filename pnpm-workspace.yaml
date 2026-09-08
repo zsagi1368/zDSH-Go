@@ -19,6 +19,11 @@ linkWorkspacePackages: true
 overrides:
   '@deepseek-ai/cosmokit': 'link:vendor/cosmokit'
   '@deepseek-ai/schemastery': 'link:vendor/schemastery'
+  # Vendored plugin devDeps declare react 18/19 ranges; the repo standard is a
+  # single React instance (18.3.1) — pin it so peer pairings (testing-library,
+  # jsdom) cannot drift between importers.
+  'react': '18.3.1'
+  'react-dom': '18.3.1'
 
 peerDependencyRules:
   allowedVersions:

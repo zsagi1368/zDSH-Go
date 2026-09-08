@@ -1,0 +1,7 @@
+# zDSH Plugin Center — bundle patch declaration.
+# Declares this package as a Cordis plugin so the DSH host discovers and loads it.
+# The insert shape follows the standard DSH bundle-patch convention (id must match
+# the id used in src/host/index.ts service registration and the client slot id).
+insert:
+  - id: zdsh-plugin-center
+    name: zdsh-plugin-center

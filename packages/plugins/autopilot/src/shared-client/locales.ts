@@ -1,0 +1,76 @@
+/**
+ * Console locale dictionaries (shared between host console wiring and the
+ * browser fiber). zh is the source of truth for the KEY SET; en must satisfy
+ * the same keys (CI-checked by tests/console/locale parity spec).
+ */
+export const NS = 'autopilot'
+
+export const zh = {
+  'tab.label': 'AutoPilot 自动领航',
+  'tab.description': '断线续跑 · 沙箱优先自动审批 · 二模型复核',
+  'global.paused': '暂停全部自动化',
+  'global.statsPersistence': '统计持久化（跨重启）',
+  'module.continue': '续跑（断线自愈）',
+  'module.guard': '守卫（沙箱优先自动审批）',
+  'module.review': '复核（二模型审批）',
+  'module.enabled': '启用',
+  'stats.today': '今日',
+  'stats.all': '累计',
+  'stats.sent': '已续发',
+  'stats.skipped': '已跳过',
+  'stats.allowed': '已放行',
+  'stats.denied': '已拦截',
+  'stats.reviewed': '已复核',
+  'panel.title': 'AutoPilot',
+  'panel.recent': '最近动作',
+  'panel.approve': '批准最近拒绝',
+  'panel.pause1h': '暂停 1 小时',
+  'cmd.status.enabled': '运行中',
+  'cmd.status.disabled': '已停用',
+  'cmd.status.circuitOpen': '复核熔断开启',
+  'cmd.pause.done': '已暂停 {duration}。',
+  'cmd.resume.done': '已恢复。',
+  'cmd.approve.none': '没有可批准的最近拒绝。',
+  'cmd.approve.done': '已授权下一次 {tool} 复核携带人类语境。',
+  'cmd.preset.done': '已应用预设：{preset}。',
+  'notify.resumed.title': '已自动续跑',
+  'notify.resumed.body': '{session} 第 {attempt} 次续跑已发送。',
+  'notify.skipped.title': '续跑被跳过',
+  'notify.denied.title': '操作已被复核驳回',
+} as const
+
+export type LocaleKey = keyof typeof zh
+
+export const en: Record<LocaleKey, string> = {
+  'tab.label': 'AutoPilot',
+  'tab.description': 'Auto-resume · sandbox-first approvals · second-model review',
+  'global.paused': 'Pause all automation',
+  'global.statsPersistence': 'Persistent stats (across restarts)',
+  'module.continue': 'Resume (interruption self-heal)',
+  'module.guard': 'Guard (sandbox-first auto approval)',
+  'module.review': 'Review (second-model)',
+  'module.enabled': 'Enabled',
+  'stats.today': 'Today',
+  'stats.all': 'All time',
+  'stats.sent': 'Resumed',
+  'stats.skipped': 'Skipped',
+  'stats.allowed': 'Allowed',
+  'stats.denied': 'Denied',
+  'stats.reviewed': 'Reviewed',
+  'panel.title': 'AutoPilot',
+  'panel.recent': 'Recent actions',
+  'panel.approve': 'Approve latest denial',
+  'panel.pause1h': 'Pause 1 hour',
+  'cmd.status.enabled': 'running',
+  'cmd.status.disabled': 'disabled',
+  'cmd.status.circuitOpen': 'review circuit open',
+  'cmd.pause.done': 'Paused for {duration}.',
+  'cmd.resume.done': 'Resumed.',
+  'cmd.approve.none': 'No recent denial to approve.',
+  'cmd.approve.done': 'Next {tool} review will carry human context.',
+  'cmd.preset.done': 'Preset applied: {preset}.',
+  'notify.resumed.title': 'Auto-resumed',
+  'notify.resumed.body': 'Attempt {attempt} sent for {session}.',
+  'notify.skipped.title': 'Resume skipped',
+  'notify.denied.title': 'Action denied by reviewer',
+}

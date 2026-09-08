@@ -1,0 +1,114 @@
+{
+  "version": 1,
+  "fetchedAt": "2026-08-24T00:00:00.000Z",
+  "entries": [
+    {
+      "id": "sliverp/dsh-hub-plugin",
+      "source": "github",
+      "owner": "sliverp",
+      "repo": "dsh-hub-plugin",
+      "pinnedCommit": "2b21934040c167e6fb08959b66bea2767f6a1b63",
+      "title": { "zh": "DSH Hub 市场橱窗", "en": "DSH Hub Marketplace" },
+      "summary": {
+        "zh": "dsh-hub.cc 的原生客户端：在设置页内搜索社区插件并发起安装请求。",
+        "en": "Native client for dsh-hub.cc: search community plugins and request installs from settings."
+      },
+      "category": "marketplace",
+      "evidence": "installable",
+      "compat": "unknown",
+      "scriptsPolicy": "none",
+      "homepage": "https://github.com/sliverp/dsh-hub-plugin",
+      "updatedAt": "2026-08-24T00:00:00.000Z"
+    },
+    {
+      "id": "AI-Scarlett/dsh-safe-plugin-manager",
+      "source": "github",
+      "owner": "AI-Scarlett",
+      "repo": "dsh-safe-plugin-manager",
+      "pinnedCommit": "47ad35be53a31e4fc6fc21a5e60ddcadef776729",
+      "title": { "zh": "DSH-Store 安全商城", "en": "DSH-Store Safe Marketplace" },
+      "summary": {
+        "zh": "第三方插件商城与安全生命周期管理器：计划式安装、备份与回滚。",
+        "en": "Third-party marketplace with safe lifecycle management: planned installs, backup and rollback."
+      },
+      "category": "marketplace",
+      "evidence": "installable",
+      "compat": "unknown",
+      "scriptsPolicy": "none",
+      "homepage": "https://github.com/AI-Scarlett/dsh-safe-plugin-manager",
+      "updatedAt": "2026-08-24T00:00:00.000Z"
+    },
+    {
+      "id": "zsagi1368/zdsh-autopilot",
+      "source": "github",
+      "owner": "zsagi1368",
+      "repo": "zdsh-autopilot",
+      "pinnedCommit": "d705e49f7be2c1115a0ae7857ecd3aaf4a7221a0",
+      "title": { "zh": "zDSH 自动领航", "en": "zDSH AutoPilot" },
+      "summary": {
+        "zh": "断线自动续跑、沙箱优先自动权限与二模型复核的整合自动化引擎。",
+        "en": "Integrated automation engine: auto-continue, sandbox-first auto permissions and dual-model review."
+      },
+      "category": "automation",
+      "evidence": "installable",
+      "compat": "unknown",
+      "scriptsPolicy": "none",
+      "homepage": "https://github.com/zsagi1368/zdsh-autopilot",
+      "updatedAt": "2026-08-24T00:00:00.000Z"
+    },
+    {
+      "id": "omdsh-dev/DSH-better-sidebar",
+      "source": "github",
+      "owner": "omdsh-dev",
+      "repo": "DSH-better-sidebar",
+      "pinnedCommit": "36a411925399a92e3b441bb8bb09c5fac85989b5",
+      "title": { "zh": "Better Sidebar 工作台", "en": "Better Sidebar Workbench" },
+      "summary": {
+        "zh": "VSCode 式侧边栏工作台基座：文件树、终端与面板扩展点。",
+        "en": "VSCode-style sidebar workbench base: file tree, terminal and panel extension points."
+      },
+      "category": "workbench",
+      "evidence": "installable",
+      "compat": "unknown",
+      "scriptsPolicy": "none",
+      "homepage": "https://github.com/omdsh-dev/DSH-better-sidebar",
+      "updatedAt": "2026-08-24T00:00:00.000Z"
+    },
+    {
+      "id": "taxueseek/dsh-files",
+      "source": "github",
+      "owner": "taxueseek",
+      "repo": "dsh-files",
+      "pinnedCommit": "b17e36fa3018b0cf24d20a7f60a26a8a826d2a2d",
+      "title": { "zh": "DSH Files 文件管理", "en": "DSH Files Manager" },
+      "summary": {
+        "zh": "面向 DSH 会话的文件管理面板：浏览、上传与整理工作区文件。",
+        "en": "File management panel for DSH sessions: browse, upload and organize workspace files."
+      },
+      "category": "files",
+      "evidence": "installable",
+      "compat": "unknown",
+      "scriptsPolicy": "none",
+      "homepage": "https://github.com/taxueseek/dsh-files",
+      "updatedAt": "2026-08-24T00:00:00.000Z"
+    },
+    {
+      "id": "HongMing-Huang/dsh-file-upload",
+      "source": "github",
+      "owner": "HongMing-Huang",
+      "repo": "dsh-file-upload",
+      "pinnedCommit": "ce4ca943da592be36a784a5648d36a600aeda136",
+      "title": { "zh": "File Upload 上传增强", "en": "File Upload Enhancer" },
+      "summary": {
+        "zh": "为 DSH Web 客户端补充文件上传与附件处理能力。",
+        "en": "Adds file upload and attachment handling to the DSH web client."
+      },
+      "category": "files",
+      "evidence": "installable",
+      "compat": "unknown",
+      "scriptsPolicy": "none",
+      "homepage": "https://github.com/HongMing-Huang/dsh-file-upload",
+      "updatedAt": "2026-08-24T00:00:00.000Z"
+    }
+  ]
+}

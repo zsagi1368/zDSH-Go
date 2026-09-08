@@ -1,0 +1,32 @@
+name: continue-max-tokens-uses-dedicated-template
+module: continue
+steps:
+  - turnEnd: { sessionId: s1, reason: max-tokens }
+  - advanceMs: 4000
+expect:
+  - id: resumed once
+    of: sentCount
+    is: 1
+  - id: dedicated template routed
+    of: sentTemplate
+    is: continue-max-tokens
+
+---
+name: continue-pending-approval-defers-not-drops
+module: continue
+setup:
+  graceMs: 1000
+steps:
+  - turnEnd: { sessionId: s1, reason: error }
+  - pendingApproval: { sessionId: s1, callId: c1 }
+  - advanceMs: 5000
+  - expectStillDeferred: true
+  - resolvedApproval: { sessionId: s1, callId: c1 }
+  - advanceMs: 5000
+expect:
+  - id: exactly one send after the approval resolved
+    of: sentCount
+    is: 1
+  - id: deferral never recorded as a skip
+    of: skipsJoined
+    is: ""

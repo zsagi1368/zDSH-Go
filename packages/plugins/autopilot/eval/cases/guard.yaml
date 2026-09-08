@@ -1,0 +1,63 @@
+name: guard-denies-multi-target-deletion
+module: guard
+steps:
+  - preToolUse:
+      toolName: bash
+      shell: bash
+      argsJson: "rm a.txt b.txt"
+expect:
+  - id: multi-target deletion denied at rules layer
+    of: lastDecision
+    is: deny
+  - id: reason demands visible literal targets
+    of: lastReason
+    contains: visible literal
+
+---
+name: guard-classifies-adhoc-package-execution
+module: guard
+setup:
+  classifierResponse: { decision: "allow", reason: "user asked for this tool run" }
+steps:
+  - preToolUse:
+      toolName: bash
+      shell: bash
+      argsJson: "npx some-tool@latest"
+expect:
+  - id: classifier allow passes
+    of: lastDecision
+    is: allow
+
+---
+name: guard-fuse-denies-privilege-escalation-before-classifier
+module: guard
+setup:
+  classifierResponse: { decision: "allow", reason: "should never be reached" }
+steps:
+  - preToolUse:
+      toolName: bash
+      shell: bash
+      argsJson: "sudo apt install thing"
+expect:
+  - id: fuse layer denied
+    of: auditsJoined
+    contains: fuse/deny
+  - id: final decision deny
+    of: lastDecision
+    is: deny
+
+---
+name: guard-ladder-hands-to-human-after-repeated-classifier-failures
+module: guard
+setup:
+  classifierThrows: true
+steps:
+  - preToolUse: { toolName: bash, shell: bash, argsJson: "npx pkg-a" }
+  - preToolUse: { toolName: bash, shell: bash, argsJson: "npx pkg-b", callId: c2 }
+expect:
+  - id: first failure fail-closes to deny
+    of: decisions.0.decision
+    is: deny
+  - id: second consecutive failure escalates to human ask
+    of: decisions.1.decision
+    is: ask
