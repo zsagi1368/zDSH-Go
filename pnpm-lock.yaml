@@ -1626,6 +1626,9 @@ importers:
       '@deepseek-ai/dsh-client-ui-workspace':
         specifier: workspace:^
         version: link:../../client/ui-workspace
+      '@deepseek-ai/dsh-client-workbench':
+        specifier: workspace:^
+        version: link:../../client/workbench
       '@deepseek-ai/dsh-cmdline':
         specifier: workspace:^
         version: link:../../boot/cmdline
@@ -1698,9 +1701,24 @@ importers:
       commander:
         specifier: ^15.0.0
         version: 15.0.0
+      dsh-omnivision:
+        specifier: workspace:^
+        version: link:../../plugins/omnivision
+      dsh-webstack:
+        specifier: workspace:^
+        version: link:../../plugins/webstack
       open:
         specifier: ^11.0.0
         version: 11.0.2
+      zdsh-autopilot:
+        specifier: workspace:^
+        version: link:../../plugins/autopilot
+      zdsh-filehub:
+        specifier: workspace:^
+        version: link:../../plugins/filehub
+      zdsh-plugin-center:
+        specifier: workspace:^
+        version: link:../../plugins/plugin-center
     devDependencies:
       '@deepseek-ai/cordis':
         specifier: workspace:^

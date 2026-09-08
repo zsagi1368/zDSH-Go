@@ -3,10 +3,14 @@
   "compilerOptions": {
     "rootDir": "src",
     "outDir": "lib/types",
-    "tsBuildInfoFile": "lib/tsconfig.client.tsbuildinfo"
+    "tsBuildInfoFile": "lib/tsconfig.client.tsbuildinfo",
+    "types": ["node"]
   },
   "include": [
-    "src/client"
+    "src/client",
+    "src/server",
+    "src/contract.ts",
+    "src/detect.ts"
   ],
   "references": [
     {

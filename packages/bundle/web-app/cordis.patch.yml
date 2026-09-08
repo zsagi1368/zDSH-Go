@@ -447,3 +447,50 @@
       name: '@deepseek-ai/dsh-agent-presets'
       config:
         default: standard
+
+# ── zDSH-go self-developed plugins (campaign 2026-09-08) ────────────────────
+# All `name:` anchors resolve via the Loader's Node ESM two-anchor resolution
+# (install anchor + profile anchor), so every package below is also declared in
+# this package's `dependencies` (workspace:^) — a missing dep only explodes at
+# runtime entry import (PLAN.md D2/M1). Rows carry fresh ids; a full-file grep
+# confirmed none of them pre-existed. Per-plugin config mirrors each plugin's
+# own cordis.patch.yml defaults:
+#   * zdsh-plugin-center: signed remote catalog (first-party registry), with
+#     the vendored catalog/seed.json as the offline fallback (no sha256 check
+#     on seed — only remote/cache verify the sidecar).
+#   * zdsh-autopilot: deployment defaults restated from its own patch file.
+#   * dsh-webstack: coexist mode — no config; it registers itself via
+#     ctx.web.registerSearchProvider/registerFetchProvider and never rewrites
+#     the upstream selectors unless explicitly opted in.
+#   * dsh-omnivision: no config — its patch's pinned keys restate
+#     DEFAULT_CONFIG (src/config/schema.ts, progressiveTools: false), so
+#     omission is behavior-neutral.
+#   * filehub / workbench: no config (their own patches ship none).
+- insert:
+    - id: workbench
+      name: '@deepseek-ai/dsh-client-workbench'
+
+    - id: filehub
+      name: zdsh-filehub
+
+    - id: zdsh-plugin-center
+      name: zdsh-plugin-center
+      config:
+        remoteCatalogUrl: https://raw.githubusercontent.com/zsagi1368/zdsh-plugin-registry/main/catalog.json
+
+    - id: autopilot
+      name: zdsh-autopilot
+      config:
+        modules:
+          continue:
+            enabled: true
+          guard:
+            enabled: true
+          review:
+            enabled: true
+
+    - id: dsh-webstack
+      name: dsh-webstack
+
+    - id: dsh-omnivision
+      name: dsh-omnivision
