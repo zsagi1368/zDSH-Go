@@ -57,6 +57,11 @@ class GatedAdapter extends LlmAdapter {
 // Each persistence-backed temp root cleans up by closing its handle before
 // removing the directory: Windows rmSync over a dir holding a still-open handle
 // fails with EPERM.
+// Async continuation waits poll agent lifecycle; on 2-core CI runners the
+// poll can outgrow the tight 5s budget while staying correct, so CI gets a
+// bounded 30s budget (local workstations keep 5s).
+const continuationWaitMs = process.env.CI === 'true' ? 30_000 : 5_000
+
 const cleanups: Array<() => Promise<void>> = []
 afterEach(async () => {
   const errors: unknown[] = []
@@ -194,7 +199,7 @@ function drainManager(ctx: Context): Promise<void> {
 async function waitNoActivation(ctx: Context, childId: SessionId): Promise<void> {
   await vi.waitFor(() => {
     expect(ctx.agents.get(childId)).toBeUndefined()
-  }, { timeout: 5_000 })
+  }, { timeout: continuationWaitMs })
 }
 
 /**
@@ -814,7 +819,7 @@ describe('direct-child Queue residency routing', () => {
     await vi.waitFor(() => {
       expect(child.status).toBe('idle')
       expect(ctx.agents.get(started.childId)).toBe(child)
-    }, { timeout: 5_000 })
+    }, { timeout: continuationWaitMs })
     // Waiting retains the handle: the same Agent is still live.
     expect(ctx.agents.get(started.childId)).toBe(child)
 
@@ -984,7 +989,7 @@ describe('continuable child ownership', () => {
     await vi.waitFor(() => {
       expect(child.status).toBe('idle')
       expect(ctx.agents.get(started.childId)).toBe(child)
-    }, { timeout: 5_000 })
+    }, { timeout: continuationWaitMs })
     // Child-first: the parent handle is retained while the grandchild is live.
     expect(ctx.agents.get(started.childId)).toBe(child)
     expect(ctx.agents.get(grandchild.childId)).toBeDefined()
@@ -1071,7 +1076,7 @@ describe('continuable durability and teardown', () => {
     await waitNoActivation(ctx, started.childId)
     await vi.waitFor(() => {
       expect(warnings.some(warning => warning.includes('normal settlement cleanup failed'))).toBe(true)
-    }, { timeout: 5_000 })
+    }, { timeout: continuationWaitMs })
   })
 
   it('disposes every live Activation forest child-first on manager teardown', async () => {
