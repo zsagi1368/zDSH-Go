@@ -16,6 +16,26 @@ zDSH 跟踪的 harness 处于 _开发者预览_ 阶段，正在快速迭代。**
 
 运行本项目前，请阅读[安全说明](SAFETY.zh.md)。
 
+## zDSH-go 分支
+
+活跃开发分支 `zdsh-latest` 是主树：保持纯 zDSH 形态，自研插件按需显式添加。`zDSH-go` 分支是同一源码树的开箱即用整合分支——它与主树的唯一区别是全部自研 zDSH 插件出厂预装，全新安装即可运行完整插件套件。安装方式与下文相同：克隆本仓库，检出 `zDSH-go`，再运行对应平台的安装脚本。
+
+| 组件 | 它带来什么 | 挂载形态 |
+|---|---|---|
+| Workbench | Web UI 的 IDE 级停靠工作区：文件、编辑器、终端、git、任务与浏览面板收拢于一个注册表服务 | 内树客户端包，出厂挂载 |
+| FileHub | 统一文件中心：随处上传、`@` 引用万物、让模型读懂文档、为图片生成讲解 | 出厂预装插件 |
+| Plugin Center | 内置插件中心：在同一设置页发现、评估、安装、更新与审计插件 | 出厂预装插件 |
+| AutoPilot | 自动化引擎：Continue（中断自动续跑）、Guard（沙箱优先权限策略）、Review（只读第二模型审查者） | 出厂预装插件 |
+| WebStack | 一体化网络搜索与抓取内核，默认加固；以共存模式注册在内置提供方之侧 | 出厂预装插件（三个源码包） |
+| Omnivision | 视觉桥：每张图片在到达模型前先转为忠实的文字描述，保持前缀缓存常热 | 出厂预装插件 |
+| ContextManagement | 上下文缓存管理（核心源码级整合） | 核心补丁，直连分支源码 |
+| dsh-guard | 安装守护：检查 web profile 的已知插件生态破坏模式，只报告、不阻断安装 | 安装脚本运行的单文件守护 |
+| Plugin Registry 目录 | 第一方插件目录，作为 Plugin Center 的内置 seed 出厂，离线即可发现插件；远端目录仍是在线通道 | 随 Plugin Center 内置的离线 seed |
+
+安装与卸载独立于主树，机制相同：所有数据都收拢在仓库目录的 `data/` 内，生成的 `env.ps1` / `env.sh` 一并定义 `DSH_HOME` 与 `DSH_BRANCH_HOME`。zDSH-go 的兜底主目录为 `~/.dsh-zdsh-go`，与主树数据目录 `~/.dsh-zdsh` 互不干扰；`--clean-legacy` 永不触碰主树数据。
+
+要更换数据目录，把生成的环境加载脚本中的 `DSH_HOME` 指向另一目录即可——与主树同一机制。
+
 ## 安装
 
 zDSH 以源码形式分发。克隆本仓库并运行对应平台的安装脚本——所有数据都收拢在仓库目录内：
@@ -34,7 +54,7 @@ git checkout zdsh-latest
 安装脚本会检查前置条件（`Node.js ^22.19.0 || >=24` 与 `pnpm`），依次执行 `pnpm install --frozen-lockfile` 与 `pnpm run build`，并生成：
 
 - `data/` —— 数据主目录（`DSH_HOME`）。官方模块数据与 zDSH 治理数据（插件注册表、审批账本，以及 `data/zdsh/` 下的已装插件）都保存在这里。
-- `env.ps1` / `env.sh` —— 环境加载脚本，定义 `DSH_HOME`、`DSH_AGENTS_HOME`，以及指向已构建 CLI 的 `dsh` 命令。
+- `env.ps1` / `env.sh` —— 环境加载脚本，定义 `DSH_HOME`、`DSH_BRANCH_HOME`、`DSH_AGENTS_HOME`，以及指向已构建 CLI 的 `dsh` 命令。
 
 <a id="run"></a>
 
