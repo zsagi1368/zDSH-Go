@@ -13,6 +13,10 @@ import {
 } from './benchmark-npm-resolution.ts'
 
 const roots: string[] = []
+// The npm child-process budget: CI runners pay cold npm-cache/proxy setup
+// before the local registry answers, which the tight 10s budget does not
+// cover on 2-core machines (local workstations keep the fast 10s).
+const npmBudgetMs = process.env.CI === 'true' ? 120_000 : 10_000
 
 afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
@@ -98,7 +102,7 @@ describe('npm resolution benchmark', () => {
     // with headroom for slow CI machines: on GH Windows runners the first
     // npm invocation pays cold-cache registry setup that blew the 5s vitest
     // default while the child itself still respected its own budget.
-    const result = await benchmarkNpmResolution(index, '0.1.0', 10_000)
+    const result = await benchmarkNpmResolution(index, '0.1.0', npmBudgetMs)
 
     expect(result.durationMs).toBeGreaterThan(0)
     expect(result.registryRequests).toBeGreaterThan(0)
@@ -118,7 +122,7 @@ describe('npm resolution benchmark', () => {
     const result = await resolveNpmPackageLock(index, {
       '@deepseek-ai/dsh': '0.2.0',
       'dsh-previous': 'npm:@deepseek-ai/dsh@0.1.0',
-    }, 10_000)
+    }, npmBudgetMs)
 
     expect(result.archiveRequests).toBe(0)
     expect(result.packageLock.packages['node_modules/@deepseek-ai/dsh']?.version).toBe('0.2.0')
@@ -154,7 +158,7 @@ describe('npm resolution benchmark', () => {
         }]])],
       ])
 
-      const result = await resolveNpmPackageLock(index, { '@deepseek-ai/dsh': '0.1.0' }, 10_000)
+      const result = await resolveNpmPackageLock(index, { '@deepseek-ai/dsh': '0.1.0' }, npmBudgetMs)
 
       expect(result.archiveRequests).toBe(0)
       expect(result.packageLock.packages['node_modules/@deepseek-ai/dsh-peer']?.version).toBe('1.0.0')

@@ -170,6 +170,13 @@ export default defineConfig({
         test: {
           name: 'thread-safe',
           execArgv: vitestExecArgv,
+          // The 2-core GitHub Windows runners schedule slower than workstations
+          // and the 5s default randomly brands heavy-but-correct suites as CI
+          // failures (agent-loop spawns, npm children, projection flushes).
+          // Keep the tight 5s budget locally for regression sensitivity; CI
+          // gets a bounded 30s ceiling. Project-level because vitest 4 does NOT
+          // propagate a root-level test.testTimeout into `projects` (probed).
+          testTimeout: process.env.CI === 'true' ? 30_000 : 5_000,
           // Node 24 has aborted in its CJS lexer (v8::ToLocalChecked Empty
           // MaybeLocal in cjs_lexer::Parse) from worker threads on macOS,
           // Linux, and Windows. Forked workers avoid that shared thread path.
@@ -188,6 +195,8 @@ export default defineConfig({
         test: {
           name: 'process-bound',
           execArgv: vitestExecArgv,
+          // Same CI-budget rationale as the thread-safe project above.
+          testTimeout: process.env.CI === 'true' ? 30_000 : 5_000,
           pool: 'forks',
           setupFiles: ['./scripts/test-proxy-environment.ts', './scripts/test-invariants.ts'],
           include: processBoundTests,
