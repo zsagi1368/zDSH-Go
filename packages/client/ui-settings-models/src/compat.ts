@@ -1,24 +1,28 @@
-import { consoleCompatLogger, guardFeature, probeSymbol } from '@deepseek-ai/dsh-compat'
+import { consoleCompatLogger, guardFeature } from '@deepseek-ai/dsh-compat'
 
 /**
- * Compatibility guard for the S-45 settings UI slot block (ui-settings-models).
+ * Compatibility preflight for the S-45 settings UI slot block (ui-settings-models).
  *
- * Probes the provider-registry store surface before the zDSH slot UI registers
- * itself. The official new version moved the store into the new
- * `@deepseek-ai/dsh-client-store` package and renamed the provider vocabulary
- * (`ConfigurableProviderView → LlmConfigurableProvider`,
- * `CredentialView → CredentialInfo`, `IApiClient → ClientRemote`); the zDSH
- * fork keeps the store in `@deepseek-ai/dsh-api-remotes/client` with the old
- * names. When the official store package is present, the zDSH slot UI must be
- * disabled to avoid dual-write conflicts (COMPAT-DESIGN §4.7 + API-DELTA §7).
- * Low-conflict design: only package/symbol presence is probed, never internals.
+ * Verifies the plugin's own peer symbols import cleanly before the slot UI
+ * registers itself, so a partially-loaded or upstream-drifted host degrades
+ * gracefully instead of throwing during registration — the same posture as the
+ * workbench guard (COMPAT-DESIGN §4.3: symbol presence only, never internals).
+ *
+ * History: this guard originally probed the *absence* of an official
+ * `@deepseek-ai/dsh-client-store` (defineStore) to avoid dual-write conflicts
+ * between the official store UI and this fork's slot UI. The 0.1.3 tree now
+ * ships that package itself as the fork's shared snapshot-store engine, and
+ * this plugin imports it directly (`createSnapshotStore`) — the old conflict
+ * premise no longer exists, and probing it always resolved "official store
+ * detected", permanently disabling the slot UI. The guard therefore now checks
+ * the peers this plugin actually depends on at registration time.
  * Never throws — a throwing probe yields a disabled verdict.
  *
  * @module @deepseek-ai/dsh-client-ui-settings-models
  */
 
 /**
- * Run the slot-UI compatibility guard.
+ * Run the slot-UI compatibility preflight.
  *
  * @param logger - Optional logger (see {@link import('@deepseek-ai/dsh-compat').CompatLogger});
  *   defaults to a `console`-backed logger.
@@ -29,15 +33,28 @@ export async function guardSlotUI(
 ): Promise<boolean> {
   const verdict = await guardFeature('dsh-slot-ui', {
     deps: [
-      // The official store lives in the new dsh-client-store package with a
-      // runtime defineStore export; zDSH has no such package (module-not-found).
-      // Official store present → disable zDSH slots to avoid dual-write.
       {
-        name: 'store:official-vs-zdsh',
+        name: 'cordis:Service',
         run: async () => {
-          const official = await probeSymbol('@deepseek-ai/dsh-client-store', 'defineStore')
-          if (official.present) return 'official store detected: zDSH slot UI must be disabled to avoid dual-write'
-          return null // no official store package → zDSH store → OK to enable
+          try {
+            const { Service } = await import('@deepseek-ai/cordis')
+            return typeof Service === 'function' ? null : 'Service not a function'
+          } catch {
+            return 'cannot import cordis Service'
+          }
+        },
+      },
+      {
+        name: 'store:createSnapshotStore',
+        run: async () => {
+          try {
+            const { createSnapshotStore } = await import('@deepseek-ai/dsh-client-store')
+            return typeof createSnapshotStore === 'function'
+              ? null
+              : 'createSnapshotStore not a function'
+          } catch {
+            return 'cannot import the dsh-client-store engine'
+          }
         },
       },
     ],
