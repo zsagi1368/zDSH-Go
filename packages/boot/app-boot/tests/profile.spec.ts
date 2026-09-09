@@ -1019,8 +1019,13 @@ describe('healProfilesModuleFallback through a reparse point (D-006)', () => {
     // the junction path (the D-006 mislink: link → junction → real, which the
     // parent-walk through the fallback still resolves, but the recorded target
     // is wrong and a later move of the junction strands it).
+    // The expectation is compared in the product's canonical coordinate system:
+    // `canonicalPathOrOriginal` runs realpathSync.native, which on hosts whose
+    // temp dir is addressed through an 8.3 short name (GitHub Windows runners:
+    // `C:\Users\RUNNER~1\...`) expands to the long form, so the raw tmpdir
+    // string would never equal the recorded canonical target.
     const target = readlinkSync(join(canonicalFallback, 'dsh-app'))
-    expect(target).toBe(realAppDir)
+    expect(target).toBe(realpathSync.native(realAppDir))
     expect(target).not.toBe(linkAppDir)
   })
 
@@ -1047,8 +1052,12 @@ describe('healProfilesModuleFallback through a reparse point (D-006)', () => {
     await healProfilesModuleFallback({ installAnchor: join(linkAppDir, 'package.json'), home })
     const fallback = join(home, 'profiles', 'node_modules')
     // BFS closure: the app and its dependency are both linked from the
-    // canonical app dir, not from the junction path.
-    expect(readlinkSync(join(fallback, 'dsh-app'))).toBe(realAppDir)
-    expect(readlinkSync(join(fallback, 'bundle-a'))).toBe(join(realAppDir, 'node_modules', 'bundle-a'))
+    // canonical app dir, not from the junction path. Expectations are compared
+    // in the product's canonical coordinate (realpathSync.native) so hosts
+    // whose temp dir carries an 8.3 short name (GitHub Windows runners) match
+    // the recorded long-form canonical target.
+    expect(readlinkSync(join(fallback, 'dsh-app'))).toBe(realpathSync.native(realAppDir))
+    expect(readlinkSync(join(fallback, 'bundle-a')))
+      .toBe(join(realpathSync.native(realAppDir), 'node_modules', 'bundle-a'))
   })
 })

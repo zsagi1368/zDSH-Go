@@ -85,3 +85,12 @@ minimumReleaseAgeExclude:
 patchedDependencies:
   '@yao-pkg/pkg@6.21.0': patches/@yao-pkg__pkg@6.21.0.patch
   node-pty@1.2.0-beta.15: patches/node-pty@1.2.0-beta.15.patch
+  # zDSH-Go CI (GH windows-latest) loses 922 thread-safe suites to
+  # `ENOENT: open <tmpdir>/<nanoid>/<env>/<sha1>` mid-run: the forks pool's
+  # `cacheFs` tmp-copy channel materializes every transformed module under a
+  # per-run nanoid temp dir, and once those files vanish (single external wipe
+  # observed at T0) the memoized `_vitest_tmp` paths fail every subsequent
+  # suite load with no self-healing. Disable the channel: modules travel
+  # inline over the worker IPC exactly like the threads pool (which has no
+  # cacheFs). Pure throughput tradeoff, no behavioral difference.
+  vitest@4.1.8: patches/vitest@4.1.8.patch

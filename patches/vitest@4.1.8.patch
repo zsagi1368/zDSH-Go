@@ -1,0 +1,6 @@
+diff --git a/dist/chunks/cli-api.BfdDOPPI.js b/dist/chunks/cli-api.BfdDOPPI.js
+--- a/dist/chunks/cli-api.BfdDOPPI.js
++++ b/dist/chunks/cli-api.BfdDOPPI.js
+@@ -3047 +3047 @@
+-	cacheFs = true;
++	cacheFs = false;
