@@ -263,14 +263,20 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
  * 记账重建，不参与消息历史重构。
  */
 'cache/ledger': {
-  /** 序列化的重置台账 JSON（`serializeLedger` 输出）。 */
+  /** 序列化的重置台账 JSON（`serializeLedger` 输出，快照式，恢复取末条）。 */
   ledger: string
-  /** 累计重置写入成本（token 当量，Σ η×contextTokens）。 */
-  resetWriteTokens: number
+  /**
+   * 本次重置的增量写入成本（token 当量，`η×contextTokens`，即
+   * `accountResetCost` 单条结果）。非累计快照——投影侧 `cacheMetrics`
+   * 经 `foldResetWriteCost` 逐条累加成 `resetWriteTokens`，agent 侧
+   * `restoreCacheLedger` 对所有条求和还原 `totalResetWriteCost`，两者
+   * 恒等于同一 Σ，故报告指标与持久化账本不会分叉。
+   */
+  resetWriteCost: number
 }
 ```
 
-来源：[`packages/core/agent-loop/src/agent.ts:65`](../packages/core/agent-loop/src/agent.ts)
+来源：[`packages/core/agent-loop/src/agent.ts:64`](../packages/core/agent-loop/src/agent.ts)
 
 ### `command/*`
 
@@ -752,7 +758,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 'slots/dispatch': ModelSlotDispatchEventData
 ```
 
-来源：[`packages/llm/model-slots/src/index.ts:51`](../packages/llm/model-slots/src/index.ts)
+来源：[`packages/llm/model-slots/src/index.ts:80`](../packages/llm/model-slots/src/index.ts)
 
 ### `step/*`
 
@@ -795,7 +801,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 'subagent/descriptor': SubagentDescriptorData
 ```
 
-来源：[`packages/subagent/subagent/src/descriptor.ts:38`](../packages/subagent/subagent/src/descriptor.ts)
+来源：[`packages/subagent/subagent/src/descriptor.ts:45`](../packages/subagent/subagent/src/descriptor.ts)
 
 <a id="subagentmodel-selection-policy--log-only"></a>
 

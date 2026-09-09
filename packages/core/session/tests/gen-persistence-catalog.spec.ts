@@ -156,6 +156,24 @@ describe('gen-persistence-catalog collectLogEvents', () => {
     }))).toThrow(/already declared at packages\/group\/fix\/src\/a\.ts/)
   })
 
+  it('tolerates a project-references mirror: cross-package re-declaration with an identical payload', () => {
+    // Mirrors the cache/ledger split: the owning declaration in agent-loop and
+    // a compile-time mirror in token-meter (interface merging collapses them).
+    const events = collectLogEvents(make({
+      'packages/group/loop/src/a.ts': merge('    /** Authoritative. */\n    \'fix/dup\': { turn: number }'),
+      'packages/other/meter/src/b.ts': merge('    /** Authoritative. */\n    \'fix/dup\': { turn: number }'),
+    }))
+    expect(events).toHaveLength(1)
+    expect(events[0]).toMatchObject({ name: 'fix/dup', source: 'packages/group/loop/src/a.ts:4' })
+  })
+
+  it('hard-errors on a cross-package re-declaration whose payload differs', () => {
+    expect(() => collectLogEvents(make({
+      'packages/group/loop/src/a.ts': merge('    /** First. */\n    \'fix/dup\': { turn: number }'),
+      'packages/other/meter/src/b.ts': merge('    /** Second. */\n    \'fix/dup\': { turn: string }'),
+    }))).toThrow(/already declared at packages\/group\/loop\/src\/a\.ts/)
+  })
+
   it('aggregates every violation into one error instead of failing fast', () => {
     expect(() => collectLogEvents(make({
       'packages/group/fix/src/types.ts': merge('    \'fix/one\': { turn: number }\n    \'fix/two\': { turn: number }'),

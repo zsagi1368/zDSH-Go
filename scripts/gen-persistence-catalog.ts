@@ -3,7 +3,10 @@
  * the owning event-envelope types. This is the durable-record vocabulary, not
  * the live Cordis bus. Event declarations must be unique, explicitly typed,
  * documented, inheritance-free, and free of Cordis-only `@mode` tags; every
- * surface-union member must resolve to one. `--check` verifies the artifact.
+ * surface-union member must resolve to one. The one tolerated duplicate is a
+ * project-references mirror: a cross-package re-declaration with an identical
+ * payload (interface merging collapses the copies). `--check` verifies the
+ * artifact.
  */
 
 import { globSync, readFileSync, writeFileSync } from 'node:fs'
@@ -167,11 +170,14 @@ function packageNameFor(rel: string, scanRoot: string): string | null {
 /**
  * Collect every `SessionEventMap` merge, rejecting inherited, non-literal,
  * untyped, undocumented, duplicate, or incorrectly owned members in one report.
+ * A duplicate is exempt only when it is a project-references mirror: a
+ * cross-package re-declaration with an identical payload that relies on
+ * interface merging to collapse the copies.
  */
 export function collectLogEvents(scanRoot: string = root): LogEventEntry[] {
   const entries: LogEventEntry[] = []
   const violations: string[] = []
-  const seen = new Map<string, string>()
+  const seen = new Map<string, { src: string; pkgDir: string; payload: string }>()
   let owningDecl: string | null = null
   for (const rel of globSync('packages/*/*/src/**/*.ts', { cwd: scanRoot }).map(s => s.split(sep).join('/')).sort()) {
     const abs = resolve(scanRoot, rel)
@@ -219,13 +225,22 @@ export function collectLogEvents(scanRoot: string = root): LogEventEntry[] {
         }
         const name = member.name.text
         const where = `log event '${name}' (${src})`
+        const payload = payloadText(member.type, sf)
         const prior = seen.get(name)
         if (prior) {
-          violations.push(`${where} is already declared at ${prior}; an event type has exactly one declaration.`)
+          const pkgDir = rel.split('/').slice(0, 3).join('/')
+          if (pkgDir !== prior.pkgDir && payload === prior.payload) {
+            // A project-references mirror: the owning package re-declares an
+            // event another package consumes so that each compiles without the
+            // other in its program; interface merging collapses the copies.
+            // The catalog keeps the first scanned (lexically sorted) home, so
+            // the rendered artifact stays stable across runs.
+            continue
+          }
+          violations.push(`${where} is already declared at ${prior.src}; an event type has exactly one declaration.`)
           continue
         }
-        seen.set(name, src)
-        const payload = payloadText(member.type, sf)
+        seen.set(name, { src, pkgDir: rel.split('/').slice(0, 3).join('/'), payload })
         const { doc, hasMode } = parseJsDoc(rawJsDoc(text, member))
         if (hasMode) {
           violations.push(`${where} carries an @mode tag, but a log event has no dispatch mode (it is not a cordis bus event — it rides the 'session/event' emit). Remove the tag.`)
