@@ -21,7 +21,13 @@ export interface RouteRegistrar {
 
 export interface WebContextLike {
   webServer: RouteRegistrar
-  effect?(teardown: () => unknown, label?: string): void
+  /**
+   * Vendored cordis `ctx.effect` face: the body runs IMMEDIATELY and may
+   * return a teardown, which the host invokes on unload. The body must not
+   * perform the teardown itself — the P1b regression (routes vanishing right
+   * after registration) came from treating the body as a deferred disposer.
+   */
+  effect?(execute: () => unknown, label?: string): void
   logger?: { info?(message: string): void }
 }
 
@@ -112,16 +118,22 @@ export async function serveRequest(
 export function apply(ctx: HostContextLike, config: Record<string, unknown> = {}): void {
   const services = new PluginCenterServices(config)
   ctx.inject(['webServer'], (webCtx) => {
-    const disposers = Object.values(ROUTES).map(path =>
-      webCtx.webServer.register({
-        kind: 'exact',
-        path,
-        handler: (req, res) => serveRequest(services, req, res),
-      }),
-    )
+    // Register now, return the teardown: the vendored cordis effect contract
+    // runs this body immediately and calls the RETURNED disposer on unload.
+    // (The P1b regression ran the disposers inside the body, unregistering
+    // every route in the same synchronous pass it registered them.)
     webCtx.effect?.(() => {
-      for (const dispose of disposers.reverse()) dispose()
+      const disposers = Object.values(ROUTES).map(path =>
+        webCtx.webServer.register({
+          kind: 'exact',
+          path,
+          handler: (req, res) => serveRequest(services, req, res),
+        }),
+      )
+      webCtx.logger?.info?.(`${PLUGIN_NAME}: market and lifecycle surface ready`)
+      return () => {
+        for (const dispose of disposers.reverse()) dispose()
+      }
     }, `${PLUGIN_NAME}: routes`)
-    webCtx.logger?.info?.(`${PLUGIN_NAME}: market and lifecycle surface ready`)
   })
 }
