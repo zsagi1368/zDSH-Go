@@ -813,7 +813,7 @@ export async function boot(
   // Compat guard: probe the installed build before any env layer is read.
   // When the installed app-boot does not already reject bootstrap-only names,
   // skip the fork's own blacklist rejection so behavior matches the build.
-  const envVerdict = await guardEnvBlacklist(
+  const envVerdict = guardEnvBlacklist(
     (line: string) => void process.stderr.write(`${binName}: env-compat: ${line}\n`),
   )
   if (!envVerdict.enabled) {

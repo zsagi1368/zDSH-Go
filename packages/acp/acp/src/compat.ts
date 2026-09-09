@@ -41,7 +41,7 @@ export async function guardACP(
       // would resolve relative to the compat helper's package instead).
       let sdk: Record<string, unknown>
       try {
-        sdk = (await import('@agentclientprotocol/sdk')) as Record<string, unknown>
+        sdk = await import('@agentclientprotocol/sdk')
       } catch {
         return 'cannot import @agentclientprotocol/sdk'
       }

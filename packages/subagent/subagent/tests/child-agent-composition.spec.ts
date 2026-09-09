@@ -44,10 +44,12 @@ describe('applyChildComposition tool-filter scoped-context branch', () => {
       throw new Error('dsh-tools: tools.restrict() requires a scoped context')
     })
     const { ctx, context, section, getContextOrder, getSectionOrder } = fakeChildCtx(restrict)
-    expect(() => applyChildComposition(ctx, fakeParent(), {
-      persona: 'child persona',
-      toolFilter: { deny: ['subagent'] },
-    })).not.toThrow()
+    expect(() => {
+      applyChildComposition(ctx, fakeParent(), {
+        persona: 'child persona',
+        toolFilter: { deny: ['subagent'] },
+      })
+    }).not.toThrow()
     // The delegation context and the shadowing persona landed before the
     // swallowed refusal — the child is composed, just unrestricted. The order
     // is whatever the system-prompt service reports (dynamic, not hardcoded).
@@ -71,9 +73,11 @@ describe('applyChildComposition tool-filter scoped-context branch', () => {
       throw new Error('unknown tool: dangerous')
     })
     const { ctx } = fakeChildCtx(restrict)
-    expect(() => applyChildComposition(ctx, fakeParent(), {
-      toolFilter: { deny: ['dangerous'] },
-    })).toThrow('unknown tool: dangerous')
+    expect(() => {
+      applyChildComposition(ctx, fakeParent(), {
+        toolFilter: { deny: ['dangerous'] },
+      })
+    }).toThrow('unknown tool: dangerous')
   })
 
   it('rethrows a non-Error throwable unchanged', () => {

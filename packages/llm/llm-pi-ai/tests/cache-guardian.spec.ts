@@ -77,7 +77,7 @@ function toolResult(
     role: 'toolResult',
     toolCallId: 'call-1',
     toolName: 'Read',
-    content: content as ToolResultMessage['content'],
+    content,
     isError: false,
     timestamp: 0,
     ...overrides,

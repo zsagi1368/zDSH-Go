@@ -556,7 +556,7 @@ export function apply(ctx: Context, config: Config): void {
           // Bounded return: an explicit config wins; otherwise the budget formula
           // (§1.2) computed from the parent's maxTokens; a parent without a
           // resolvable maxTokens falls back to the formula floor.
-          const parentMaxTokens = parent.options?.maxTokens
+          const parentMaxTokens = parent.options.maxTokens
           let returnCap: number
           if (config.maxReturnTokens !== undefined) {
             returnCap = config.maxReturnTokens

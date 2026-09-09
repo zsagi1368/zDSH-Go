@@ -52,16 +52,13 @@
 
 import { createHash } from 'node:crypto'
 import type {
-  AssistantMessage,
   Context as PiContext,
   ImageContent,
   Message as PiMessage,
   TextContent,
   ThinkingContent,
   Tool as PiTool,
-  ToolCall,
   ToolResultMessage,
-  UserMessage,
 } from '@earendil-works/pi-ai'
 
 // ---------------------------------------------------------------------------
@@ -197,7 +194,7 @@ export function normalizeTools(tools: readonly PiTool[] | undefined): string {
   if (tools === undefined || tools.length === 0) return '[]'
   const normalized = tools.map(tool => ({
     name: normalizeToolName(tool.name),
-    description: tool.description ?? '',
+    description: tool.description,
     parameters: filterToolParameters(tool.parameters),
   }))
   return stableStringify(normalized)
@@ -246,7 +243,7 @@ function normalizeToolResultContent(
 export function normalizeMessage(message: PiMessage, options?: NormalizeOptions): unknown {
   const allowEmptySignature = options?.allowEmptySignature ?? false
   if (message.role === 'user') {
-    const userMessage = message as UserMessage
+    const userMessage = message
     if (typeof userMessage.content === 'string') {
       // pi :1171 用 raw（清理前）trim 判空；仅含未配对 surrogate 的字符串
       // 清理后为空串仍会进 wire，故此处不提前剔除。
@@ -267,7 +264,7 @@ export function normalizeMessage(message: PiMessage, options?: NormalizeOptions)
   }
 
   if (message.role === 'assistant') {
-    const assistant = message as AssistantMessage
+    const assistant = message
     const blocks: unknown[] = []
     for (const block of assistant.content) {
       if (block.type === 'text') {
@@ -305,11 +302,16 @@ export function normalizeMessage(message: PiMessage, options?: NormalizeOptions)
       }
       // toolCall：pi 发送 tool_use{id,name,input}（:1252-1258）。
       // id 进 wire 必须进哈希；arguments 缺省时 pi 发 {}（:1257）。
-      const toolCall = block as ToolCall
+      const toolCall = block
       blocks.push({
         type: 'toolCall',
         id: toolCall.id,
         name: normalizeToolName(toolCall.name),
+        // pi folds missing arguments to {} on the wire (:1257), but locally
+        // built ToolCall objects can still carry undefined; the spec pins
+        // missing ≡ {} hashing, so the type-level "unnecessary" fold is
+        // load-bearing at runtime.
+        // oxlint-disable-next-line typescript/no-unnecessary-condition -- runtime invariant: missing arguments hash like {}.
         arguments: toolCall.arguments ?? {},
       })
     }

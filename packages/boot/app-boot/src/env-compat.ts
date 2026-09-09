@@ -47,7 +47,7 @@ const PROBE_VAR = 'SYSTEMROOT'
  * @param logger - optional sink for the one-line probe diagnostics; defaults to a no-op.
  * @returns the probe verdict; the probe never throws.
  */
-export async function probeEnvBlacklist(logger?: (line: string) => void): Promise<EnvBlacklistProbe> {
+export function probeEnvBlacklist(logger?: (line: string) => void): EnvBlacklistProbe {
   const warn = logger ?? (() => undefined)
   const envSnapshot = { ...process.env }
   let fixtureDir = ''
@@ -88,8 +88,8 @@ export async function probeEnvBlacklist(logger?: (line: string) => void): Promis
  * @param logger - optional sink for the one-line probe diagnostics; defaults to a no-op.
  * @returns the guard verdict; enabled only when the probe found the installed build patched.
  */
-export async function guardEnvBlacklist(logger?: (line: string) => void): Promise<EnvBlacklistGuard> {
-  const probe = await probeEnvBlacklist(logger)
+export function guardEnvBlacklist(logger?: (line: string) => void): EnvBlacklistGuard {
+  const probe = probeEnvBlacklist(logger)
   return probe.patched
     ? { enabled: true, patched: true, reason: probe.reason }
     : { enabled: false, patched: false, reason: probe.reason }

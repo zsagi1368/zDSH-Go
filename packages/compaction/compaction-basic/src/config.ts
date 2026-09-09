@@ -301,8 +301,18 @@ function validatePolicy(
     || !Number.isInteger(outputCap)
     || outputCap < MIN_OUTPUT_CAP
   )) {
+    // Diagnostics only: `outputCap` is untyped on the external config face, so
+    // render primitives with their own toString and everything else as JSON —
+    // a total formatter that never throws inside this validator.
+    const shown = outputCap === null
+      || typeof outputCap === 'string'
+      || typeof outputCap === 'number'
+      || typeof outputCap === 'boolean'
+      || typeof outputCap === 'bigint'
+      ? String(outputCap)
+      : JSON.stringify(outputCap)
     throw new Error(
-      `${name}.outputCap (${String(outputCap)}) must be an integer >= ${MIN_OUTPUT_CAP}`,
+      `${name}.outputCap (${shown}) must be an integer >= ${MIN_OUTPUT_CAP}`,
     )
   }
   if (retainRatio !== undefined) assertRatio(`${name}.retainRatio`, retainRatio)

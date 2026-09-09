@@ -273,7 +273,7 @@ export class ReactLoopAgent implements Agent {
     const events = this.session.snapshotEvents()
     let total = 0
     for (const event of events) {
-      if (event?.type === 'cache/ledger') total += event.data.resetWriteCost
+      if (event.type === 'cache/ledger') total += event.data.resetWriteCost
     }
     this.totalResetWriteCost = total
     for (let index = events.length - 1; index >= 0; index -= 1) {

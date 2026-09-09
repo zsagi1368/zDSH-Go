@@ -36,7 +36,7 @@ export async function guardTruncatedToolCalls(logger = consoleCompatLogger()): P
     deps: [
       {
         name: 'llm:BlockAssembler',
-        run: async () => {
+        run: () => {
           const hasMethod = typeof BlockAssembler === 'function'
             && typeof BlockAssembler.prototype.truncatedToolCalls === 'function'
           return hasMethod ? null : 'BlockAssembler.truncatedToolCalls not found'
@@ -44,7 +44,7 @@ export async function guardTruncatedToolCalls(logger = consoleCompatLogger()): P
       },
       {
         name: 'llm:TRUNCATED_TOOL_CALL_CODE',
-        run: async () => {
+        run: () => {
           return typeof TRUNCATED_TOOL_CALL_CODE === 'string'
             ? null
             : 'TRUNCATED_TOOL_CALL_CODE not a string'

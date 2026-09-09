@@ -37,7 +37,10 @@ class CooperativeAdapter extends LlmAdapter {
     if (signal === undefined) throw new Error('expected title request signal')
     await new Promise<never>((_resolve, reject) => {
       const rejectAbort = (): void => {
-        reject(signal.reason)
+        // An abort reason is always an Error: this spec aborts with
+        // `new Error('caller stopped')`, and Node's default (cause-less)
+        // abort reason is a DOMException, which subclasses Error.
+        reject(signal.reason as Error)
       }
       if (signal.aborted) {
         rejectAbort()
