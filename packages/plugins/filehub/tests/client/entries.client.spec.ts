@@ -141,11 +141,11 @@ describe('collectFromDataTransfer', () => {
   })
 
   it('collects multiple mixed roots in one pass', async () => {
-    const root = dirEntry('docs', [[fileEntry('spec.md')]])
+    const root = dirEntry('handbook', [[fileEntry('spec.md')]])
     const dropped = await collectFromDataTransfer([item(fileEntry('top.txt')), item(root), item(fileEntry('end.bin'))])
     expect(dropped).toHaveLength(3)
     expect(new Set(names(dropped))).toEqual(
-      new Set(['top.txt:top.txt', 'docs/spec.md:spec.md', 'end.bin:end.bin']),
+      new Set(['top.txt:top.txt', 'handbook/spec.md:spec.md', 'end.bin:end.bin']),
     )
   })
 })

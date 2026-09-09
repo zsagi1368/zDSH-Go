@@ -4,7 +4,7 @@
  * Every attack below was executed against the real HTTP route (fake host
  * context) or the pure path-policy functions; each successful break carries a
  * named fix in src/, each failed break pins the rejection as a regression
- * test. Findings log: docs/adversarial-log.md.
+ * test. Findings log: filehub package docs, adversarial-log.md.
  */
 import http from 'node:http'
 import fsp from 'node:fs/promises'

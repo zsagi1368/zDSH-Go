@@ -3,7 +3,7 @@
  *
  * 本文件是 dsh-webstack 全部跨模块公共词汇的唯一事实源。并行工程师只允许
  * 「消费」这里的类型；需要新增或修改公共类型必须走首席架构师（见
- * docs/CONTRACTS.md 协作规则）。所有导出均为冻结契约，字段语义一经发布
+ * 本包 docs 目录 CONTRACTS.md 的协作规则）。所有导出均为冻结契约，字段语义一经发布
  * 不做破坏性变更，只能加可选字段。
  *
  * 设计溯源 id（G:\000Github\DSH\PluginR&D\docs\web-search\81-design-inspiration.md）：
