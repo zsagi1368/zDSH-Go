@@ -7,8 +7,7 @@
 1. **原创性**：禁止复制任何第三方代码、API 形状、文案或资源进入本仓，来源包括但不限于：
    - `G:\000Github\DSH\PluginR&D\sources\` 下的参考克隆（只读，仅用于理解平台机制）
    - `G:\000Github\DSH\Fork\`（zDSH 分支，只读研究平台契约）
-   - 任何 npm / GitHub 第三方实现。
-   理解平台契约与安全设计思想允许；逐行翻译或形状抄袭不允许。公开文档（README/CHANGELOG/Release）不得出现"参考/整合自某项目"类表述——本产品定位为全新插件。
+   - 任何 npm / GitHub 第三方实现。理解平台契约与安全设计思想允许；逐行翻译或形状抄袭不允许。公开文档（README/CHANGELOG/Release）不得出现"参考/整合自某项目"类表述——本产品定位为全新插件。
 2. **Fork 树绝对只读**：对 `G:\000Github\DSH\Fork\` 只允许读命令与 git log/show/diff/status。
 3. 源码文件一律用 Write/Edit 工具创建修改；不要用 bash 重定向/heredoc 写 .ts/.tsx/.js/.mjs。
 4. 临时文件放 `G:\000Github\DSH\TMP\`，不落仓库根。

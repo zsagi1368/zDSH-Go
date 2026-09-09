@@ -1,8 +1,6 @@
 # zdsh-autopilot
 
-[![ci](https://github.com/zsagi1368/zdsh-autopilot/actions/workflows/ci.yml/badge.svg)](https://github.com/zsagi1368/zdsh-autopilot/actions/workflows/ci.yml)
-[![release](https://img.shields.io/github/v/tag/zsagi1368/zdsh-autopilot?label=release&sort=semver)](https://github.com/zsagi1368/zdsh-autopilot/releases)
-[![license](https://img.shields.io/github/license/zsagi1368/zdsh-autopilot)](LICENSE)
+[![ci](https://github.com/zsagi1368/zdsh-autopilot/actions/workflows/ci.yml/badge.svg)](https://github.com/zsagi1368/zdsh-autopilot/actions/workflows/ci.yml) [![release](https://img.shields.io/github/v/tag/zsagi1368/zdsh-autopilot?label=release&sort=semver)](https://github.com/zsagi1368/zdsh-autopilot/releases) [![license](https://img.shields.io/github/license/zsagi1368/zdsh-autopilot)](LICENSE)
 
 **zDSH AutoPilot（自动领航）** —— [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的统一自动化引擎。三个协同能力，共享一个内核与一个控制台：
 
@@ -12,7 +10,7 @@
 | 🛡 | **守卫 Guard** | 沙箱优先的权限策略：例行工作在 OS 沙箱内零打扰直行；语义风险经脱敏后的 LLM 分类器严格裁决；越界操作发放五元组一次性授权并在官方审批点代答一次——永远只弹一次窗。 |
 | 🔎 | **复核 Review** | 只读第二模型复核子代理在完整认领条件下应答审批请求，默认 fail-closed，带双预算、推导式默认熔断器，并把拒绝理由回喂给错误结果。 |
 
-[English](README.md) ｜ 简体中文
+[English](README.md) | 中文
 
 ---
 
@@ -58,10 +56,10 @@ dsh plugin --profile web add link:/path/to/zdsh-autopilot
 所有操作都收敛在一个命令面：
 
 ```text
-/ap                          全模块状态 + 今日计数
+/ap                          status of all modules + today counters
 /ap on|off [continue|guard|review]
-/ap pause [时长]             /ap resume
-/ap approve                  授权最近一次拒绝（一次性语境）
+/ap pause [duration]         /ap resume
+/ap approve                  authorize the latest denial (one-shot context)
 /ap preset conservative|standard|fullspeed
 /ap reset-stats              /ap help
 ```
@@ -80,14 +78,14 @@ dsh plugin --profile web add link:/path/to/zdsh-autopilot
 
 ```text
 src/
-├── kernel/      共享门面：协调器 · 记账 · 审计(ap/*) · 脱敏 · 探测 · 默认值
-├── continue/    打断检测 · 调度器 · 循环守卫 · 续跑文案
-├── guard/       路径硬化 · shell 词法(bash/pwsh) · 工件身份 · 分类器 · 授权桥
-├── review/      应答器 · 复核提示词/裁决 · 熔断 · 反馈回路
-├── console/     命令解析 · 状态/动作桥(令牌或同源鉴权)
-└── client/      浏览器半身——仅官方槽位,零 DOM 依赖
-eval/            离线行为契约:YAML 用例驱动真实模块工厂
-corpus/          可扩展的错误分类语料
+├── kernel/      shared facade: coordinator · ledger · audit(ap/*) · redact · probes · defaults
+├── continue/    detector · scheduler · loopguard · resume texts
+├── guard/       path hardening · shell lexer (bash/pwsh) · artifacts · classifier · grants
+├── review/      answerer · reviewer prompt/verdict · circuit · feedback
+├── console/     command parser · status/action bridge (token-or-same-origin auth)
+└── client/      browser fiber — official slots only, zero DOM scraping
+eval/            offline behavior contracts: YAML cases drive real module factories
+corpus/          extensible error-classification corpus
 ```
 
 模块边界由 CI 强制（`scripts/check-boundaries.mjs`）：能力模块只准依赖内核门面与自身。因此任一模块目录未来都可零重构地抽出为独立插件。
@@ -98,8 +96,8 @@ corpus/          可扩展的错误分类语料
 
 ```bash
 pnpm install
-pnpm verify     # lint(边界) + typecheck(3 配置) + vitest + build + eval
-pnpm eval       # 仅离线行为契约套件(无需 API key)
+pnpm verify     # lint(boundaries) + typecheck(3 configs) + vitest + build + eval
+pnpm eval       # offline behavior-contract suite only (no API key needed)
 ```
 
 仓库内置的质量门禁：
@@ -122,3 +120,25 @@ pnpm eval       # 仅离线行为契约套件(无需 API key)
 ## 许可证
 
 [MIT](LICENSE) © 2026 zsagi1368
+
+## 模型体验
+
+### 自动化内核
+
+#### 模型看到什么
+
+Continue 通过提交普通恢复消息续跑被中断的会话；Guard 经官方审批缝以五要素一次性升级授权作答；Review 贡献只读的审稿 subagent 裁决（严格输出协议），拒绝理由回灌错误结果。
+
+#### Token 影响
+
+LLM 分类器与审稿调用是主对话之外的辅助请求；审计事件（`ap/*`）是会话日志记录而非提示内容，跨模型边界前一律经结构化脱敏（密钥名键、批量内容、token 形状）。
+
+#### KV Cache 影响
+
+模块决策从不改写消息历史——待审批推迟自动恢复、熔断状态抑制恢复，前缀缓存赖以建立的可见转写始终与用户和工具所写一致。
+
+## 已知限制与延期工作
+
+- 审稿质量取决于所配置的第二模型；表现不佳时默认 fail-closed 拒绝。
+- 路径判断以 Windows 优先加固；其他平台为尽力等价实现。
+- 升级授权按 callId 恰好消费一次，不可批量。

@@ -6,13 +6,9 @@
 
 One plugin. Every search layer. Hardened by default.
 
-[![CI](https://github.com/zsagi1368/dsh-webstack/actions/workflows/ci.yml/badge.svg)](https://github.com/zsagi1368/dsh-webstack/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/zsagi1368/dsh-webstack)](https://github.com/zsagi1368/dsh-webstack/releases)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
-![Node](https://img.shields.io/badge/node%20%3E%3D%2022.19-brightgreen)
-![Tests](https://img.shields.io/badge/tests-761%20passing-success)
+[![CI](https://github.com/zsagi1368/dsh-webstack/actions/workflows/ci.yml/badge.svg)](https://github.com/zsagi1368/dsh-webstack/actions/workflows/ci.yml) [![Release](https://img.shields.io/github/v/release/zsagi1368/dsh-webstack)](https://github.com/zsagi1368/dsh-webstack/releases) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE) ![Node](https://img.shields.io/badge/node%20%3E%3D%2022.19-brightgreen) ![Tests](https://img.shields.io/badge/tests-761%20passing-success)
 
-English · [简体中文](./README.zh.md)
+English | [中文](README.zh.md)
 
 </div>
 
@@ -80,8 +76,8 @@ Optional satellites (same repo, independently installable):
 
 | Package | What it adds |
 | --- | --- |
-| [`dsh-webstack-bridge`](../bridge/extension/README.md) | Browser-render rescue for JS-heavy pages (MV3 extension + pairing protocol) |
-| [`dsh-webstack-verticals`](../verticals) | Experimental credential-free X/Twitter leg (off by default, opt-in) |
+| [`dsh-webstack-bridge`](../webstack-bridge/extension/README.md) | Browser-render rescue for JS-heavy pages (MV3 extension + pairing protocol) |
+| [`dsh-webstack-verticals`](../webstack-verticals) | Experimental credential-free X/Twitter leg (off by default, opt-in) |
 
 ## Configuration
 
@@ -163,3 +159,27 @@ Requires Node.js ≥ 22.19 and pnpm ≥ 10. Zero native modules.
 ## License
 
 [MIT](./LICENSE)
+
+## Model Experience
+
+### Web search and fetch tools
+
+#### What the model sees
+
+The `web_backend_status`, `web_batch_search` and `web_history` tools expose side-effect-free diagnostics, an order-preserving fan-out search (≤10 queries, per-item isolation) and history replay/clear; search results render through the host web tools with truncation kept on the platform side.
+
+#### Token effect
+
+Result lists are truncated to the `fetch.maxContentChars` budget before rendering; cache hits replay identical text, and cooldown or failure outcomes report as compact status text instead of error dumps.
+
+#### KV Cache effect
+
+No prompt or tool schema is registered here; results enter context only through the host web tools, so the request shape is unchanged whether the free pool, keyed engines or MCP engines serve a query.
+
+## Known Limitations and Deferred Work
+
+- Native-layer handle capture is pending, so `native` forwards through the host built-ins' current interface.
+- Prompt sections are fixed zh/en; host locale probing is future work.
+- Fetch-domain cache wiring is not yet implemented.
+- The settings surface has no editor for selector rules yet, and further vertical channels are pending.
+- npm publish automation is not in place.

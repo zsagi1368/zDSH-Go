@@ -4,17 +4,11 @@
 
 **让 DeepSeek 看见图像——而不碰它的 KV Cache。**
 
-面向 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的视觉桥接插件：
-每张图片在到达模型**之前**就被转换为忠实的文字描述，请求始终保持纯文本形态、前缀缓存
-持续保温；聊天界面照常显示原始图片。
+面向 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的视觉桥接插件：每张图片在到达模型**之前**就被转换为忠实的文字描述，请求始终保持纯文本形态、前缀缓存持续保温；聊天界面照常显示原始图片。
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Node](https://img.shields.io/badge/node-%E2%89%A522.19-339933?logo=node.js&logoColor=white)](package.json)
-[![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)](tsconfig.json)
-[![Tests](https://img.shields.io/badge/tests-232%20passing-brightgreen)](tests)
-[![Coverage](https://img.shields.io/badge/coverage-98%25-brightgreen)](reports)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![Node](https://img.shields.io/badge/node-%E2%89%A522.19-339933?logo=node.js&logoColor=white)](package.json) [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)](tsconfig.json) [![Tests](https://img.shields.io/badge/tests-232%20passing-brightgreen)](tests) [![Coverage](https://img.shields.io/badge/coverage-98%25-brightgreen)](https://github.com/zsagi1368/dsh-omnivision/actions/workflows/ci.yml)
 
-[English](README.md) · **简体中文**
+[English](README.md) | 中文
 
 </div>
 
@@ -22,31 +16,28 @@
 
 ## 为什么
 
-往对话里贴图，通常意味着切换到多模态消息格式——每张图片都会使提示词前缀缓存失效、拖慢
-后续每一轮，并且把你和单一厂商的视觉 API 绑死。
+往对话里贴图，通常意味着切换到多模态消息格式——每张图片都会使提示词前缀缓存失效、拖慢后续每一轮，并且把你和单一厂商的视觉 API 绑死。
 
-**dsh-omnivision 走另一条路：图片根本不进入模型请求。** pre-step 桥接层先把图片描述成
-文字。DeepSeek 收到的消息结构与"没有图片时"完全一致——同样的纯文本形状、同样的可缓存性；
-而用户在界面上仍然能看到自己发的图（影子历史层）。
+**dsh-omnivision 走另一条路：图片根本不进入模型请求。** pre-step 桥接层先把图片描述成文字。DeepSeek 收到的消息结构与"没有图片时"完全一致——同样的纯文本形状、同样的可缓存性；而用户在界面上仍然能看到自己发的图（影子历史层）。
 
 ## 工作原理
 
 ```
- 用户粘贴图片                        ┌────────────────────────────┐
-        │                           │  视觉 Provider 链           │
-        ▼                           │  LM Studio → Ollama →      │
-┌──────────────────┐    描述请求      │  OpenAI / Anthropic /      │
-│ 校验             │ ─────────────► │  Gemini / Zhipu / Zen /    │
-│ 路径·大小        │   （返回文字）   │  OVH Free（免登录）         │
-│ 符号链接         │                └────────────────────────────┘
-└──────────────────┘                         │
-        │                                    ▼
-        │                          [已识图1: 一张设置对话框截图…]
-        ▼                                    │
-┌──────────────────┐                         ▼
-│ 影子历史          │                 纯文本消息 ──►  DeepSeek
-│ UI 显示原图，     │              （与无图请求结构完全相同）
-│ 模型只看到文字    │
+ user pastes image                    ┌──────────────────────────────┐
+        │                             │  vision provider chain       │
+        ▼                             │  LM Studio → Ollama →        │
+┌──────────────────┐    describe      │  OpenAI / Anthropic /        │
+│ validate         │ ───────────────► │  Gemini / Zhipu / Zen /      │
+│ path · size      │   (text back)    │  OVH Free (anonymous)        │
+│ symlink          │                  └──────────────────────────────┘
+└──────────────────┘                            │
+        │                                       ▼
+        │                              [已识图1: a screenshot of …]
+        ▼                                       │
+┌──────────────────┐                             ▼
+│ shadow history   │                     pure-text message ──►  DeepSeek
+│ UI shows image,  │                     (identical shape to a
+│ model sees text  │                      no-image request)
 └──────────────────┘
 ```
 
@@ -76,12 +67,11 @@
 git clone https://github.com/zsagi1368/dsh-omnivision.git
 cd dsh-omnivision
 npm ci
-npm run build        # 产出 dist/index.js + 类型声明
-npm test             # 232 个测试，约 1 秒
+npm run build        # produces dist/index.js + type declarations
+npm test             # 232 tests, ~1 s
 ```
 
-要求 **Node ≥ 22.19**。可选 peer 依赖 [`sharp`](https://www.npmjs.com/package/sharp)
-启用 `vision_crop` / `vision_pixel_diff`。
+要求 **Node ≥ 22.19**。可选 peer 依赖 [`sharp`](https://www.npmjs.com/package/sharp) 启用 `vision_crop` / `vision_pixel_diff`。
 
 ## 快速开始
 
@@ -90,37 +80,37 @@ import { createOmnivisionPlugin, resolveConfig } from 'dsh-omnivision';
 
 const plugin = createOmnivisionPlugin({
   config: resolveConfig({
-    language: 'zh',              // 'zh' | 'en' —— 标记与提示词语言
+    language: 'zh',              // 'zh' | 'en' — marker & prompt language
     visionDepth: 'standard',     // 'fast' | 'standard' | 'deep'
   }),
-  workspace: process.cwd(),      // 允许读取图片附件的根目录
-  sessionId: 'session-1',        // 描述缓存的隔离作用域
+  workspace: process.cwd(),      // root allowed for reading image attachments
+  sessionId: 'session-1',        // scopes the description cache
 });
 
-// Pre-step：把消息交给 DeepSeek **之前**调用
+// Pre-step: call BEFORE handing the message to DeepSeek
 const result = await plugin.processMessage(content, attachments, eventId);
 
 if (result.rewritten) {
-  sendToDeepSeek(result.newContent);      // 纯文本，已附加标记
+  sendToDeepSeek(result.newContent);      // pure text, markers appended
 }
 if (result.hasErrors) {
-  surfaceInUi(result.failures);           // 绝不会出现在 newContent 里
+  surfaceInUi(result.failures);           // never part of newContent
 }
 
-// 工具：按需深入分析某张图
+// Tools: drill into an image on demand
 const hit = await plugin.callTool('vision_ground', {
   image: attachments[0],
-  target: '登录按钮',
+  target: 'login button',
 });
 ```
 
 模型实际看到的内容（auto 模式，中文）：
 
 ```
-<用户原始文字>
+<original user text>
 
-[已识图1: 一张设置对话框，两栏布局…
-OCR: 常规 | 外观 | 高级]
+[已识图1: A settings dialog with two columns…
+OCR: General | Appearance | Advanced]
 ```
 
 ## Provider 链
@@ -136,8 +126,7 @@ OCR: 常规 | 外观 | 高级]
 | 4b | Zhipu | `glm-4.6v-flash` | `ZAI_API_KEY` | 检测到 key 才入链 |
 | 4c | OpenCode Zen Free | `big-pickle` *（可配置）* | `OPENCODE_API_KEY` | 检测到 key 才入链 |
 
-`freeCloudFirst: true` 会把有 key 的免费 provider 排到 OVH 之前。免费模型若拒收图片，
-链会自动滑向下一级。
+`freeCloudFirst: true` 会把有 key 的免费 provider 排到 OVH 之前。免费模型若拒收图片，链会自动滑向下一级。
 
 **环境变量（全部可选）：**
 
@@ -161,8 +150,7 @@ OCR: 常规 | 外观 | 高级]
 
 ## 工具集
 
-所有工具经 `plugin.callTool(name, args)` 与导出的注册表（`registerTool` / `getTool` /
-`listTools`）分发。参数自动校验，handler 异常先脱敏再返回。
+所有工具经 `plugin.callTool(name, args)` 与导出的注册表（`registerTool` / `getTool` / `listTools`）分发。参数自动校验，handler 异常先脱敏再返回。
 
 | 工具 | 参数 | 依赖 | 状态 |
 |---|---|---|---|
@@ -183,7 +171,7 @@ import { registerTool } from 'dsh-omnivision';
 
 registerTool({
   name: 'vision_palette',
-  description: '提取主色调',
+  description: 'Extract dominant colors',
   inputSchema: { required: ['image'] },
   async handler(ctx, args) { /* ctx.bridge, ctx.image, ctx.config */ },
 });
@@ -191,14 +179,13 @@ registerTool({
 
 ## 配置
 
-部分配置会与 `DEFAULT_CONFIG` 合并；嵌套对象做一层深合并。权威来源：
-[`src/config/schema.ts`](src/config/schema.ts)。
+部分配置会与 `DEFAULT_CONFIG` 合并；嵌套对象做一层深合并。权威来源： [`src/config/schema.ts`](src/config/schema.ts)。
 
 ```ts
 config: resolveConfig({
   language: 'zh',
   visionDepth: 'standard',
-  freeZen: { model: 'big-pickle' },   // Zen 免费模型在这里轮换
+  freeZen: { model: 'big-pickle' },   // rotate the Zen free model here
 })
 ```
 
@@ -229,16 +216,16 @@ config: resolveConfig({
 
 ```ts
 interface ProcessMessageResult {
-  rewritten: boolean;       // 全部失败时为 false
-  newContent: string;       // 至少一张成功前保持原样
+  rewritten: boolean;       // false when nothing succeeded
+  newContent: string;       // original content unless ≥ 1 image succeeded
   imageCount: number;
-  descriptions: string[];   // 仅成功项
+  descriptions: string[];   // successes only
   hasErrors: boolean;
   failures?: Array<{
     index: number;
     path: string;
     reason: 'too_large' | 'symlink' | 'provider';
-    message: string;        // 已脱敏
+    message: string;        // redacted
   }>;
 }
 ```
@@ -274,8 +261,7 @@ interface ProcessMessageResult {
 | `npm run lint` / `npm run format` | Biome 检查 / 自动修复 |
 | `npm run dev` | 监听重建 |
 
-测试套件完全离线（mock fetch/DNS）且跨平台——路径一律经 `os.tmpdir()` 构造，Windows、
-Linux、macOS 结果一致。
+测试套件完全离线（mock fetch/DNS）且跨平台——路径一律经 `os.tmpdir()` 构造，Windows、 Linux、macOS 结果一致。
 
 ## 状态与路线图
 
@@ -288,3 +274,39 @@ Linux、macOS 结果一致。
 ## 许可证
 
 [MIT](LICENSE) © zsagi1368
+
+## 模型体验
+
+### 图像描述标记
+
+#### 模型看到什么
+
+成功的图像会变成 `` `[已识图N: 描述]` `` 标记追加到用户原文之后；请求保持与无图请求形状完全一致的纯文本消息，失败的图像完全不产生标记。
+
+#### Token 影响
+
+标记文本为每张成功描述的图像各增加一次 token；由 `language` × `visionDepth` 派生的稳定查询模板让供应商侧提示保持可预测，缓存命中的描述跨轮复用同一文本。
+
+#### KV Cache 影响
+
+请求形状与有无图像字节级一致，前缀缓存保持温热；失败结果落在带外 `failures[]` 数组，从不改变模型可见内容。
+
+### 按需视觉工具
+
+#### 模型看到什么
+
+九个可派发工具（`vision_describe`、`vision_ocr`、`vision_detect`、`vision_ground`、`vision_bootstrap`、`vision_crop`、`vision_pixel_diff`，另有两个显式 stub）具备参数校验与凭据脱敏的错误返回。
+
+#### Token 影响
+
+工具结果为结构化文本，检测与定位走严格 JSON，受每供应商超时预算约束；stub 返回显式 not-implemented 错误，不携带图像数据。
+
+#### KV Cache 影响
+
+随附 patch 将 `progressiveTools` 固定为 `false`，会话开始时暴露的工具列表保持稳定，杜绝会话中途工具表扩张使缓存失效。
+
+## 已知限制与延期工作
+
+- `vision_trace` 与 `vision_screenshot` 为显式未实现的 stub。
+- npm 发布仍在筹备；当前安装需从源码构建。
+- 插件处于 alpha 阶段；供应商覆盖面与配置面仍可能变动。

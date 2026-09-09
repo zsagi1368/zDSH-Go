@@ -1,6 +1,6 @@
 # T6-③④ 修复后终验报告（tester 独立终验）
 
-English | [中文](2026-09-09-t6-final-verification.zh.md)
+[English](2026-09-09-t6-final-verification.md) | 中文
 
 - 日期：2026-09-09
 - 执行者：tester（独立复验，不采信 coder 自证）

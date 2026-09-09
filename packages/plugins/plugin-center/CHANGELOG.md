@@ -1,7 +1,6 @@
 # Changelog — zdsh-plugin-center
 
-All notable changes are documented here. Format follows Keep a Changelog;
-versioning is semver. 中文说明见同文件下半部分。
+All notable changes are documented here. Format follows Keep a Changelog; versioning is semver. 中文说明见同文件下半部分。
 
 ## [0.2.0] - 2026-08-24
 
@@ -9,61 +8,33 @@ Operations surface, adversarial hardening, first-party registry.
 
 ### Added
 
-- **Guardian wiring**: `guardian/toggle` + `guardian/status` routes drive the
-  detached watchdog with launch command and web port from config.
-- **Backup manager**: list snapshots and restore byte-verified copies through
-  a two-phase confirm (one-shot id/code pair, typo-tolerant until success).
+- **Guardian wiring**: `guardian/toggle` + `guardian/status` routes drive the detached watchdog with launch command and web port from config.
+- **Backup manager**: list snapshots and restore byte-verified copies through a two-phase confirm (one-shot id/code pair, typo-tolerant until success).
 - **Uninstall surface** in the client through the same one-shot dialog.
-- **Signed remote catalogs**: remote snapshots require a matching
-  `catalog.json.sha256`; the local cache is digest-checked too. First-party
-  registry lives at `zsagi1368/zdsh-plugin-registry`.
-- **Closed-loop integration test**: real node:http server + real child-process
-  CLI stand-in over real temp profile files (market → stage → apply → audit →
-  uninstall → restore → replay refusal).
+- **Signed remote catalogs**: remote snapshots require a matching `catalog.json.sha256`; the local cache is digest-checked too. First-party registry lives at `zsagi1368/zdsh-plugin-registry`.
+- **Closed-loop integration test**: real node:http server + real child-process CLI stand-in over real temp profile files (market → stage → apply → audit → uninstall → restore → replay refusal).
 
 ### Hardened (three adversarial review rounds, re-verified to zero P0/P1)
 
-- Command argv allowlist + catalog charset pinning close shell injection
-  through catalog-controlled owner/repo/version.
-- SSRF guard judges full inet_aton numeric forms (`2130706433`, `127.1`,
-  hex, octal), IPv4-compatible ::/96 and NAT64 embeds (RFC 6052 + RFC 8215);
-  redirects strip credential headers across origins.
-- Confirmation codes are independent random secrets (no longer derivable
-  from plan ids that appear in the audit tail); terminal plans refuse replay.
-- Host header must be a loopback literal (DNS-rebinding defense); oversized
-  bodies get 413 + socket destroy; audit reads are tail-bounded.
-- Backup directories refuse junction/reparse traversal; atomic writes retry
-  the Windows AV rename window; watchdog config is sha256-sealed.
+- Command argv allowlist + catalog charset pinning close shell injection through catalog-controlled owner/repo/version.
+- SSRF guard judges full inet_aton numeric forms (`2130706433`, `127.1`, hex, octal), IPv4-compatible ::/96 and NAT64 embeds (RFC 6052 + RFC 8215); redirects strip credential headers across origins.
+- Confirmation codes are independent random secrets (no longer derivable from plan ids that appear in the audit tail); terminal plans refuse replay.
+- Host header must be a loopback literal (DNS-rebinding defense); oversized bodies get 413 + socket destroy; audit reads are tail-bounded.
+- Backup directories refuse junction/reparse traversal; atomic writes retry the Windows AV rename window; watchdog config is sha256-sealed.
 
 ## [0.1.0] - 2026-08-24
 
-First public release of the zDSH Plugin Center: a built-in hub for
-discovering, evaluating and safely installing DSH plugins from the web UI.
+First public release of the zDSH Plugin Center: a built-in hub for discovering, evaluating and safely installing DSH plugins from the web UI.
 
 ### Added
 
-- **Marketplace discovery**: bounded 24-per-page listing with search,
-  category filter, recommended-only toggle, three badges per entry
-  (trust evidence, compatibility projection, pinned source), offline
-  degradation to the bundled seed catalog.
-- **Trust model**: GitHub targets pinned to exact 40-hex commits; catalog
-  entries carry evidence levels (discovered/installable/verified/recommended);
-  candidate pool is type-forbidden from carrying installable fields.
-- **Safe lifecycle transactions**: one-shot plans with content-bound
-  confirmation phrases → profile pre-hash → backup snapshot → pinned official
-  CLI invocation (force-add forbidden) → post-state comparison → health probe
-  → byte-exact verified rollback on any failure → secret-free JSONL audit.
-- **Lifecycle script gate**: plans whose target declares unlisted
-  lifecycle scripts are refused (`script_blocked`).
-- **HTTP surface** under `/api2/zdsh-plugin-center/*`: same-origin
-  enforcement, mutation intent header, read-only mode, bounded bodies,
-  stable status-code mapping.
-- **Self-guardian watchdog**: detached Node process probing a hardcoded
-  loopback address, bounded restarts (3 per 5 minutes) with give-up state,
-  status mirrored to disk; no launchd/schtasks/systemd required.
-- **Web client**: settings section (order 30) with bilingual zh/en UI,
-  theme alias variables, one-shot confirm dialog requiring the phrase code,
-  boot guard refreshing once when the host reloads under a new boot id.
+- **Marketplace discovery**: bounded 24-per-page listing with search, category filter, recommended-only toggle, three badges per entry (trust evidence, compatibility projection, pinned source), offline degradation to the bundled seed catalog.
+- **Trust model**: GitHub targets pinned to exact 40-hex commits; catalog entries carry evidence levels (discovered/installable/verified/recommended); candidate pool is type-forbidden from carrying installable fields.
+- **Safe lifecycle transactions**: one-shot plans with content-bound confirmation phrases → profile pre-hash → backup snapshot → pinned official CLI invocation (force-add forbidden) → post-state comparison → health probe → byte-exact verified rollback on any failure → secret-free JSONL audit.
+- **Lifecycle script gate**: plans whose target declares unlisted lifecycle scripts are refused (`script_blocked`).
+- **HTTP surface** under `/api2/zdsh-plugin-center/*`: same-origin enforcement, mutation intent header, read-only mode, bounded bodies, stable status-code mapping.
+- **Self-guardian watchdog**: detached Node process probing a hardcoded loopback address, bounded restarts (3 per 5 minutes) with give-up state, status mirrored to disk; no launchd/schtasks/systemd required.
+- **Web client**: settings section (order 30) with bilingual zh/en UI, theme alias variables, one-shot confirm dialog requiring the phrase code, boot guard refreshing once when the host reloads under a new boot id.
 - Seed catalog with six verified, installable plugins.
 - CI: lint + build + test on ubuntu and windows runners.
 

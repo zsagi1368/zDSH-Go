@@ -2,17 +2,13 @@
 
 # WebStack · 网栈
 
-**面向 DeepSeek Harness 的一体化网络搜索与抓取内核插件**
+**面向 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的一体化网络搜索与抓取内核插件**
 
 一个插件，覆盖全部搜索层，默认即硬化。
 
-[![CI](https://github.com/zsagi1368/dsh-webstack/actions/workflows/ci.yml/badge.svg)](https://github.com/zsagi1368/dsh-webstack/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/zsagi1368/dsh-webstack)](https://github.com/zsagi1368/dsh-webstack/releases)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
-![Node](https://img.shields.io/badge/node%20%3E%3D%2022.19-brightgreen)
-![Tests](https://img.shields.io/badge/tests-761%20passing-success)
+[![CI](https://github.com/zsagi1368/dsh-webstack/actions/workflows/ci.yml/badge.svg)](https://github.com/zsagi1368/dsh-webstack/actions/workflows/ci.yml) [![Release](https://img.shields.io/github/v/release/zsagi1368/dsh-webstack)](https://github.com/zsagi1368/dsh-webstack/releases) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE) ![Node](https://img.shields.io/badge/node%20%3E%3D%2022.19-brightgreen) ![Tests](https://img.shields.io/badge/tests-761%20passing-success)
 
-[English](./README.md) · 简体中文
+[English](README.md) | 中文
 
 </div>
 
@@ -53,11 +49,11 @@ WebStack 向宿主 `ctx.web` 接缝注册唯一的中性聚合器（同时覆盖
 通过 DSH 插件机制安装，可使用 GitHub Release 资产：
 
 ```bash
-# 从 GitHub Releases 下载 dsh-webstack-<version>.tgz，在 bundle 清单中引用
+# grab dsh-webstack-<version>.tgz from GitHub Releases, then reference it in your bundle manifest
 ```
 
 ```yaml
-# bundle 依赖示例
+# bundle dependency example
 dependencies:
   - name: dsh-webstack
 ```
@@ -66,22 +62,22 @@ dependencies:
 
 ```yaml
 search:
-  layer: api            # 切到 keyed 引擎层
+  layer: api            # switch to keyed engines
 engines:
   tavily:
-    key: tvly-...       # 或 credentialRef / 环境变量 WEBSTACK_TAVILY_API_KEY
+    key: tvly-...       # or a credentialRef / WEBSTACK_TAVILY_API_KEY env var
 mcpServers:
   - id: ddg-mcp
     transport: stdio
-    command: npx duckduckgo-mcp-server@0.1.2   # 必须锁定版本
+    command: npx duckduckgo-mcp-server@0.1.2   # pinned versions only
 ```
 
 可选卫星包（同仓库、独立安装）：
 
 | 包 | 增加的能力 |
 | --- | --- |
-| [`dsh-webstack-bridge`](../bridge/extension/README.md) | JS 重页面浏览器渲染兜底（MV3 扩展 + 配对协议） |
-| [`dsh-webstack-verticals`](../verticals) | 实验性免凭据 X/Twitter 检索腿（默认关闭，显式开启） |
+| [`dsh-webstack-bridge`](../webstack-bridge/extension/README.zh.md) | JS 重页面浏览器渲染兜底（MV3 扩展 + 配对协议） |
+| [`dsh-webstack-verticals`](../webstack-verticals) | 实验性免凭据 X/Twitter 检索腿（默认关闭，显式开启） |
 
 ## 配置
 
@@ -115,14 +111,14 @@ mcpServers:
 ## 一次搜索的流水线
 
 ```text
-query → extractHints        # site:/引号/时效/语言（确定性提取）
+query → extractHints        # site:/quotes/freshness/locale (deterministic)
       → estimateBand        # simple | medium | complex
-      → planSearch          # 层池 × 档宽 × autoFallback
-      → creds               # 三级链，单次操作解析一次
-      → cache               # 全维度 sha256 指纹
-      → fallback            # 冷却跳过 · 重试一次 · 终止语义
-      → fuse                # RRF × 衰减 × 权威域 × 多样性
-      → seam                # 截断权交还平台
+      → planSearch          # layer pool × band width × autoFallback
+      → creds               # 3-level chain, resolved once per operation
+      → cache               # sha256 fingerprint over all dimensions
+      → fallback            # cooldown skip · retry-once · terminal abort
+      → fuse                # RRF × decay × authority × diversity
+      → seam                # truncation stays with the platform
 ```
 
 抓取共用同一 hardened 出站通道：预算 → SSRF 四道闸 → 可选站点规则 → 抽取回退链（raw→fit）→「状态码即数据」如实上呈；桥接卫星已配对时可获得一次浏览器渲染救援。
@@ -133,8 +129,8 @@ query → extractHints        # site:/引号/时效/语言（确定性提取）
 
 ```bash
 pnpm install
-pnpm lint              # biome 全工作区
-pnpm -r run check      # 各包 类型检查 + 测试 + 构建
+pnpm lint              # biome across all packages
+pnpm -r run check      # typecheck + test + build per package
 pnpm --filter dsh-webstack bench
 ```
 
@@ -163,3 +159,27 @@ pnpm --filter dsh-webstack bench
 ## 许可证
 
 [MIT](./LICENSE)
+
+## 模型体验
+
+### 搜索与抓取工具
+
+#### 模型看到什么
+
+`web_backend_status`、`web_batch_search` 与 `web_history` 三个工具分别暴露无副作用诊断、保序扇出搜索（≤10 条查询、逐项隔离）与历史回放/清空；搜索结果经宿主 web 工具渲染，截断保留在平台侧。
+
+#### Token 影响
+
+结果列表在渲染前按 `fetch.maxContentChars` 预算截断；缓存命中回放完全相同的文本，冷却或失败结果以紧凑状态文本报告而非错误堆栈。
+
+#### KV Cache 影响
+
+此处不注册任何 prompt 或工具 schema；结果只经宿主 web 工具进入上下文，无论免费池、 keyed 引擎还是 MCP 引擎服务查询，请求形状均不变。
+
+## 已知限制与延期工作
+
+- 原生层句柄捕获未完成，`native` 仍经由宿主内置的现有接口转发。
+- 提示语段固定为 zh/en 双语；宿主 locale 探测是后续工作。
+- 抓取域缓存接线尚未实现。
+- 设置界面暂无 selector 规则编辑器，更多垂直频道仍在排期。
+- npm 发布自动化尚未就位。

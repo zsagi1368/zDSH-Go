@@ -1,6 +1,6 @@
 # T5+T6 测试报告 — zDSH-go 战役全量门禁 + 端到端安装验证
 
-English | [中文](2026-09-09-t5-t6-test-report.zh.md)
+[English](2026-09-09-t5-t6-test-report.md) | 中文
 
 > tester 执行；日期 2026-09-09；worktree `G:\000Github\zDSH\zDSH-wt\zDSH-go`（分支 zDSH-go，起测 HEAD=d87c48f87e，新增 commit 4d3a99d847）。证据文件（worktree 内相对路径）：/tmp 日志已摘录进本报告，关键原始日志见 `del/20260909-053849-t5-config-catalog-gate-fix/` 旁的 ops 交接与下文逐项引用。
 

@@ -4,18 +4,11 @@
 
 **Give DeepSeek eyes — without touching its KV cache.**
 
-A vision bridge plugin for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness):
-every image is converted to a faithful text description *before* it reaches the model,
-so the request stays pure text and prefix caches stay warm. The chat UI keeps showing
-the original images.
+A vision bridge plugin for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness): every image is converted to a faithful text description *before* it reaches the model, so the request stays pure text and prefix caches stay warm. The chat UI keeps showing the original images.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Node](https://img.shields.io/badge/node-%E2%89%A522.19-339933?logo=node.js&logoColor=white)](package.json)
-[![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)](tsconfig.json)
-[![Tests](https://img.shields.io/badge/tests-232%20passing-brightgreen)](tests)
-[![Coverage](https://img.shields.io/badge/coverage-98%25-brightgreen)](reports)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![Node](https://img.shields.io/badge/node-%E2%89%A522.19-339933?logo=node.js&logoColor=white)](package.json) [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)](tsconfig.json) [![Tests](https://img.shields.io/badge/tests-232%20passing-brightgreen)](tests) [![Coverage](https://img.shields.io/badge/coverage-98%25-brightgreen)](https://github.com/zsagi1368/dsh-omnivision/actions/workflows/ci.yml)
 
-**English** · [简体中文](README.zh.md)
+English | [中文](README.zh.md)
 
 </div>
 
@@ -23,15 +16,9 @@ the original images.
 
 ## Why
 
-Pasting images into an LLM conversation normally means switching to a multimodal message
-format — which invalidates the prompt prefix cache on every image, slows every subsequent
-turn, and couples you to a single vendor's vision API.
+Pasting images into an LLM conversation normally means switching to a multimodal message format — which invalidates the prompt prefix cache on every image, slows every subsequent turn, and couples you to a single vendor's vision API.
 
-**dsh-omnivision takes a different path:** images never enter the model request at all.
-A pre-step bridge describes them in text first. DeepSeek receives exactly the same
-pure-text message shape it would receive without any image — same structure, same
-cacheability — while the user still sees their pictures in the UI via a shadow-history
-layer.
+**dsh-omnivision takes a different path:** images never enter the model request at all. A pre-step bridge describes them in text first. DeepSeek receives exactly the same pure-text message shape it would receive without any image — same structure, same cacheability — while the user still sees their pictures in the UI via a shadow-history layer.
 
 ## How it works
 
@@ -84,8 +71,7 @@ npm run build        # produces dist/index.js + type declarations
 npm test             # 232 tests, ~1 s
 ```
 
-Requires **Node ≥ 22.19**. Optional peer dependency [`sharp`](https://www.npmjs.com/package/sharp)
-enables `vision_crop` / `vision_pixel_diff`.
+Requires **Node ≥ 22.19**. Optional peer dependency [`sharp`](https://www.npmjs.com/package/sharp) enables `vision_crop` / `vision_pixel_diff`.
 
 ## Quick start
 
@@ -129,8 +115,7 @@ OCR: General | Appearance | Advanced]
 
 ## Provider chain
 
-Providers are tried strictly in order until one succeeds. Compose yours in `config.providers`,
-then local backends, then the free fallback tail:
+Providers are tried strictly in order until one succeeds. Compose yours in `config.providers`, then local backends, then the free fallback tail:
 
 | Order | Provider | Default model | Auth | Notes |
 |---|---|---|---|---|
@@ -141,8 +126,7 @@ then local backends, then the free fallback tail:
 | 4b | Zhipu | `glm-4.6v-flash` | `ZAI_API_KEY` | joins only when the key exists |
 | 4c | OpenCode Zen Free | `big-pickle` *(configurable)* | `OPENCODE_API_KEY` | joins only when the key exists |
 
-`freeCloudFirst: true` reorders the free tail to key-gated providers before OVH. If a free
-model rejects image input, the chain simply moves on.
+`freeCloudFirst: true` reorders the free tail to key-gated providers before OVH. If a free model rejects image input, the chain simply moves on.
 
 **Environment variables (all optional):**
 
@@ -154,8 +138,7 @@ model rejects image input, the chain simply moves on.
 | `ZAI_API_KEY` | Zhipu GLM-V flash |
 | `OPENCODE_API_KEY` | OpenCode Zen free tier |
 
-With **no** environment variables set, the plugin still works end-to-end via the anonymous
-OVH endpoint.
+With **no** environment variables set, the plugin still works end-to-end via the anonymous OVH endpoint.
 
 ## Modes
 
@@ -167,9 +150,7 @@ OVH endpoint.
 
 ## Tools
 
-All tools are dispatched through `plugin.callTool(name, args)` and the exported
-registry (`registerTool` / `getTool` / `listTools`). Arguments are validated, and handler
-errors are credential-redacted before returning.
+All tools are dispatched through `plugin.callTool(name, args)` and the exported registry (`registerTool` / `getTool` / `listTools`). Arguments are validated, and handler errors are credential-redacted before returning.
 
 | Tool | Arguments | Depends on | Status |
 |---|---|---|---|
@@ -198,8 +179,7 @@ registerTool({
 
 ## Configuration
 
-Partial configs are merged over `DEFAULT_CONFIG`; nested objects merge one level deep.
-Canonical source: [`src/config/schema.ts`](src/config/schema.ts).
+Partial configs are merged over `DEFAULT_CONFIG`; nested objects merge one level deep. Canonical source: [`src/config/schema.ts`](src/config/schema.ts).
 
 ```ts
 config: resolveConfig({
@@ -250,8 +230,7 @@ interface ProcessMessageResult {
 }
 ```
 
-When every image fails, `newContent` is returned untouched and the reason trail lands in
-`failures` — the UI decides what to show.
+When every image fails, `newContent` is returned untouched and the reason trail lands in `failures` — the UI decides what to show.
 
 ## Security
 
@@ -282,8 +261,7 @@ When every image fails, `newContent` is returned untouched and the reason trail 
 | `npm run lint` / `npm run format` | Biome check / autofix |
 | `npm run dev` | Watch rebuild |
 
-The test suite is fully offline (mocked fetch/DNS) and cross-platform — paths are built
-through `os.tmpdir()` so it passes identically on Windows, Linux, and macOS.
+The test suite is fully offline (mocked fetch/DNS) and cross-platform — paths are built through `os.tmpdir()` so it passes identically on Windows, Linux, and macOS.
 
 ## Status & roadmap
 
@@ -296,3 +274,39 @@ through `os.tmpdir()` so it passes identically on Windows, Linux, and macOS.
 ## License
 
 [MIT](LICENSE) © zsagi1368
+
+## Model Experience
+
+### Image description markers
+
+#### What the model sees
+
+Successful images become `` `[已识图N: description]` `` markers appended to the user's own text; the request stays a pure-text message identical in shape to a no-image request, and failed images produce no marker at all.
+
+#### Token effect
+
+Marker text adds tokens once per described image; stable query templates derived from `language` × `visionDepth` keep provider prompts predictable, and cached descriptions reuse the same text across turns.
+
+#### KV Cache effect
+
+The request shape is byte-identical with or without images, so prefix caches stay warm; failures land in the out-of-band `failures[]` array and never alter model-visible content.
+
+### On-demand vision tools
+
+#### What the model sees
+
+Nine dispatchable tools (`vision_describe`, `vision_ocr`, `vision_detect`, `vision_ground`, `vision_bootstrap`, `vision_crop`, `vision_pixel_diff`, plus two explicit stubs) with validated arguments and credential-redacted errors.
+
+#### Token effect
+
+Tool results are structured text with strict JSON for detection and grounding, bounded by per-provider timeout budgets; stubs return explicit not-implemented errors that carry no image data.
+
+#### KV Cache effect
+
+The bundled patch pins `progressiveTools: false`, keeping the exposed tool list stable from session start so no mid-conversation tool-list expansion invalidates caches.
+
+## Known Limitations and Deferred Work
+
+- `vision_trace` and `vision_screenshot` are explicit not-implemented stubs.
+- The npm release is still pending; installation currently requires building from source.
+- The plugin is in alpha; provider coverage and the config surface may still change.

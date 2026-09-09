@@ -358,7 +358,7 @@ Source: [`packages/client/hmr/src/index.ts:31`](../packages/client/hmr/src/index
 
 ## `@deepseek-ai/dsh-client-workbench`
 
-Requires: `webServer`
+Requires: `webServer` · `connection`
 
 ```ts config-catalog
 /** Deployment options for the host half (cordis plugin row `config`). */
@@ -395,7 +395,7 @@ export interface WorkbenchHostConfig {
 }
 ```
 
-Source: [`packages/client/workbench/src/index.ts:28`](../packages/client/workbench/src/index.ts)
+Source: [`packages/client/workbench/src/index.ts:37`](../packages/client/workbench/src/index.ts)
 
 <a id="deepseek-aidsh-code-runtime-worker-thread"></a>
 

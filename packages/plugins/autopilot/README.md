@@ -1,8 +1,6 @@
 # zdsh-autopilot
 
-[![ci](https://github.com/zsagi1368/zdsh-autopilot/actions/workflows/ci.yml/badge.svg)](https://github.com/zsagi1368/zdsh-autopilot/actions/workflows/ci.yml)
-[![release](https://img.shields.io/github/v/tag/zsagi1368/zdsh-autopilot?label=release&sort=semver)](https://github.com/zsagi1368/zdsh-autopilot/releases)
-[![license](https://img.shields.io/github/license/zsagi1368/zdsh-autopilot)](LICENSE)
+[![ci](https://github.com/zsagi1368/zdsh-autopilot/actions/workflows/ci.yml/badge.svg)](https://github.com/zsagi1368/zdsh-autopilot/actions/workflows/ci.yml) [![release](https://img.shields.io/github/v/tag/zsagi1368/zdsh-autopilot?label=release&sort=semver)](https://github.com/zsagi1368/zdsh-autopilot/releases) [![license](https://img.shields.io/github/license/zsagi1368/zdsh-autopilot)](LICENSE)
 
 **zDSH AutoPilot（自动领航）** — the unified automation engine for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness). Three cooperating capabilities behind one kernel and one console:
 
@@ -12,7 +10,7 @@
 | 🛡 | **Guard** | Sandbox-first permission policy: routine work runs without prompts inside the OS sandbox; semantic risks go through a redacted LLM classifier with a strict output protocol; out-of-boundary work gets a five-element one-shot escalation grant answered at the official approval seam — one popup, ever. |
 | 🔎 | **Review** | A read-only second-model reviewer subagent answers approval requests under a full claim conjunction, fail-closed by default, with dual budgets, a derived-default circuit breaker, and denial reasons fed back into error results. |
 
-English | [简体中文](README.zh.md)
+English | [中文](README.zh.md)
 
 ---
 
@@ -44,10 +42,10 @@ All runtime host capabilities are feature-detected with graceful degradation; a 
 **Upstream DSH or any other profile:**
 
 ```bash
-# from GitHub
+# 从 GitHub 安装
 dsh plugin --profile web add github:zsagi1368/zdsh-autopilot
 
-# or from a local checkout
+# 或从本地检出安装
 dsh plugin --profile web add link:/path/to/zdsh-autopilot
 ```
 
@@ -122,3 +120,25 @@ See [docs/DESIGN.md](docs/DESIGN.md) for the full architecture record and [CHANG
 ## License
 
 [MIT](LICENSE) © 2026 zsagi1368
+
+## Model Experience
+
+### Automation kernel
+
+#### What the model sees
+
+Continue resumes interrupted sessions by submitting an ordinary resume message; Guard answers at the official approval seam through a five-element one-shot escalation grant; Review contributes a read-only reviewer subagent verdict under a strict output protocol, with denial reasons fed back into error results.
+
+#### Token effect
+
+The LLM classifier and reviewer calls are auxiliary requests outside the main conversation; audit events (`ap/*`) are session-log records, not prompt content, and structural redaction strips secret-named keys, bulk content and token shapes before anything crosses a model boundary.
+
+#### KV Cache effect
+
+Module decisions never rewrite message history — pending approvals defer auto-resume and circuit states suppress it, so the visible transcript the prefix cache is built on stays exactly what the user and tools wrote.
+
+## Known Limitations and Deferred Work
+
+- Reviewer quality depends on the configured second model; fail-closed denials are the default when it underperforms.
+- Path judgment is hardened for Windows first; other platforms receive best-effort equivalents.
+- The escalation grant is consumable exactly once per callId and cannot be batched.
