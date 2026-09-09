@@ -21,6 +21,12 @@ import { teamProjectionDefinition } from '../src/projection.ts'
 import type { TeamMemberSnapshot, TeamMessageSnapshot, TeamTaskSnapshot } from '../src/index.ts'
 import { TestSessionQuery } from './test-session-query.ts'
 
+// Fork/fresh teammate spawns boot full agent loops with session persistence;
+// on slow CI machines (2-core GH runners) a single spawn chain can outgrow the
+// 5s default, so the file gets the same bounded 30s budget the
+// workflow-worker-thread and projection-cache fixtures suites use.
+vi.setConfig({ testTimeout: 30_000 })
+
 const SIGNAL = new AbortController().signal
 const roots: string[] = []
 
