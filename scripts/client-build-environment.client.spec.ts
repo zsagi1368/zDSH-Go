@@ -32,14 +32,11 @@ const COMMIT_HASH = '0123456789abcdef0123456789abcdef01234567'
 const PROBE_KEY = `process.env.${PROBE_NAME}`
 const originalProbe = process.env[PROBE_NAME]
 const roots: string[] = []
+// zDSH-Go ships exactly one GitHub Actions workflow (upstream's spread of
+// build workflows was removed with commit 167b35fb1b); the env-leakage rule
+// applies to whatever workflow inventory exists in this tree.
 const dshBuildWorkflows = [
-  'build-exe-for-python-sdk.yml',
   'ci.yml',
-  'e2b-e2e.yml',
-  'e2e.yml',
-  'release.yml',
-  'release-publish.yml',
-  'sandbox.yml',
 ]
 
 afterEach(() => {

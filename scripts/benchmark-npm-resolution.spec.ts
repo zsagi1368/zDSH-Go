@@ -89,11 +89,15 @@ describe('npm resolution benchmark', () => {
     })
   })
 
-  it('runs npm against the local registry without requesting an archive', async () => {
+  it('runs npm against the local registry without requesting an archive', { timeout: 90_000 }, async () => {
     const index: RegistryIndex = new Map([[
       '@deepseek-ai/dsh',
       new Map([['0.1.0', { name: '@deepseek-ai/dsh', version: '0.1.0' }]]),
     ]])
+    // The 90s test timeout matches the npm child's own 10s process budget
+    // with headroom for slow CI machines: on GH Windows runners the first
+    // npm invocation pays cold-cache registry setup that blew the 5s vitest
+    // default while the child itself still respected its own budget.
     const result = await benchmarkNpmResolution(index, '0.1.0', 10_000)
 
     expect(result.durationMs).toBeGreaterThan(0)
