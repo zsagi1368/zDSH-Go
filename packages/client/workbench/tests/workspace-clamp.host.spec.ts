@@ -40,7 +40,9 @@ async function startClamped(clampRoot: string): Promise<TestServer> {
     const parsed = new URL(req.url ?? '/', 'http://workbench.invalid')
     const exact = routes.find(route => route.kind === 'exact' && route.path === parsed.pathname)
     const prefix = routes
-      .filter(route => route.kind === 'prefix' && parsed.pathname.startsWith(route.path))
+      // Contract semantics (webserver match()): prefix p matches p and p/<anything>.
+      .filter(route => route.kind === 'prefix'
+        && (parsed.pathname === route.path || parsed.pathname.startsWith(`${route.path}/`)))
       .sort((a, b) => b.path.length - a.path.length)[0]
     const handler = exact?.handler ?? prefix?.handler
     if (handler === undefined) {

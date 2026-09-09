@@ -4,12 +4,21 @@
  * fence (see trust.ts) before any work happens. API responses share one
  * envelope (`shared/protocol-envelope.ts`); unknown methods answer with
  * `no-route` on HTTP 200 so transport status stays reserved for transport.
+ *
+ * Route paths follow the vendored webserver contract: absolute pathnames with
+ * no trailing slash — `prefix` p matches p and p/<anything>. The dock SPA face
+ * (below) serves the composing web frontend's index for `/workbench` deep
+ * paths that no workbench endpoint claims.
  */
 import type { Context } from '@deepseek-ai/cordis'
 import type { ServerResponse } from 'node:http'
 import { realpathSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
+import { createRequire } from 'node:module'
+import { dirname, join } from 'node:path'
 import { WORKBENCH_ROUTE_PREFIX as PREFIX, pingResult } from './shared/protocol.ts'
 import type { WorkbenchRouteEnvelope } from './shared/protocol-envelope.ts'
+import type {} from '@deepseek-ai/dsh-client-connection'
 import type { WebRoute } from './context-types.ts'
 import { createGitHandlers } from './git-routes.ts'
 import { createFsHandlers, readBody, RootCache } from './fs-routes.ts'
@@ -22,7 +31,7 @@ import { assertTrustedAuthorityEntry, isTrustedRequestHost } from './trust.ts'
 import { guardWorkbench } from './compat.ts'
 
 /** Services required from the host composition. */
-export const inject = ['webServer']
+export const inject = ['webServer', 'connection']
 
 /** Deployment options for the host half (cordis plugin row `config`). */
 export interface WorkbenchHostConfig {
@@ -73,6 +82,24 @@ function respondJson(res: ServerResponse, status: number, body: unknown): void {
 function fail(code: string, message: string): WorkbenchRouteEnvelope<never> {
   return { ok: false, error: { code, message } }
 }
+
+/**
+ * Anchor of the composing web frontend's built index. The dist location is
+ * workspace knowledge of the web-app bundle, so this resolves through the
+ * package graph and degrades to `undefined` (no SPA face) in compositions
+ * that do not carry the frontend package.
+ */
+function resolveSpaIndex(): string | undefined {
+  try {
+    const require = createRequire(import.meta.url)
+    return join(dirname(require.resolve('@deepseek-ai/dsh-web-frontend/package.json')), 'dist', 'index.html')
+  } catch {
+    return undefined
+  }
+}
+
+/** Test hooks for the dist anchor; production never mutates them. */
+export const internals: { resolveSpaIndex: () => string | undefined } = { resolveSpaIndex }
 
 export async function apply(ctx: Context, options?: WorkbenchHostConfig): Promise<void> {
   const enabled = await guardWorkbench(ctx.logger)
@@ -145,7 +172,10 @@ export async function apply(ctx: Context, options?: WorkbenchHostConfig): Promis
 
   const apiRoute: WebRoute = {
     kind: 'prefix',
-    path: `${PREFIX}/api/`,
+    // Webserver contract: no trailing slash — `prefix` p matches p and
+    // p/<anything>. Deep paths like `/workbench/api/fs/list` route here and
+    // the handler strips the `<prefix>/api/` remainder below.
+    path: `${PREFIX}/api`,
     handler: async (req, res) => {
       if (!isTrustedRequestHost(req.headers, trustedHosts)) {
         respondJson(res, 403, fail('untrusted-host', 'host header failed the trust fence'))
@@ -236,6 +266,49 @@ export async function apply(ctx: Context, options?: WorkbenchHostConfig): Promis
     },
   }
 
+  // Dock SPA face: every `/workbench` path no workbench endpoint claims
+  // answers with the composing web frontend's index, so `/workbench` and its
+  // deep links land in the SPA that mounts the workbench dock. Index
+  // responses follow the frontend-static fallback semantics: browser
+  // authentication first (never serving the injected index body unauthenticated),
+  // then the webserver's index render (structured injection rows, then raw
+  // taps), with relative asset URLs anchored at the site root. Endpoint
+  // precedence is untouched: exact routes (`/workbench/events`,
+  // `/workbench/file`) win first and longest-prefix-wins keeps
+  // `/workbench/api` ahead of this catch-all.
+  const spaIndex = internals.resolveSpaIndex()
+  const spaRoute: WebRoute | undefined = spaIndex === undefined
+    ? undefined
+    : {
+      kind: 'prefix',
+      path: PREFIX,
+      handler: async (req, res) => {
+        if (req.method !== 'GET' && req.method !== 'HEAD') {
+          res.writeHead(405)
+          res.end()
+          return
+        }
+        if (!isTrustedRequestHost(req.headers, trustedHosts)) {
+          respondJson(res, 403, fail('untrusted-host', 'host header failed the trust fence'))
+          return
+        }
+        if (!ctx.connection.authorizeIndex(req, res)) return
+        let html: string
+        try {
+          html = await readFile(spaIndex, 'utf8')
+        } catch {
+          // Absent dist index answers 404 like the fallback owner does.
+          res.writeHead(404)
+          res.end()
+          return
+        }
+        const body = ctx.webServer.renderIndex(html)
+          .replace(/<head(?:\s[^>]*)?>/i, open => `${open}<base href="/">`)
+        res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
+        res.end(body)
+      },
+    }
+
   ctx.effect(() => ctx.webServer.register(apiRoute), 'workbench: /workbench/api routes')
   ctx.effect(() => ctx.webServer.register({
     kind: 'exact',
@@ -243,6 +316,9 @@ export async function apply(ctx: Context, options?: WorkbenchHostConfig): Promis
     handler: createMediaHandler(rootCache, trustedHosts, rootAllowed),
   }), 'workbench: /workbench/file media route')
   ctx.effect(() => ctx.webServer.register(eventsRoute), 'workbench: /workbench/events sse')
+  if (spaRoute !== undefined) {
+    ctx.effect(() => ctx.webServer.register(spaRoute), 'workbench: /workbench spa face')
+  }
   ctx.effect(() => ctx.webServer.registerUpgrade({
     path: `${PREFIX}/ws/terminal`,
     handler: (req, socket, head) => {

@@ -41,7 +41,11 @@ async function startServer(): Promise<TestServer> {
     const parsed = new URL(req.url ?? '/', 'http://workbench.invalid')
     const exact = routes.find(route => route.kind === 'exact' && route.path === parsed.pathname)
     const prefixes = routes
-      .filter(route => route.kind === 'prefix' && parsed.pathname.startsWith(route.path))
+      // Contract semantics (webserver match()): prefix p matches p and
+      // p/<anything> — sibling-prefix lookalikes (`/workbench/api-x`) must not
+      // route into p's handler.
+      .filter(route => route.kind === 'prefix'
+        && (parsed.pathname === route.path || parsed.pathname.startsWith(`${route.path}/`)))
       .sort((a, b) => b.path.length - a.path.length)
     const handler = exact?.handler ?? prefixes[0]?.handler
     if (handler === undefined) {

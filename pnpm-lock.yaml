@@ -3938,6 +3938,9 @@ importers:
 
   packages/client/workbench:
     dependencies:
+      '@deepseek-ai/dsh-web-frontend':
+        specifier: workspace:^
+        version: link:../../../apps/web
       '@xterm/xterm':
         specifier: ^5.5.0
         version: 5.5.0
@@ -3951,6 +3954,9 @@ importers:
       '@deepseek-ai/cordis':
         specifier: workspace:^
         version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-client-connection':
+        specifier: workspace:^
+        version: link:../connection
       '@deepseek-ai/dsh-client-locale':
         specifier: workspace:^
         version: link:../locale
