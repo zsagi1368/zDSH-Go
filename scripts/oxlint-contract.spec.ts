@@ -5,7 +5,13 @@ import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { flattenDiagnosticMessageText, parseConfigFileTextToJson } from 'typescript'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+
+// Every case spawns real oxlint/tsx child processes; under full-suite
+// parallelism a single spawn can exceed the default 5s testTimeout (observed
+// as a one-off full-run failure that was green on rerun). 60s matches the
+// heaviest-suite precedent while keeping real contract regressions failing.
+vi.setConfig({ testTimeout: 60_000 })
 
 const repositoryRoot = fileURLToPath(new URL('..', import.meta.url))
 const oxlintCli = fileURLToPath(new URL('../node_modules/oxlint/bin/oxlint', import.meta.url))

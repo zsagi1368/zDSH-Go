@@ -4,6 +4,13 @@ import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import yaml from 'js-yaml'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+
+// The repository-metadata case chains many real git subprocesses (init,
+// commits, a submodule add) and another case imports the web Vite config;
+// under full-suite parallelism the default 5s testTimeout flakily expired on
+// a cold cache (6467ms in the T5 report, green on hot rerun). 30s matches
+// the heavy-suite precedent and keeps real regressions failing loudly.
+vi.setConfig({ testTimeout: 30_000 })
 import {
   assertClientBuildEnvironment,
   clientBuildEnvironmentDefines,
