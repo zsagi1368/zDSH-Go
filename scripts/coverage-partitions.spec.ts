@@ -26,7 +26,12 @@ const passed: CoverageCommandResult = { exitCode: 0, signalCode: null }
 const roots: string[] = []
 afterEach(async () => {
   vi.restoreAllMocks()
-  for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true })
+  // CI runners expose the temp dir through an 8.3 short name (RUNNER~1); the
+  // vitest cache inside can still hold handles when rm first walks the tree,
+  // so let fs.rm retry instead of failing the cleanup with EPERM.
+  for (const root of roots.splice(0)) {
+    await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
+  }
 })
 
 async function writeBlob(command: CoverageCommand): Promise<void> {
