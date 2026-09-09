@@ -1,6 +1,6 @@
 # 发布前全量门禁复验（战役 B · tester 独立验证）
 
-English | [中文](2026-09-09-release-gate-recheck.zh.md)
+[English](2026-09-09-release-gate-recheck.md) | 中文
 
 - 日期：2026-09-09
 - 执行者：tester（独立复验，不采信各卡自证）
