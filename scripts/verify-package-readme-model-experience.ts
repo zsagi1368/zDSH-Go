@@ -188,6 +188,10 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
   'packages/web/web-fetch-http': { kind: 'indirect', reason: 'The provider backend delegates model rendering to dsh-tool-web.' },
   'packages/web/web-search-exa': { kind: 'indirect', reason: 'The provider backend delegates model rendering to dsh-tool-web.' },
   'packages/workflow/workflow': { kind: 'indirect', reason: 'The service delegates parent and child model rendering to its consumer and engine.' },
+  'packages/plugins/dsh-guard': { kind: 'none', reason: 'The package is a pnpm prepare hook that repairs plugin-ecosystem breakage on disk; it registers nothing model-facing.' },
+  'packages/plugins/plugin-center': { kind: 'none', reason: 'The marketplace drives browser UI and one-shot profile lifecycle transactions over the web console; it registers no prompt, tool, or session event.' },
+  'packages/plugins/webstack-bridge': { kind: 'indirect', reason: 'The bridge returns extracted page text into dsh-webstack search results; the consuming web tools own every model-visible effect.' },
+  'packages/plugins/webstack-verticals': { kind: 'indirect', reason: 'Vertical results flow into dsh-webstack search aggregation; the consuming web tools own every model-visible effect.' },
 }
 
 interface Failure {
