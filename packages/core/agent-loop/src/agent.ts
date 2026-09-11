@@ -32,12 +32,51 @@ import { canonicalHeader, headerEquals } from '@deepseek-ai/dsh-session'
 import { joinContextSections, renderContextSections, renderPrompt } from '@deepseek-ai/dsh-system-prompt'
 import type { PromptAssembly } from '@deepseek-ai/dsh-system-prompt'
 import type {} from '@deepseek-ai/dsh-session-projection'
+import {
+  accountResetCost,
+  createResetLedger,
+  deserializeLedger,
+  registerResetEvent as registerGuardianResetEvent,
+  resolveCacheEconomics,
+  serializeLedger,
+  type ResetLedger,
+} from '@deepseek-ai/dsh-llm-pi-ai/cache-guardian'
 import type { Context } from '@deepseek-ai/cordis'
 import { ReactLoopInbox } from './inbox.ts'
-import { RuntimeContextProjection } from './runtime-context.ts'
+import { RuntimeContextProjection, type DeltaResetSink } from './runtime-context.ts'
 import { AssistantStreamAttempt } from './assistant-stream.ts'
 import { SystemPromptProjection } from './runtime-context.ts'
 import { executeToolCalls } from './tool-calls.ts'
+
+/**
+ * L5 重置台账的持久化载体（Phase 6）：每次尾部合并/重置后追加一条
+ * log-only 事件，把序列化的 cache-guardian `ResetLedger` 与累计重置写入
+ * 成本写入会话日志——事件日志即会话的持久化存储，resume 时回放重建。
+ * `ignorable` 语义：它只是辅助台账，不影响消息历史重构，旧版读取器
+ * 可以安全跳过（事件本身属于本版已知词汇表，正常读取方照常重建）。
+ */
+declare module '@deepseek-ai/dsh-session/types' {
+  interface SessionEventMap {
+    /**
+     * L5 缓存重置台账快照（Phase 6 遗留收口）：`tailMerge`/`compaction`
+     * 重置登记后追加，序列化 cache-guardian `ResetLedger`（events +
+     * generation）与累计重置写入成本。log-only，辅助缓存豁免窗口与
+     * 记账重建，不参与消息历史重构。
+     */
+    'cache/ledger': {
+      /** 序列化的重置台账 JSON（`serializeLedger` 输出，快照式，恢复取末条）。 */
+      ledger: string
+      /**
+       * 本次重置的增量写入成本（token 当量，`η×contextTokens`，即
+       * `accountResetCost` 单条结果）。非累计快照——投影侧 `cacheMetrics`
+       * 经 `foldResetWriteCost` 逐条累加成 `resetWriteTokens`，agent 侧
+       * `restoreCacheLedger` 对所有条求和还原 `totalResetWriteCost`，两者
+       * 恒等于同一 Σ，故报告指标与持久化账本不会分叉。
+       */
+      resetWriteCost: number
+    }
+  }
+}
 
 type Phase =
   | { kind: 'idle'; lastTurn: number }
@@ -69,6 +108,69 @@ function requestProposal(header: EpochHeader): LlmCallConfig {
   return proposal
 }
 
+/**
+ * openai-completions 系路由名单（D1 接线：保守判定 `deferFoldAfterToolResult`）。
+ *
+ * 背景（M4′ 闭合 a）：pi-ai 的 `requiresAssistantAfterToolResult` 垫片——在
+ * toolResult 与其后 user 消息之间注入占位 assistant——只对 `openai-completions`
+ * 协议有意义，且**默认禁用**：`detectCompat` 对所有 provider 返回 false，DSH 的
+ * llm-pi-ai catalog 仅把它列为 profile 可配置项（`'offer'`），未对任何路由默认
+ * 启用。这类路由对 wire 上的 `[toolResult, user(delta)]` 相邻对可能 400/误读，
+ * 故 L2 delta 折叠需推迟（`deferFoldAfterToolResult=true`：delta 保持 pending，
+ * 不丢，等下一条真实 user 前有 assistant 中介，或由压缩边界回收）。
+ *
+ * 判定局限：agent-loop 侧只拿得到 provider 路由字符串——`LlmCallConfig` 不携带
+ * 已解析的 wire 协议，pi-ai 的 compat 垫片状态也不向本包暴露（见 runtime-context
+ * 的 `deferFoldAfterToolResult` 选项注释）。故此处按「路由名恰为已知
+ * openai-completions 系内建 provider」保守匹配。名单取自 pi-ai 内建 provider 中
+ * **默认协议即 openai-completions** 者（deepseek/groq/cerebras/openrouter/… 及
+ * 若干国产 openai-compatible 路由）；按 provider id 小写形态收录。
+ *
+ * 名单外一律返回 false（不误伤）：自定义网关名、anthropic-messages /
+ * openai-responses 系、混合按模型分派协议者（xai）、以及空/未知 provider，都
+ * 保持缺省折叠。误判方向是安全的——误置 true 只是把折叠推迟到下一条 assistant
+ * 中介之后（delta 绝不丢），误置 false 才会漏出 `[toolResult, user]` 相邻对；
+ * 因此对「名字命中已知 openai-completions 路由」者宁可推迟。
+ *
+ * 长期更干净方案：在 llm-pi-ai catalog 对 openai-completions 系路由默认启用
+ * `requiresAssistantAfterToolResult` 垫片（wire 上自动补占位 assistant），届时
+ * 撤销本接线（连同名单），恢复工具批末即时折叠。
+ */
+const OPENAI_COMPLETIONS_FAMILY_PROVIDERS: ReadonlySet<string> = new Set([
+  'deepseek',
+  'groq',
+  'cerebras',
+  'openrouter',
+  'huggingface',
+  'together',
+  'nvidia',
+  'moonshotai',
+  'moonshotai-cn',
+  'zai',
+  'zai-coding-cn',
+  'qwen-token-plan',
+  'qwen-token-plan-cn',
+  'xiaomi',
+  'xiaomi-token-plan-cn',
+  'xiaomi-token-plan-ams',
+  'xiaomi-token-plan-sgp',
+  'ant-ling',
+  'cloudflare-workers-ai',
+])
+
+/**
+ * 是否对某 provider 路由推迟工具批末折叠（D1 接线判定）。见
+ * {@link OPENAI_COMPLETIONS_FAMILY_PROVIDERS} 的名单与局限说明。
+ * @param provider - 构造期可解析的 provider 路由字符串（会话已解析路由优先，
+ *   否则声明路由；见 {@link ReactLoopAgent.cacheProvider}）。
+ * @returns 命中 openai-completions 系名单时 true，否则 false（缺省，不误伤）。
+ */
+function shouldDeferFoldAfterToolResult(provider: string): boolean {
+  const normalized = provider.trim().toLowerCase()
+  if (normalized.length === 0) return false
+  return OPENAI_COMPLETIONS_FAMILY_PROVIDERS.has(normalized)
+}
+
 /** Drives one session through turn and step boundaries. */
 export class ReactLoopAgent implements Agent {
   readonly inbox: ReactLoopInbox
@@ -90,6 +192,15 @@ export class ReactLoopAgent implements Agent {
   /** Process-local revision of assistant frames for this attached Session. */
   private assistantStreamRevision = 0
   private assistantAttemptCounter = 0
+  /** L5 重置事件台账（cache-guardian `ResetLedger`），resume 时从会话日志重建。 */
+  private cacheLedger: ResetLedger
+  /**
+   * 累计重置写入成本（token 当量，Σ η×contextTokens）。它是各 `cache/ledger`
+   * 事件增量 `resetWriteCost` 的运行期求和，与 token-meter 投影经
+   * `foldResetWriteCost` 累加出的 `resetWriteTokens` 恒等（同一批事件、同一
+   * 增量），resume 时由 `restoreCacheLedger` 从日志重算还原。
+   */
+  private totalResetWriteCost = 0
   private readonly systemPrompt: SystemPromptProjection
   /** Identities fully frozen by this loop; weak references do not retain replaced history. */
   private readonly frozenMessages = new WeakSet<Message>()
@@ -108,12 +219,86 @@ export class ReactLoopAgent implements Agent {
     /* v8 ignore next -- the loop registers its own turnBoundary unit, so the key is always present */
     const lastTurn = this.loopCtx.sessionProjections.stateOf(session, 'turnBoundary')?.lastTurn ?? 0
     this.phase = { kind: 'idle', lastTurn }
-    this.runtimeContext = new RuntimeContextProjection(this.ctx, session)
+    // L2↔L5 重置事件桥：RuntimeContextProjection 的 DeltaResetSink 登记
+    // tailMerge/compaction 时，映射为 cache-guardian 白名单事件并入台账，
+    // 按当前会话 provider 的 η 记账 `η×contextTokens`，随后把台账写入
+    // 会话日志（`cache/ledger` 事件，resume 时回放重建）。
+    this.cacheLedger = this.restoreCacheLedger()
+    const resetSink: DeltaResetSink = {
+      registerResetEvent: (type, seq, contextTokens) => {
+        // L5 白名单映射：tailMerge（尾部合并）→ mergeRewrite（合并重写）；
+        // compaction 直接对应白名单的 compaction。
+        const mappedType = type === 'tailMerge' ? 'mergeRewrite' : type
+        this.cacheLedger = registerGuardianResetEvent(this.cacheLedger, mappedType, seq)
+        // 单条重置写入成本（η×context）：既累加进本 agent 的 totalResetWriteCost，
+        // 又作为增量随 `cache/ledger` 事件持久化——投影侧对同一事件经
+        // `foldResetWriteCost` 累加，两条账共用同一份增量，恒等。
+        let resetWriteCost = 0
+        if (contextTokens !== undefined) {
+          const eta = resolveCacheEconomics(this.cacheProvider()).eta
+          resetWriteCost = accountResetCost(contextTokens, eta)
+          this.totalResetWriteCost += resetWriteCost
+        }
+        this.persistCacheLedger(resetWriteCost)
+      },
+    }
+    // D1 接线：openai-completions 系路由（DeepSeek 等，`requiresAssistantAfterToolResult`
+    // 垫片默认禁用）推迟工具批末折叠，避免 wire 上出现 `[toolResult, user(delta)]`
+    // 相邻对触发 provider 400/误读。此处按构造期可解析的 provider 路由置**初值**；
+    // provider 可在会话中途切换，故 `buildRequest` 每次按已解析的 `config.provider`
+    // 重算并更新（见 {@link shouldDeferFoldAfterToolResult} 与 runtime-context 的
+    // `setDeferFoldAfterToolResult`）。名单外/未知一律 false，不误伤。
+    this.runtimeContext = new RuntimeContextProjection(this.ctx, session, {
+      resetSink,
+      deferFoldAfterToolResult: shouldDeferFoldAfterToolResult(this.cacheProvider()),
+    })
     this.systemPrompt = new SystemPromptProjection(session)
   }
 
   get status(): AgentStatus {
     return this.phase.kind === 'idle' || this.phase.kind === 'maintenance' ? 'idle' : 'running'
+  }
+
+  /** 当前会话 provider 路由（η 解析用）：优先会话内已解析的路由元数据。 */
+  private cacheProvider(): string {
+    return this.session.requestContext()?.provider ?? this.options.provider ?? ''
+  }
+
+  /**
+   * 从会话日志回放重建 L5 台账。两条账分别处理，保证与 token-meter 投影恒等：
+   * - 成本 `totalResetWriteCost`：对**所有** `cache/ledger` 事件的增量
+   *   `resetWriteCost` 求和——投影侧 `foldResetWriteCost` 逐条累加的是同一批
+   *   事件，故 resume 后两视图必然相等（与 ledger JSON 是否可解析无关）。
+   * - 台账快照 `ResetLedger`：取末条可反序列化的 `ledger`；损坏的 JSON 视为
+   *   不存在（重建空台账）；无事件时同样返回空台账。
+   */
+  private restoreCacheLedger(): ResetLedger {
+    // oxlint-disable-next-line typescript/no-deprecated -- Existing Session history read; migration deferred.
+    const events = this.session.snapshotEvents()
+    let total = 0
+    for (const event of events) {
+      if (event.type === 'cache/ledger') total += event.data.resetWriteCost
+    }
+    this.totalResetWriteCost = total
+    for (let index = events.length - 1; index >= 0; index -= 1) {
+      const event = events[index]
+      if (event?.type !== 'cache/ledger') continue
+      const ledger = deserializeLedger(event.data.ledger)
+      if (ledger === undefined) break
+      return ledger
+    }
+    return createResetLedger()
+  }
+
+  /**
+   * 把当前台账快照与**本次重置的增量写入成本**序列化进会话日志（log-only 事件）。
+   * `resetWriteCost` 是单条增量（非累计），投影与恢复据此各自累加/求和成同一 Σ。
+   */
+  private persistCacheLedger(resetWriteCost: number): void {
+    this.session.append('cache/ledger', {
+      ledger: serializeLedger(this.cacheLedger),
+      resetWriteCost,
+    })
   }
 
   /** Commit a phase and publish its externally visible status transition. */
@@ -245,18 +430,21 @@ export class ReactLoopAgent implements Agent {
     const claimed = this.inbox.claim(target, position.turn)
     const assembly = await this.loopCtx.systemPrompt.assemble(assembleContextFor(this, signal))
     signal.throwIfAborted()
+    // L2 delta 内部登记：状态变化只登记增量文本，不产生完整快照 user 消息。
     const sections = renderContextSections(assembly)
-    const context = this.runtimeContext.project(joinContextSections(sections), sections)
+    this.runtimeContext.register(joinContextSections(sections), sections)
     const decision = await this.dispatch.waterfall(
       'agent/pre-step', { messages: claimed, ...position, signal },
       (): Promise<PreStepDecision> => Promise.resolve<PreStepDecision>({
         kind: 'enter',
-        messages: context === undefined ? claimed : [...claimed, context],
+        messages: claimed,
       }),
     )
     signal.throwIfAborted()
     if (decision.kind === 'reject') return decision
-    return { ...decision, assembly }
+    // L2 出站折叠：delta 折进下一条真实 user 消息的文本前缀（wire 上
+    // 不存在孤立 user(delta)）；preflight 不通过时推迟到下次。
+    return { ...decision, assembly, messages: this.runtimeContext.foldInto(decision.messages) }
   }
 
   /** Whether the assembled tool schemas differ from the logged request header's. */
@@ -600,6 +788,17 @@ export class ReactLoopAgent implements Agent {
     this.requestSurfaceGeneration = surfaceGeneration
 
     const contextWindow = preparedCall?.context?.contextWindow
+    // L2 delta 阈值按上下文窗口缩放（§1.2）：max(8192, floor(W×0.008))。
+    // 窗口在请求解析时才确定，故在此应用；未解析到窗口时保持构造默认值。
+    if (contextWindow !== undefined) {
+      this.runtimeContext.setDeltaThreshold(Math.max(8192, Math.floor(contextWindow * 0.008)))
+    }
+    // D1 接线（运行期重算）：折叠延迟开关按**本次已解析的实际路由** `config.provider`
+    // 重算，而非沿用构造期初值——provider 可经 `agent/request` 瀑布流在会话中途切换
+    // （如降级到 openai-completions 系），固定初值会漏出 `[toolResult, user(delta)]`
+    // 相邻对触发 400。名单外/未知一律 false，与构造期判定同一套 {@link
+    // shouldDeferFoldAfterToolResult}。
+    this.runtimeContext.setDeferFoldAfterToolResult(shouldDeferFoldAfterToolResult(config.provider))
     const systemPromptUpdate = preparedCall?.systemPromptUpdate
     const requestContext: RequestContext = {
       provider: config.provider,

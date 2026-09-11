@@ -123,6 +123,7 @@ export class SubagentContinuationManager {
       ...agentReasoningEffort !== undefined ? { agentReasoningEffort } : {},
       ...request.persona !== undefined ? { persona: request.persona } : {},
       ...request.toolFilter !== undefined ? { toolFilter: request.toolFilter } : {},
+      ...spec.returnCap !== undefined ? { returnCap: spec.returnCap } : {},
     })
     // Capture before the first await: a later parent switch belongs to the
     // parent's future, not to this child.
@@ -169,6 +170,7 @@ export class SubagentContinuationManager {
           },
           agentOptions,
           composition: { persona: request.persona, toolFilter: request.toolFilter },
+          returnCap: spec.returnCap,
           signal: spec.signal,
         })
         const childHeader = activation.handle.agent.session.header
@@ -443,6 +445,7 @@ export class SubagentContinuationManager {
             : {},
         },
         composition: { persona: descriptor.persona, toolFilter: descriptor.toolFilter },
+        returnCap: descriptor.returnCap,
         signal: options.signal,
       })
     } catch (error: unknown) {

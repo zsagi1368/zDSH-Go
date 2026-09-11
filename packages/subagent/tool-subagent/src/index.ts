@@ -20,8 +20,12 @@ import { SessionSeq } from '@deepseek-ai/dsh-session'
 import type { Session } from '@deepseek-ai/dsh-session'
 import {
   assertSubagentMaxDepth,
+  computeSubagentReturnCap,
+  estimateApproxTokens,
+  MIN_SUBAGENT_RETURN_CAP,
   parentAgentOptionsForDelegation,
   settleRun,
+  truncateSubagentOutput,
 } from '@deepseek-ai/dsh-subagent'
 import type { SubagentProvider, SubagentResult, SubagentRun } from '@deepseek-ai/dsh-subagent'
 import type { JobOutcome } from '@deepseek-ai/dsh-jobs'
@@ -100,6 +104,18 @@ export interface Config {
    * budget belongs to the child runtime or its own deployment.
    */
   maxDepth?: number | 'provider-managed'
+  /**
+   * Token cap for the subagent result returned into the parent's context
+   * (bounded return, §1.2 / L6 of CONTEXT-CACHE-MANAGEMENT.md v2.3). When
+   * omitted, the default is computed from the calling parent agent's
+   * `maxTokens` via the budget formula
+   * `max(2048, floor(0.25 × (reserve − maxTokens)))` (reserve =
+   * `ceil(maxTokens × 1.25) + 4096`); when the parent's `maxTokens` is
+   * unavailable, the formula floor {@link MIN_SUBAGENT_RETURN_CAP} applies.
+   * Outputs over the cap are structurally truncated (conclusion + changed
+   * files + unfinished items kept, middle work transcript dropped).
+   */
+  maxReturnTokens?: number
 }
 
 export const Config: z<Config> = z.object({
@@ -127,6 +143,10 @@ export const Config: z<Config> = z.object({
     deny: z.array(z.string()).default(undefined as unknown as string[]),
   }).default(undefined as unknown as { allow: string[]; deny: string[] }),
   maxDepth: z.union([z.natural().max(Number.MAX_SAFE_INTEGER), z.const('provider-managed' as const)]).default(3),
+  // Preserve omission; the effective cap is resolved at execution time from the
+  // calling parent's budget formula when this key is absent.
+  maxReturnTokens: z.number().step(1).min(1).max(Number.MAX_SAFE_INTEGER)
+    .default(undefined as unknown as number),
 })
 
 /** Render text blocks from the canonical JSON block array without trusting arbitrary values. */
@@ -175,12 +195,22 @@ function stopReasonError(result: SubagentResult): string | undefined {
 /**
  * Append provider-authored failure detail and the child's preserved partial
  * answer to a stop-reason error, keeping diagnostic text separate from the
- * child's assistant output.
+ * child's assistant output. When `returnCap` is set the composed message is
+ * bounded to it (structured truncation of the partial text), so a failed run
+ * cannot smuggle an unbounded transcript into the parent's context through the
+ * error channel — the same §1.2 bounded-return guarantee the success path gets.
  * @param error - the stop-reason headline.
  * @param result - the child's terminal result.
- * @returns the headline, diagnostic, and partial text that are present.
+ * @param returnCap - the token budget for the whole message re-entering the
+ *   parent, or `undefined` to leave the partial text unbounded (a direct-apply
+ *   bypass that never resolved a cap).
+ * @returns the headline, diagnostic, and (capped) partial text that are present.
  */
-function withDiagnosticAndPartialText(error: string, result: SubagentResult): string {
+function withDiagnosticAndPartialText(
+  error: string,
+  result: SubagentResult,
+  returnCap: number | undefined,
+): string {
   const diagnostic = result.diagnostic === undefined
     ? ''
     : `\nDiagnostic: ${result.diagnostic}`
@@ -188,10 +218,21 @@ function withDiagnosticAndPartialText(error: string, result: SubagentResult): st
     .filter((block): block is Extract<ContentBlock, { type: 'text' }> => block.type === 'text')
     .map(block => block.text)
     .join('')
-  const partial = text.length === 0
-    ? ''
-    : `\nPartial output before the run ended:\n${text}`
-  return `${error}${diagnostic}${partial}`
+  if (text.length === 0) return `${error}${diagnostic}`
+  const label = '\nPartial output before the run ended:\n'
+  // Charge the headline, diagnostic, and label against the budget first, then
+  // spend only the remainder on the child's partial text. `truncateSubagentOutput`
+  // returns the text unchanged when it already fits, so an under-budget failure
+  // keeps the exact legacy shape.
+  const partialText = returnCap === undefined
+    ? text
+    : truncateSubagentOutput(
+      [{ type: 'text', text }],
+      Math.max(0, returnCap - estimateApproxTokens(`${error}${diagnostic}${label}`)),
+    )
+      .map(block => block.type === 'text' ? block.text : '')
+      .join('')
+  return `${error}${diagnostic}${label}${partialText}`
 }
 
 type ForegroundToolResult = {
@@ -202,23 +243,31 @@ type ForegroundToolResult = {
 
 /**
  * Collect and release one foreground run without letting disposal replace an
- * independent result failure.
+ * independent result failure. The child's result is bounded by `returnCap`
+ * tokens (structured truncation) before it enters the parent's context.
  */
-async function settleForegroundRun(run: SubagentRun): Promise<ForegroundToolResult> {
+async function settleForegroundRun(
+  run: SubagentRun,
+  returnCap: number | undefined,
+): Promise<ForegroundToolResult> {
   const [execution] = await Promise.allSettled([
     run.result.then((result): ForegroundToolResult => {
       const error = stopReasonError(result)
       if (error !== undefined) {
         // The registry converts this throw to isError; partial output is not
-        // success, but the preserved partial answer still reaches the parent.
-        throw new Error(withDiagnosticAndPartialText(error, result))
+        // success, but the preserved partial answer still reaches the parent —
+        // bounded by `returnCap` so the failure channel cannot bypass it.
+        throw new Error(withDiagnosticAndPartialText(error, result, returnCap))
       }
+      const output = returnCap !== undefined
+        ? truncateSubagentOutput(result.output, returnCap)
+        : result.output
       return {
         kind: 'foreground',
         runId: run.id,
         // Content blocks already cross durable JSON boundaries elsewhere;
         // the registry performs the authoritative lossless snapshot here.
-        output: result.output as unknown as JsonValue[],
+        output: output as unknown as JsonValue[],
       }
     }),
   ])
@@ -511,6 +560,19 @@ export function apply(ctx: Context, config: Config, session?: Session): void {
             }
           }
           exec.signal.throwIfAborted()
+          // Bounded return: an explicit config wins; otherwise the budget formula
+          // (§1.2) computed from the parent's maxTokens; a parent without a
+          // resolvable maxTokens falls back to the formula floor.
+          const parentMaxTokens = parent.options.maxTokens
+          let returnCap: number
+          if (config.maxReturnTokens !== undefined) {
+            returnCap = config.maxReturnTokens
+          } else if (parentMaxTokens !== undefined && Number.isFinite(parentMaxTokens) && parentMaxTokens > 0) {
+            returnCap = computeSubagentReturnCap(parentMaxTokens)
+          } else {
+            returnCap = MIN_SUBAGENT_RETURN_CAP
+          }
+
           const maxDepth = typeof config.maxDepth === 'number' ? config.maxDepth : undefined
           const request = {
             label: args.description,
@@ -526,12 +588,16 @@ export function apply(ctx: Context, config: Config, session?: Session): void {
           if (runSpec.runInBackground) {
             if (continuable) {
               // Resolves at inbox acceptance: the child owns its own turns from
-              // there, so this call neither waits for nor collects a result.
+              // there, so this call neither waits for nor collects a result. The
+              // computed `returnCap` is handed to the manager so it persists into
+              // the durable descriptor and bounds the eventual settlement notice
+              // that re-enters this parent's context (surviving a cold resume).
               const started = await runtimeCtx.subagents.startContinuable({
                 provider: config.provider,
                 label: args.description,
                 request,
                 signal: exec.signal,
+                returnCap,
               })
               return { kind: 'continuable' as const, subagentId: started.childId }
             }
@@ -564,7 +630,7 @@ export function apply(ctx: Context, config: Config, session?: Session): void {
             ...request,
             signal: exec.signal,
           })
-          return settleForegroundRun(run)
+          return settleForegroundRun(run, returnCap)
         },
       }))
       mounted = { subagentProvider, disposeTool }

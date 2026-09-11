@@ -12,7 +12,7 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
-import { defineTool } from '@deepseek-ai/dsh-tools'
+import { defineTool, PRUNING_META_KEY } from '@deepseek-ai/dsh-tools'
 import type { GenericCallView, SearchResultView, ToolResult } from '@deepseek-ai/dsh-tools'
 import type { RetainedItems } from '@deepseek-ai/dsh-output-retention'
 import type { SpillRef } from '@deepseek-ai/dsh-spill'
@@ -316,8 +316,17 @@ export function applyGrepTool(ctx: Context, caps: GrepToolCaps): void {
         type: 'text',
         text: formatRetainedGrep(retainGrepMatches(value.matches, caps.maxMatches, caps.maxLineBytes)),
       }],
-      presentationMeta: (_args, value) =>
-        grepSearchMeta(retainGrepMatches(value.matches, caps.maxMatches, caps.maxLineBytes), caps.maxMetaBytes),
+      presentationMeta: (_args, value) => {
+        const retained = retainGrepMatches(value.matches, caps.maxMatches, caps.maxLineBytes)
+        const body = formatRetainedGrep(retained)
+        const meta = grepSearchMeta(retained, caps.maxMetaBytes)
+        return {
+          ...meta,
+          // L3 pruning declaration: a grep result is prunable (the matches are
+          // re-derivable from disk). Bytes price the model-facing body.
+          [PRUNING_META_KEY]: { prunable: true, bytes: Buffer.byteLength(body, 'utf8') },
+        }
+      },
     },
     async execute(args, exec) {
       const input = parseGrepArgs(args)

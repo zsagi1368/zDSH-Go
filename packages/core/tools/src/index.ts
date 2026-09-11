@@ -703,6 +703,15 @@ interface ToolView {
  */
 export type ToolGuard = (execution: Readonly<ToolExecution>) => string | undefined
 
+/** L3 tool-result pruning vocabulary (ContextManagement core patch). */
+export {
+  PRUNING_META_KEY,
+  pruningFromMeta,
+  pruningMeta,
+  toolCapToByteLimit,
+  type ToolResultPruning,
+} from './l3.ts'
+
 /** One scope's complete tool-registry contribution. */
 class ToolLayer implements ScopeLayer {
   readonly tools: NamedEntries<ToolDefinition>

@@ -72,6 +72,9 @@ function conversationTarget(
 }
 
 const thresholdRatioSchema = z.number()
+const proactiveTriggerSchema = z.boolean()
+const batchCapSchema = z.number().step(1).min(1)
+const outputCapSchema = z.number().step(1).min(1024)
 const retainRatioSchema = z.number()
 const retainTokensSchema = z.number().step(1).min(0)
 const summarizationProviderSchema = z.string()
@@ -84,6 +87,9 @@ const modelPolicy: z<ModelCompactPolicyConfig> = z.object({
   provider: z.string().required(),
   model: z.string().required(),
   thresholdRatio: thresholdRatioSchema,
+  proactiveTrigger: proactiveTriggerSchema,
+  batchCap: batchCapSchema,
+  outputCap: outputCapSchema,
   retainRatio: retainRatioSchema,
   retainTokens: retainTokensSchema,
   summarizationProvider: summarizationProviderSchema,
@@ -106,6 +112,9 @@ export class BasicCompactionEngine extends CompactionEngine {
 
   static Config: z<BasicCompactionConfig> = z.object({
     thresholdRatio: thresholdRatioSchema,
+    proactiveTrigger: proactiveTriggerSchema,
+    batchCap: batchCapSchema,
+    outputCap: outputCapSchema,
     retainRatio: retainRatioSchema,
     retainTokens: retainTokensSchema,
     summarizationProvider: summarizationProviderSchema,
@@ -121,6 +130,7 @@ export class BasicCompactionEngine extends CompactionEngine {
   readonly config: ResolvedConfig
 
   private readonly warnedPressureConfigTargets = new Set<string>()
+  private readonly warnedProactiveFallbackTargets = new Set<string>()
   private readonly overflowRetries = new WeakMap<Agent, number>()
   private readonly overflowAgents = new WeakMap<Session, Agent>()
 
@@ -302,6 +312,10 @@ export class BasicCompactionEngine extends CompactionEngine {
       )
     }
     const spec = resolveCompactSpec(policy, context.contextWindow)
+    if (spec.warning !== undefined && !this.warnedProactiveFallbackTargets.has(targetKey)) {
+      this.warnedProactiveFallbackTargets.add(targetKey)
+      this.ctx.logger.warn(spec.warning)
+    }
     if (measurement.totalTokens < spec.thresholdTokens) return null
 
     // Once pressure qualifies, land the model-free pass before choosing a

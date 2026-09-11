@@ -22,6 +22,35 @@ export { MODEL_SLOT_COMPACTION_SUMMARIZE, MODEL_SLOT_IDS, MODEL_SLOT_PLAN, MODEL
 /** Settings namespace carrying the user-editable slot policy (composition below, user layer above). */
 export const MODEL_SLOTS_SETTINGS_NAMESPACE = 'llm-model-slots'
 
+export type {
+  BudgetRow,
+  LockedRow,
+  Profile,
+  ProfileValidation,
+} from './budget.ts'
+export {
+  BATCH_CAP,
+  BUDGET_TABLE,
+  DEFAULT_OUTPUT_CAP,
+  MIN_OUTPUT_CAP,
+  MIN_WINDOW,
+  computeBudget,
+  computeDeltaCap,
+  computeInjectionBudget,
+  computeKeepRecent,
+  computeMaxTokens,
+  computeRPess,
+  computeRMin,
+  computeReserve,
+  computeSlo,
+  computeSubagentReturn,
+  computeSummaryInputMax,
+  computeSummaryOutput,
+  computeToolCap,
+  computeTrigger,
+  validateProfile,
+} from './budget.ts'
+
 /** One exact provider/model pair an auxiliary call dispatches to. */
 export interface ModelRoute {
   /** Registered LLM provider route. */

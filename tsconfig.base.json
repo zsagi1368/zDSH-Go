@@ -67,6 +67,7 @@
       "@deepseek-ai/dsh-session/chunk-rows": ["./packages/core/session/src/chunk-rows.ts"],
       "@deepseek-ai/dsh-session/surface": ["./packages/core/session/src/surface.ts"],
       "@deepseek-ai/dsh-session-projection/types": ["./packages/session/session-projection/src/types.ts"],
+      "@deepseek-ai/dsh-llm-pi-ai/cache-guardian": ["./packages/llm/llm-pi-ai/src/cache-guardian.ts"],
       "@deepseek-ai/dsh-tool-todo/types": ["./packages/todo/tool-todo/src/types.ts"],
       "@deepseek-ai/dsh-tool-todo/client": ["./packages/todo/tool-todo/src/client.ts"],
       "@deepseek-ai/dsh-session-title/types": ["./packages/session/session-title/src/types.ts"],
