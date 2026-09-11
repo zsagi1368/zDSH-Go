@@ -4,7 +4,8 @@
  * SSE watcher registration, and the media byte route.
  */
 import { createServer, type Server } from 'node:http'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { realpathSync } from 'node:fs'
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
@@ -61,8 +62,8 @@ async function startClamped(clampRoot: string): Promise<TestServer> {
   }
 }
 
-async function api<T>(method: string, payload?: unknown): Promise<T> {
-  const response = await fetch(`${server.baseUrl}/workbench/api/${method}`, {
+async function api<T>(method: string, payload?: unknown, baseUrl: string = server.baseUrl): Promise<T> {
+  const response = await fetch(`${baseUrl}/workbench/api/${method}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(payload ?? {}),
@@ -108,6 +109,31 @@ describe('deployment workspace clamp', () => {
     const url = `${server.baseUrl}/workbench/file?cwd=${encodeURIComponent(outside)}&path=${encodeURIComponent(join(outside, 'secret.txt'))}`
     const response = await fetch(url)
     expect(response.status).toBe(403)
+  })
+
+  it('admits inside requests when the clamp is configured in 8.3 short-name form', async () => {
+    // On hosts whose temp dir is addressed through an 8.3 short name (GitHub
+    // Windows runners: TEMP=C:\Users\RUNNER~1\...), fs.realpathSync keeps the
+    // short components while fs/promises.realpath expands them. The boot-side
+    // clamp must canonicalize through the same promise API the request path
+    // uses, else every inside request is refused as outside-workspace. The
+    // divergence cannot manifest on hosts without 8.3 aliasing, so those
+    // (e.g. local non-system volumes) skip silently.
+    const shortForm = realpathSync(inside)
+    const longForm = await realpath(inside)
+    if (shortForm.toLowerCase() === longForm.toLowerCase()) return
+    const clamped = await startClamped(shortForm)
+    try {
+      const result = await api<{ ok: boolean; value?: { content: string } }>(
+        'fs.read',
+        { cwd: inside, path: join(inside, 'ok.txt') },
+        clamped.baseUrl,
+      )
+      expect(result.ok).toBe(true)
+      expect(result.value?.content).toBe('in')
+    } finally {
+      await clamped.close()
+    }
   })
 
   // Note: SSE watcher-root filtering lives in the events route (roots are

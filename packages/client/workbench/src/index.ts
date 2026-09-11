@@ -7,7 +7,7 @@
  */
 import type { Context } from '@deepseek-ai/cordis'
 import type { ServerResponse } from 'node:http'
-import { realpathSync } from 'node:fs'
+import { realpath } from 'node:fs/promises'
 import { WORKBENCH_ROUTE_PREFIX as PREFIX, pingResult } from './shared/protocol.ts'
 import type { WorkbenchRouteEnvelope } from './shared/protocol-envelope.ts'
 import type { WebRoute } from './context-types.ts'
@@ -93,11 +93,17 @@ export async function apply(ctx: Context, options?: WorkbenchHostConfig): Promis
   })
   const rootCache = new RootCache()
   // Workspace clamp: resolve once at boot so the clamp itself cannot be
-  // influenced by request-time symlink games.
+  // influenced by request-time symlink games. The coordinate MUST match the
+  // request path (`fs/promises.realpath` in resolveWorkspaceRoot): on win32
+  // the promise API expands 8.3 short-name components while fs.realpathSync
+  // keeps them, so a sync-canonicalized clamp would never lexically contain a
+  // promise-canonicalized request root on 8.3-aliasing hosts (GH Windows
+  // runners: RUNNER~1 vs runneradmin) and every inside request would be
+  // refused as outside-workspace.
   const allowedRealRoots: string[] = []
   for (const candidate of options?.allowedRoots ?? []) {
     try {
-      allowedRealRoots.push(realpathSync(candidate))
+      allowedRealRoots.push(await realpath(candidate))
     } catch {
       // Unresolvable configured root: refuse loudly at composition time.
       throw new Error(`workbench: allowedRoots entry is not an existing directory: ${candidate}`)
