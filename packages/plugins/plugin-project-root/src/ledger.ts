@@ -68,7 +68,7 @@ export function projectRootKey(projectRoot: string): string {
 /**
  * Resolve the persistence data directory used for the ledger, delegating to
  * the authoritative `resolveBranchStorageRoot` chain (`DSH_BRANCH_HOME` →
- * `<DSH_HOME>/zdsh` → `~/.dsh-zdsh`), then `data/`.
+ * `<DSH_HOME>/zdsh` → `~/.dsh-zdsh-go`), then `data/`.
  * @param env - the environment used to resolve the storage root; defaults to `process.env`.
  * @returns the absolute data directory path.
  */

@@ -22,7 +22,7 @@ export const inject = ['invariants']
 /**
  * Storage root agreed with PluginPersistence defaults, via the authoritative
  * `resolveBranchStorageRoot` chain (`DSH_BRANCH_HOME` → `<DSH_HOME>/zdsh` →
- * `~/.dsh-zdsh`).
+ * `~/.dsh-zdsh-go`).
  */
 function storageRoot(): string {
   return resolveBranchStorageRoot()

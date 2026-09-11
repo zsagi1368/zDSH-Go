@@ -24,14 +24,14 @@ export const inject = ['invariants']
  * Storage root agreed with PluginPersistence defaults. Mirror of
  * `resolveBranchStorageRoot` from plugin-persistence.ts (kept inline because
  * this companion entry is built standalone): `DSH_BRANCH_HOME` when set, else
- * `<DSH_HOME>/zdsh` when DSH_HOME is set, else `~/.dsh-zdsh`.
+ * `<DSH_HOME>/zdsh` when DSH_HOME is set, else `~/.dsh-zdsh-go`.
  */
 function storageRoot(): string {
   const branchHome = process.env.DSH_BRANCH_HOME
   if (branchHome !== undefined && branchHome.trim().length > 0) return resolve(branchHome)
   const dshHome = process.env.DSH_HOME
   if (dshHome !== undefined && dshHome.trim().length > 0) return join(resolve(dshHome), 'zdsh')
-  return join(homedir(), '.dsh-zdsh')
+  return join(homedir(), '.dsh-zdsh-go')
 }
 
 interface PersistedApprovals {
