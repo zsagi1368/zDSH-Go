@@ -28,8 +28,6 @@ import { createSettingsSchemaOperations } from './schema-operations.ts'
 import { en, zh, type ModelsKey } from './locales.ts'
 import { WELCOME_NOTICE_SETTINGS_NAMESPACE } from '../onboarding-copy.ts'
 
-import { guardSlotUI } from '../compat.ts'
-
 export type { ModelsSectionInjected, ModelsSectionProps } from './ModelsSection.tsx'
 export type { ModelsFooterOwnerProps, ProviderCardExtrasOwnerProps } from './slot-contract.ts'
 export type { ModelsKey } from './locales.ts'
@@ -74,13 +72,7 @@ export const inject = [
  * pushed invalidation (settings, credentials, or provider topology).
  * @param ctx - client root context.
  */
-export async function apply(ctx: ClientContext): Promise<void> {
-  const enabled = await guardSlotUI(ctx.logger)
-  if (!enabled) {
-    ctx.logger.warn('ui-settings-models: skipped registration (compat guard disabled the slot UI)')
-    return
-  }
-
+export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-settings-models: copy dictionaries')
 
   const schema = createSettingsSchemaOperations(ctx.settingsSchema)
