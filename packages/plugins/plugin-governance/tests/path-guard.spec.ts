@@ -129,6 +129,23 @@ describe('checkPathAllowed raw-path traversal defense (POSIX fork escape)', () =
     writeFileSync(join(allowed, 'file.name.txt'), 'ok')
     expect(checkPathAllowed(fsConfig([allowed]), join(allowed, 'file.name.txt'))).toBe(true)
   })
+
+  it('allows an 8.3 short-name shaped path whose tilde sits MID-path (RUNNER~1)', () => {
+    // Windows 8.3 short names carry a `~` mid-component (GitHub Windows
+    // runners: `C:\Users\RUNNER~1\...`). A substring tilde check fail-closed
+    // every temp path on those hosts; the check must be component-scoped.
+    // The directory below reproduces the trigger shape without needing real
+    // 8.3 name generation on the host volume.
+    const shortNamed = join(root, 'runner~1-ws')
+    mkdirSync(shortNamed, { recursive: true })
+    writeFileSync(join(shortNamed, 'file.txt'), 'ok')
+    expect(checkPathAllowed(fsConfig([shortNamed]), join(shortNamed, 'file.txt'))).toBe(true)
+  })
+
+  it('still rejects a leading tilde component (POSIX home-expansion escape)', () => {
+    expect(checkPathAllowed(fsConfig([allowed]), '~/secrets')).toBe(false)
+    expect(checkPathAllowed(fsConfig([allowed]), '~\\secrets')).toBe(false)
+  })
 })
 
 describe('checkPathAllowed deny-pattern realpath (batch3 backlog)', () => {

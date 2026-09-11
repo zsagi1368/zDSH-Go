@@ -92,4 +92,30 @@ describe('workspace path guard', () => {
       await rm(root, { recursive: true, force: true })
     }
   })
+
+  it('accepts an alias-prefixed request once canonicalized into the root coordinate (8.3 short-name shape)', async () => {
+    const root = await makeWorkspace()
+    try {
+      // A junction (win32) / symlink (POSIX) alias names the workspace through
+      // a different lexical prefix — the same coordinate mismatch an 8.3 short
+      // name (`RUNNER~1` vs the long user directory) produces on GitHub
+      // Windows runners, where the boot-side root is canonicalized but a raw
+      // lexical judgment on the request would brand every temp path an escape.
+      const alias = `${root}-alias`
+      try {
+        await symlink(root, alias, 'junction')
+      } catch {
+        return // Platform refuses alias creation; the shape is covered on win32 CI.
+      }
+      try {
+        const canonicalRoot = await resolveWorkspaceRoot(root)
+        const verdict = await ensureRealPathInside(canonicalRoot, join(alias, 'file.txt'))
+        expect(verdict.allowed).toBe(true)
+      } finally {
+        await rm(alias, { recursive: true, force: true })
+      }
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
 })

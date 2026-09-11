@@ -95,7 +95,10 @@ function resolveReal(path: string): string | undefined {
 /**
  * Whether a path matches any configured deny pattern.
  *
- * Patterns are compared as resolved-string containment (historical semantics).
+ * Patterns are compared as resolved-string containment (historical semantics),
+ * plus — in the candidate's realpath coordinate — against each pattern's own
+ * realpath, so a short-name logical pattern still matches a long-name real
+ * candidate on 8.3-aliasing hosts (GitHub Windows runners).
  * The caller runs this against BOTH the logical path and the real on-disk
  * location, so a symlink alias whose real target falls under a deny pattern
  * cannot hide behind an innocent-looking logical path.
@@ -105,13 +108,21 @@ function resolveReal(path: string): string | undefined {
  */
 function matchesDeniedPattern(deniedPatterns: readonly string[], candidate: string): boolean {
   for (const pattern of deniedPatterns) {
+    let resolvedPattern: string
     try {
-      const resolvedPattern = resolve(pattern)
+      resolvedPattern = resolve(pattern)
       if (candidate.includes(resolvedPattern)) return true
     } catch {
       /* v8 ignore next 2 -- resolve() of a configured deny pattern cannot fail on real inputs. */
       continue
     }
+    // Re-check the pattern in the candidate's realpath coordinate. On hosts
+    // where temp paths carry 8.3 short-name components (GitHub Windows
+    // runners: `C:\Users\RUNNER~1\...`), the realpathed candidate expands to
+    // the long form while a lexical pattern stays short — a coordinate-only
+    // comparison would silently bypass the deny rule.
+    const realPattern = resolveReal(resolvedPattern)
+    if (realPattern !== undefined && candidate.includes(realPattern)) return true
   }
   return false
 }
@@ -121,7 +132,9 @@ function matchesDeniedPattern(deniedPatterns: readonly string[], candidate: stri
  *
  * Security semantics:
  * - the candidate is normalized (`resolve`) so `..`/`.` components collapse;
- * - a literal `..`/`~` surviving in the result rejects defensively;
+ * - a literal `..` surviving in the result, or a leading literal `~` component
+ *   (POSIX home-expansion escape) rejects defensively; a `~` MID-path is legal
+ *   (Windows 8.3 short names, e.g. `RUNNER~1`) and must not reject;
  * - configured deny patterns win over everything and are checked against BOTH
  *   the logical path and the real on-disk location, so a symlink/junction
  *   alias whose target falls under a deny pattern is still denied;
@@ -151,11 +164,20 @@ export function checkPathAllowed(config: FilesystemConfig, path: string): boolea
   try {
     normalizedPath = resolve(path)
     /* v8 ignore next 2 -- resolve() already collapses '..' and never emits '~'; this is defense-in-depth against exotic hosts. */
-    if (normalizedPath.includes('..') || normalizedPath.includes('~')) {
+    if (normalizedPath.includes('..')) {
       return false
     }
   } catch {
     /* v8 ignore next -- path.resolve only rejects on hostile custom fs; unreachable over real paths. */
+    return false
+  }
+
+  // 字面 `~` 只在「首组件」位置才有 POSIX 主目录展开语义（`~`/`~user`），据此拒绝；
+  // 检查按组件而非子串：Windows 8.3 短名（如 runner 临时目录里的 `RUNNER~1`）在
+  // 路径中部合法携带 `~`，子串检查会把整棵临时目录树误判为逃逸（fail closed），
+  // 在 GitHub 的 Windows runner 上曾导致沙箱拒绝一切 Temp 下的路径。
+  const firstComponent = path.split(/[\\/]/).find(component => component.length > 0)
+  if (firstComponent !== undefined && firstComponent.startsWith('~')) {
     return false
   }
 

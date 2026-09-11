@@ -14,7 +14,7 @@
  *    are never cached across operations.
  */
 import { lstat, realpath } from 'node:fs/promises'
-import { isAbsolute, parse, relative, resolve } from 'node:path'
+import { isAbsolute, join, parse, relative, resolve } from 'node:path'
 
 /** Verdict of the workspace path guard: an allowed target, or a refused code with message. */
 export type PathGuardResult =
@@ -41,6 +41,39 @@ function escapesRoot(root: string, target: string): boolean {
 
 function outside(message: string): PathGuardResult {
   return { allowed: false, code: 'outside-workspace', message }
+}
+
+/**
+ * Canonicalize a candidate path into the realpath coordinate — the coordinate
+ * `resolveWorkspaceRoot` produced the workspace root in. A fully existing path
+ * realpaths directly; a path with absent segments (a file about to be
+ * created) realpaths its deepest existing ancestor and re-appends the
+ * remainder. This matters on hosts whose temp root is addressed through an
+ * 8.3 short name (GitHub Windows runners: `C:\Users\RUNNER~1\...`): the root
+ * was canonicalized at boot (expanding `RUNNER~1` to the long form), so a
+ * purely lexical `relative()` between a short-name request and a long-name
+ * root would brand every temp-dir path an escape. Windows case-correcting
+ * readdir makes plain `realpath` expand the short components too, so both
+ * sides land in one coordinate.
+ * @param requestedPath - the absolute candidate path to canonicalize.
+ * @returns the canonical candidate, or `undefined` when no ancestor resolves.
+ */
+async function canonicalizeRequestTarget(requestedPath: string): Promise<string | undefined> {
+  const normalized = resolve(requestedPath)
+  let anchor = normalized
+  let remainder = ''
+  for (;;) {
+    try {
+      return join(await realpath(anchor), remainder)
+    } catch {
+      const parent = resolve(anchor, '..')
+      // The filesystem root always exists, so this is defensive against
+      // hostile filesystem failures rather than reachable through real input.
+      if (parent === anchor) return undefined
+      remainder = join(parse(anchor).base, remainder)
+      anchor = parent
+    }
+  }
 }
 
 /**
@@ -77,7 +110,20 @@ export function judgeInsideWorkspace(root: string, requestedPath: string): PathG
  * @returns the allowed target or a refused verdict.
  */
 export async function ensureRealPathInside(root: string, requestedPath: string): Promise<PathGuardResult> {
-  const judged = judgeInsideWorkspace(root, requestedPath)
+  // Rule 1 from the header: the RAW request names an absolute path; relative
+  // input is refused outright (resolve() would silently pin it to process cwd).
+  if (typeof requestedPath !== 'string' || requestedPath.length === 0 || !isAbsolute(requestedPath)) {
+    return { allowed: false, code: 'bad-request', message: 'path must be absolute' }
+  }
+  // Canonicalize the request into the root's realpath coordinate BEFORE the
+  // lexical containment judgment: `relative()` is purely lexical and cannot
+  // know that `C:\Users\RUNNER~1\...` and `C:\Users\runneradmin\...` name the
+  // same directory (see canonicalizeRequestTarget).
+  const canonical = await canonicalizeRequestTarget(requestedPath)
+  if (canonical === undefined) {
+    return outside('path cannot be resolved to a real location')
+  }
+  const judged = judgeInsideWorkspace(root, canonical)
   if (!judged.allowed) return judged
 
   let cursor = judged.target
