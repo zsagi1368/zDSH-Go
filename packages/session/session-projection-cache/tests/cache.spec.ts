@@ -237,7 +237,12 @@ describe('SessionProjectionCache write policy', () => {
     }, { timeout: flushWaitMs })
   })
 
-  it('flushes when the in-turn event count reaches the configured threshold', async () => {
+  it('flushes when the in-turn event count reaches the configured threshold', { timeout: 90_000 }, async () => {
+    // The 90s test timeout covers two serialized flushWaitMs polls (30s each
+    // on CI) with headroom for slow CI machines: under full-suite parallel
+    // load a late flush can burn one whole poll window, and a testTimeout
+    // equal to a single window left zero margin (observed as a 30108ms
+    // timeout on the GH Windows runner while the flush stayed correct).
     const { ctx, root } = await harness({ config: { writeEveryEvents: 3, writeIntervalMs: 60_000 } })
     const session = ctx.sessions.create(SessionId('count'))
     mark(session, ['1'])
