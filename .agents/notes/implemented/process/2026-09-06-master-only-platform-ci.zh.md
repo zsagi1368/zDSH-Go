@@ -10,7 +10,7 @@ macOS Intel、ARM 与 Linux ARM64 上的 Python 运行时构建，以及通过 W
 
 ## Decision
 
-[CI](../../../../.github/workflows/ci.yml) 要求 Linux x64 与 Windows x64 上的 Python 运行时验证。[CI master](../../../../.github/workflows/ci-master.yml) 仅在 master 推送时通过同一可复用构建器选择 Linux ARM64、macOS ARM64 与 macOS x64。两个调用方均传入 `ci: true` 和显式外部 API 密钥，保留完整的无密钥安装后 wheel 包场景及可信 live 测试的明确失败。Fork 与 Dependabot 拉取请求仍不带密钥；运行器信任与回退选择器保持不变。Python 发布保留全部五个目标。
+[CI](../../../../.github/workflows/ci.yml) 要求 Linux x64 与 Windows x64 上的 Python 运行时验证。[CI master](https://github.com/deepseek-ai/deepseek-harness/blob/master/.github/workflows/ci-master.yml) 仅在 master 推送时通过同一可复用构建器选择 Linux ARM64、macOS ARM64 与 macOS x64。两个调用方均传入 `ci: true` 和显式外部 API 密钥，保留完整的无密钥安装后 wheel 包场景及可信 live 测试的明确失败。Fork 与 Dependabot 拉取请求仍不带密钥；运行器信任与回退选择器保持不变。Python 发布保留全部五个目标。
 
 Wine 作为独立的托管 Ubuntu master 作业运行一次。其现有的按镜像标识的 apt 缓存恢复和保存也负责生成默认分支缓存，因此不需要单独的缓存预热作业。原生 Linux 与 Windows 串行聚合不调用 Wine。Wine 保持托管运行，避免在持久 Linux VM 上执行共享宿主机 apt 事务和共享 Wine prefix 清理。脚本负责临时快照、checkout 内的 Wine prefix 和经过校验和验证的 Windows Node 缓存；环境准备、失败传播及始终执行的清理保持不变。
 
