@@ -90,29 +90,28 @@ describe('dsh-subagent-fork-in-process', () => {
     await run.dispose()
   })
 
-  it('seeds every completed parent turn through the last turn/end', async () => {
+  it('does NOT seed completed parent turns into the child (L6 minimal contract)', async () => {
     const { ctx, parent } = await setup([textResponse('first'), textResponse('second'), textResponse('child')])
     parent.followup(createUserMessage({ content: [{ type: 'text', text: 'q1' }], source: { kind: 'user' } }))
     await parent.whenIdle()
     parent.followup(createUserMessage({ content: [{ type: 'text', text: 'q2' }], source: { kind: 'user' } }))
     await parent.whenIdle()
-    const parentPrefixLen = parent.session.snapshotEvents().length
 
     const run = await start(ctx, 'fork', { prompt: [{ type: 'text', text: 'child q' }], parent })
     await run.result
     const child = ctx.agents.get(run.id)!
-    expect(child.session.header.isSeeded).toBe(true)
-    expect(child.session.inheritedEventCount).toBe(parentPrefixLen)
-    expect(child.session.snapshotEvents().slice(0, parentPrefixLen).at(-1)?.type).toBe('turn/end')
-    expect(child.session.snapshotEvents().slice(0, parentPrefixLen).filter(e => e.type === 'turn/end')).toHaveLength(2)
+    // No seed boundary: the child's log is entirely its own.
+    expect(child.session.header.isSeeded).toBe(false)
+    expect(child.session.inheritedEventCount).toBe(0)
+    // Exactly the child's own completed turn, none inherited from the parent.
+    expect(child.session.snapshotEvents().filter(e => e.type === 'turn/end')).toHaveLength(1)
     await run.dispose()
   })
 
-  it('seeds the child with the parent\'s completed-turn prefix (child inherits context)', async () => {
+  it('runs a fresh child that never inherits parent context (L6 minimal contract)', async () => {
     const { ctx, parent } = await setup([textResponse('parent answer'), textResponse('child answer')])
     parent.followup(createUserMessage({ content: [{ type: 'text', text: 'parent question' }], source: { kind: 'user' } }))
     await parent.whenIdle()
-    const parentPrefixLen = parent.session.snapshotEvents().length
 
     const run = await start(ctx, 'fork', { prompt: [{ type: 'text', text: 'child question' }], parent })
     const result = await run.result
@@ -120,24 +119,30 @@ describe('dsh-subagent-fork-in-process', () => {
     expect(text(result.output)).toBe('child answer')
 
     const child = ctx.agents.get(run.id)!
-    // The child's log STARTS with the parent's prefix (seeded), then its own turn.
-    expect(child.session.snapshotEvents().length).toBeGreaterThan(parentPrefixLen)
-    // The seeded prefix carried the parent's user message.
-    const seededUser = child.session.snapshotEvents().slice(0, parentPrefixLen).find(e => e.type === 'user/message')
-    expect(seededUser).toBeDefined()
+    // The child's log contains exactly ONE user message — its own prompt — and
+    // NO parent user message: parent history is never copied into the child's
+    // context (the runtime-context injection is the child's own, not the parent's).
+    const userMessages = child.session.snapshotEvents().filter(e => e.type === 'user/message')
+    expect(userMessages).toHaveLength(1)
+    const userTexts = userMessages
+      .flatMap(e => e.data.content)
+      .filter((b): b is { type: 'text'; text: string } => b.type === 'text')
+      .map(b => b.text)
+      .join('')
+    expect(userTexts).toContain('child question')
+    expect(userTexts).not.toContain('parent question')
     // Lineage stamped.
     expect(child.session.header.parentSession).toBe(parent.session.header.id)
-    // Logical metadata records lineage while Session state retains the exact
-    // inherited cut for reload and replay.
-    expect(child.session.header.isSeeded).toBe(true)
-    expect(child.session.inheritedEventCount).toBe(parentPrefixLen)
+    // No seed boundary is recorded.
+    expect(child.session.header.isSeeded).toBe(false)
+    expect(child.session.inheritedEventCount).toBe(0)
     await run.dispose()
   })
 
-  it('produces an invariant-CLEAN seed: forking mid-turn excludes the open turn', async () => {
+  it('produces an invariant-CLEAN child: forking mid-turn never throws', async () => {
     // Drive the parent so it has one completed turn, then start a SECOND turn that is still
-    // open (a hanging model call), and fork while it's in flight. The seed must stop after the
-    // balanced first turn; including the open turn would fail invariant replay during start.
+    // open (a hanging model call), and fork while it's in flight. The child starts fresh, so
+    // there is no seed to balance; the fork must never throw.
     const { ctx, parent } = await setup([textResponse('done'), 'hang', textResponse('child')])
     parent.followup(createUserMessage({ content: [{ type: 'text', text: 'q1' }], source: { kind: 'user' } }))
     await parent.whenIdle()
@@ -145,17 +150,17 @@ describe('dsh-subagent-fork-in-process', () => {
     parent.followup(createUserMessage({ content: [{ type: 'text', text: 'q2' }], source: { kind: 'user' } }))
     await new Promise(r => setTimeout(r, 20)) // let the hanging turn open
 
-    // Forking now must NOT throw (the open second turn is excluded from the seed).
+    // Forking now must NOT throw (the child starts fresh regardless of the open turn).
     const run = await start(ctx, 'fork', { prompt: [{ type: 'text', text: 'child q' }], parent })
     const result = await run.result
     expect(result.stopReason).toBe('completed')
     expect(text(result.output)).toBe('child')
 
     const child = ctx.agents.get(run.id)!
-    // The child's seed has exactly the ONE completed parent turn (the open one excluded).
+    // The child's log has exactly ITS OWN completed turn (no seed to balance).
     const seedTurnEnds = child.session.snapshotEvents().filter(e => e.type === 'turn/end')
-    // 1 from the seeded parent turn + 1 from the child's own completed turn.
-    expect(seedTurnEnds.length).toBe(2)
+    expect(seedTurnEnds.length).toBe(1)
+    expect(child.session.header.isSeeded).toBe(false)
 
     parent.cancel({ kind: 'user' })
     await run.dispose()
@@ -218,13 +223,12 @@ describe('dsh-subagent-fork-in-process', () => {
     expect(ctx.subagents.list()).toEqual([])
   })
 
-  it('contributes the completed-turn prefix as a continuable child\'s seed', async () => {
+  it('contributes NO seed for a continuable child (L6 minimal contract)', async () => {
     const { ctx, parent } = await setup([textResponse('parent turn'), textResponse('child answer')])
     const provider = ctx.subagents.getProvider('fork')!
     const signal = new AbortController().signal
 
-    // Before any completed parent turn there is nothing to inherit, so the
-    // child starts fresh rather than carrying an empty seed.
+    // Before any completed parent turn there is nothing to inherit — fresh child.
     const fresh = await provider.prepareContinuable!({
       sessionId: SessionId('continuable-fresh'),
       parent,
@@ -232,7 +236,8 @@ describe('dsh-subagent-fork-in-process', () => {
     })
     expect(fresh.seed).toBeUndefined()
 
-    // Complete one parent turn, then the prefix is captured once at creation.
+    // Even after a completed parent turn, the child still starts fresh: parent
+    // history is never copied into the child's session (L6 minimal contract).
     parent.followup(createUserMessage({ content: [{ type: 'text', text: 'hello' }], source: { kind: 'user' } }))
     await parent.whenIdle()
     const seeded = await provider.prepareContinuable!({
@@ -240,11 +245,7 @@ describe('dsh-subagent-fork-in-process', () => {
       parent,
       signal,
     })
-    expect(seeded.seed).toBeDefined()
-    const lastSeeded = seeded.seed!.at(-1)
-    // The seed ends at a completed turn, so it replays as a valid child log.
-    expect(lastSeeded?.type).toBe('turn/end')
-    expect(seeded.seed!.map(event => event.seq)).toEqual(seeded.seed!.map((_event, index) => index))
+    expect(seeded.seed).toBeUndefined()
   })
 
   it('has the namespace-plugin export shape (no stray default)', () => {

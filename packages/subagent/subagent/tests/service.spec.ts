@@ -454,6 +454,34 @@ describe('subagent descriptors', () => {
     })).toThrow('not losslessly JSON-serializable')
   })
 
+  it('persists and recovers a continuable returnCap, and rejects a malformed one', () => {
+    // Snapshot keeps the cap verbatim so cold resume can rebuild it.
+    const withCap = snapshotSubagentDescriptor({
+      mode: 'continuable',
+      provider: 'spawn',
+      label: 'capped child',
+      returnCap: 2560,
+    })
+    expect(withCap).toEqual({
+      version: SUBAGENT_DESCRIPTOR_VERSION,
+      mode: 'continuable',
+      provider: 'spawn',
+      label: 'capped child',
+      returnCap: 2560,
+    })
+    expect(foldSubagentDescriptor([event(withCap)])).toEqual(withCap)
+    // Absent stays absent (unbounded settlement), not zero.
+    const noCap = snapshotSubagentDescriptor({ mode: 'continuable', provider: 'spawn', label: 'l' })
+    expect('returnCap' in noCap).toBe(false)
+    // A malformed persisted cap is corrupt log data and fails loud.
+    expect(() => foldSubagentDescriptor([
+      event({ version: SUBAGENT_DESCRIPTOR_VERSION, mode: 'continuable', provider: 'spawn', label: 'l', returnCap: 'lots' }),
+    ])).toThrow('returnCap must be a finite positive number')
+    expect(() => foldSubagentDescriptor([
+      event({ version: SUBAGENT_DESCRIPTOR_VERSION, mode: 'continuable', provider: 'spawn', label: 'l', returnCap: 0 }),
+    ])).toThrow('returnCap must be a finite positive number')
+  })
+
   it.each([
     ['string payload', 'invalid', 'payload must be an object'],
     ['null payload', null, 'payload must be an object'],

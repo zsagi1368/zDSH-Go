@@ -48,6 +48,26 @@ class GatedAdapter extends LlmAdapter {
 
 const testToolSignal = new AbortController().signal
 
+/**
+ * Runtime-context delta header (system-prompt's `joinContextSections`): the
+ * v2.3 L2 protocol folds the runtime context as a prefix into the next real
+ * user message's text (`<delta>\n\n<user text>`), so no standalone plugin
+ * snapshot message exists on the wire anymore.
+ */
+const RUNTIME_CONTEXT_HEADER = 'Current runtime context. This snapshot supersedes earlier runtime-context snapshots.'
+
+/**
+ * Strip the folded runtime-context delta prefix from a real user message text,
+ * returning the caller-supplied text. The delta joins its own sections with
+ * `\n\n` but never ends with one, so the fold separator is the last `\n\n`;
+ * text that does not carry the delta is returned unchanged.
+ */
+function stripRuntimeContextPrefix(text: string): string {
+  if (!text.startsWith(RUNTIME_CONTEXT_HEADER)) return text
+  const separator = text.lastIndexOf('\n\n')
+  return separator >= 0 ? text.slice(separator + 2) : text
+}
+
 const roots: string[] = []
 afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
@@ -152,13 +172,16 @@ describe('dsh-tool-subagent-control', () => {
     await waitNoActivation(ctx, started.childId)
     const loaded = await loadStoredSession(ctx.sessionPersistence, started.childId)
     const promptIndex = loaded.events.findIndex(event => event.type === 'user/message'
-      && event.data.content.some(block => block.type === 'text' && block.text === 'fork task'))
-    expect(loaded.meta.isSeeded).toBe(true)
+      && event.data.content.some(block => block.type === 'text' && stripRuntimeContextPrefix(block.text) === 'fork task'))
+    // L6 minimal contract: a fork child carries no parent-history seed.
+    expect(loaded.meta.isSeeded).toBe(false)
     expect(promptIndex).toBeGreaterThanOrEqual(loaded.inheritedEventCount)
     const prompt = loaded.events[promptIndex]
     if (prompt?.type !== 'user/message') throw new Error('expected the initial fork task')
     const texts = prompt.data.content.flatMap(block => block.type === 'text' ? [block.text] : [])
-    expect(texts[0]).toBe('fork task')
+    // v2.3 L2 delta protocol: the runtime context is folded as a prefix into the
+    // first real user message; strip it to recover the caller's task text.
+    expect(stripRuntimeContextPrefix(texts[0]!)).toBe('fork task')
     expect(texts[1]).toContain(`Your parent agent id is ${JSON.stringify(parent.id)}`)
     expect(texts[1]).toContain(`send_message({ agent_id: ${JSON.stringify(parent.id)}`)
     expect(texts[1]).not.toContain('report tool')
@@ -177,7 +200,7 @@ describe('dsh-tool-subagent-control', () => {
     await waitNoActivation(ctx, started.childId)
     const loaded = await loadStoredSession(ctx.sessionPersistence, started.childId)
     const prompt = loaded.events.find(event => event.type === 'user/message'
-      && event.data.content.some(block => block.type === 'text' && block.text === 'encoded task'))
+      && event.data.content.some(block => block.type === 'text' && stripRuntimeContextPrefix(block.text) === 'encoded task'))
     if (prompt?.type !== 'user/message') throw new Error('expected the encoded initial task')
     const guidance = prompt.data.content.findLast(block => block.type === 'text')?.text ?? ''
 
@@ -281,7 +304,7 @@ describe('dsh-tool-subagent-control', () => {
     const prompts = loaded.events.flatMap(event => event.type === 'user/message' && event.data.source.kind !== 'plugin'
       ? event.data.content.flatMap(block => block.type === 'text'
         && !block.text.startsWith('Your parent agent id is ')
-        ? [block.text]
+        ? [stripRuntimeContextPrefix(block.text)]
         : [])
       : [])
     expect(prompts).toEqual([
@@ -403,7 +426,7 @@ describe('dsh-tool-subagent-control interrupt_agent', () => {
     const prompts = loaded.events.flatMap(event => event.type === 'user/message' && event.data.source.kind !== 'plugin'
       ? event.data.content.flatMap(block => block.type === 'text'
         && !block.text.startsWith('Your parent agent id is ')
-        ? [block.text]
+        ? [stripRuntimeContextPrefix(block.text)]
         : [])
       : [])
     expect(prompts).toEqual([

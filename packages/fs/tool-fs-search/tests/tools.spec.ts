@@ -1132,6 +1132,7 @@ describe('presentation', () => {
       files: [{ path: 'a.ts', matches: [{ lineNumber: 1, line: 'one' }, { lineNumber: 2, line: 'two' }] }],
       truncated: true,
       total: 3,
+      'l3.pruning': { bytes: 139, prunable: true },
     })
     const view = presentGrepResult({ pattern: 'e' }, result)
     expect(view).toEqual({

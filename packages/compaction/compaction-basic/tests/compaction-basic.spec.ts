@@ -310,6 +310,9 @@ describe('compact configuration and defaults', () => {
 
     expect(resolved).toEqual({
       thresholdRatio: 0.8,
+      proactiveTrigger: false,
+      batchCap: 2,
+      outputCap: 32768,
       retainRatio: 0.16,
       summarizationProvider: '',
       summarizationModel: '',

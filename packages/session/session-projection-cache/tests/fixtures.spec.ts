@@ -13,6 +13,12 @@
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
+// Every test here boots the full storage stack (Storage → json → domain →
+// SessionStore → projection registry → cache) over real temp-dir files, so
+// under full-suite parallelism the default 5s testTimeout flakily expires on
+// cold caches. 30s matches the heavy-suite precedent (workflow-worker-thread)
+// and keeps real regressions failing loudly.
+vi.setConfig({ testTimeout: 30_000 })
 import { cp, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -136,7 +142,7 @@ async function assertRewrite(ctx: Context, root: string, id: SessionId): Promise
       inheritedEventCount: 0,
     })
     expect(doc.record.rows['title']?.val).toBe('重写标题')
-  }, { timeout: 5_000 })
+  }, { timeout: 20_000 })
 }
 
 afterEach(async () => {

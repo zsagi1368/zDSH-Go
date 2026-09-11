@@ -9,16 +9,17 @@ const SOURCE = '@deepseek-ai/dsh-system-prompt'
 function contextMessage(text: string) {
   return createUserMessage({
     content: [{ type: 'text', text }],
-    source: { kind: 'plugin', plugin: SOURCE },
+    source: { kind: 'plugin', plugin: SOURCE, form: 'snapshot', sections: [{ name: 'policy', text }] },
   })
 }
 
-describe('RuntimeContextProjection', () => {
-  it('restores the latest visible owned snapshot and ignores other sessions', async () => {
+describe('RuntimeContextProjection (legacy restore & session isolation)', () => {
+  it('restores the latest visible owned snapshot baseline and ignores other sessions', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
     const session = ctx.sessions.create(SessionId('runtime-context-replay'))
-    const retained = session.append('user/message', contextMessage('retained'), { surfaceOp: 'append' })
+    // 'retained' 事件仅用于构造可见快照基线，其 seq 本身不参与后续断言。
+    session.append('user/message', contextMessage('retained'), { surfaceOp: 'append' })
     const shadowed = session.append('user/message', contextMessage('shadowed'), { surfaceOp: 'append' })
     session.append('user/message', createUserMessage({
       content: [{ type: 'text', text: 'summary' }],
@@ -29,17 +30,13 @@ describe('RuntimeContextProjection', () => {
     })
 
     const projection = new RuntimeContextProjection(ctx, session)
-    expect(session.surface.nodes).toContain(retained.seq)
-    expect(projection.project('retained', [])).toBeUndefined()
-    expect(projection.project('next', [{ name: 'sandbox:policy', text: 'policy' }])?.source).toEqual({
-      kind: 'plugin',
-      plugin: SOURCE,
-      form: 'snapshot',
-      sections: [{ name: 'sandbox:policy', text: 'policy' }],
-    })
+    // 恢复后状态未变 → 无 delta。
+    projection.register('retained', [{ name: 'policy', text: 'retained' }])
+    expect(projection.pendingDeltaText()).toBe('')
 
+    // 其他会话不影响本投影。
     const other = ctx.sessions.create(SessionId('runtime-context-other'))
     other.append('user/message', contextMessage('other'), { surfaceOp: 'append' })
-    expect(projection.project('retained', [])).toBeUndefined()
+    expect(projection.pendingDeltaText()).toBe('')
   })
 })

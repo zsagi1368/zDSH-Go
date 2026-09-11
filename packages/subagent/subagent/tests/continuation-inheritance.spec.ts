@@ -113,10 +113,12 @@ describe('continuable policy inheritance', () => {
     expect(foldedSandboxMode(ctx, started.childId, loaded.events)).toBe('danger-full-access')
     expect(foldedApprovalPolicy(ctx, started.childId, loaded.events)).toBe('never')
     expect(ctx.approval.overrideOf(parent.session)).toBeUndefined()
+    // v2.3 L2 delta protocol: the runtime context no longer rides a standalone
+    // plugin snapshot message; it is folded into the first real user message's
+    // text prefix.
     const runtimeContext = loaded.events.find(
       (event): event is SessionEvent<'user/message'> => event.type === 'user/message'
-        && event.data.source.kind === 'plugin'
-        && event.data.source.plugin === '@deepseek-ai/dsh-system-prompt',
+        && event.data.source.kind === 'user',
     )
     const contextText = runtimeContext?.data.content
       .flatMap(block => block.type === 'text' ? [block.text] : [])
@@ -153,7 +155,7 @@ describe('continuable policy inheritance', () => {
     expect(foldedSandboxMode(ctx, started.childId, loaded.events)).toBeNull()
   })
 
-  it('pins approval after the fork prefix of an unswitched fork child', { timeout: 20_000 }, async () => {
+  it('pins approval for an unseeded fork child (L6 minimal contract)', { timeout: 20_000 }, async () => {
     const { ctx, parent } = await setup([textResponse('parent turn'), textResponse('forked child')])
     parent.followup(createUserMessage({
       content: [{ type: 'text', text: 'parent work' }],
@@ -165,7 +167,8 @@ describe('continuable policy inheritance', () => {
     await waitNoActivation(ctx, started.childId)
 
     const loaded = await loadStoredSession(ctx.sessionPersistence, started.childId)
-    expect(loaded.inheritedEventCount).toBeGreaterThan(0)
+    // L6 minimal contract: a fork child contributes no parent-history seed.
+    expect(loaded.inheritedEventCount).toBe(0)
     expect(policyEvents(loaded.events)).toMatchObject([
       { type: 'approval/policy', data: { policy: 'never', source: 'delegation' } },
     ])
@@ -222,9 +225,10 @@ describe('continuable policy inheritance', () => {
     ])
   })
 
-  it('places inherited events after a fork prefix so fresh policy wins stale seed state', { timeout: 20_000 }, async () => {
+  it('snapshots delegation policy without replaying parent history for a fork child', { timeout: 20_000 }, async () => {
     const { ctx, parent } = await setup([textResponse('parent turn'), textResponse('forked child')])
-    // The stale mode lands inside the completed turn the fork seed replays.
+    // A parent-side mode lands inside the parent's completed turn. A fork child
+    // must never replay it (L6 minimal contract: no parent-history seed).
     setSandboxMode(parent.session, 'workspace-write')
     parent.followup(createUserMessage({
       content: [{ type: 'text', text: 'parent work' }],
@@ -237,9 +241,10 @@ describe('continuable policy inheritance', () => {
     await waitNoActivation(ctx, started.childId)
 
     const loaded = await loadStoredSession(ctx.sessionPersistence, started.childId)
-    expect(loaded.inheritedEventCount).toBeGreaterThan(0)
+    expect(loaded.inheritedEventCount).toBe(0)
+    // Only the delegation-time snapshot exists — nothing inherited from the
+    // parent's history.
     expect(loaded.events.filter(event => event.type === 'sandbox/mode')).toMatchObject([
-      { data: { mode: 'workspace-write' } },
       { data: { mode: 'read-only', source: 'delegation' } },
     ])
     expect(foldedSandboxMode(ctx, started.childId, loaded.events)).toBe('read-only')

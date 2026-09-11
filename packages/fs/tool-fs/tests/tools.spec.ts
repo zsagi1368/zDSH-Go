@@ -353,6 +353,7 @@ describe('read tool', () => {
       lines: [{ number: 1, text: 'const x = 1' }, { number: 2, text: 'const y = 2' }],
       totalLines: 2,
       lang: 'ts',
+      'l3.pruning': { bytes: 122, prunable: true },
     })
     const view = ctx.tools.get('read')?.presentResult?.({ file_path: 'a.ts' }, result)
     expect(view).toEqual({
@@ -371,7 +372,7 @@ describe('read tool', () => {
     fs.files.set('key:notes', 'plain')
     const result = await call(ctx, 'read', { file_path: 'notes' })
     if (result.isError) throw new Error('expected read success')
-    expect(result.meta).toEqual({ path: '/abs/notes', offset: 1, lines: [{ number: 1, text: 'plain' }], totalLines: 1 })
+    expect(result.meta).toEqual({ path: '/abs/notes', offset: 1, lines: [{ number: 1, text: 'plain' }], totalLines: 1, 'l3.pruning': { bytes: 102, prunable: true } })
   })
 })
 

@@ -13,7 +13,7 @@ import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
-import SubagentRuntime from '@deepseek-ai/dsh-subagent'
+import SubagentRuntime, { MIN_SUBAGENT_RETURN_CAP } from '@deepseek-ai/dsh-subagent'
 import type { SubagentStartRequest } from '@deepseek-ai/dsh-subagent'
 import LocalJobRegistry from '@deepseek-ai/dsh-jobs-local'
 import * as SubagentSpawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
@@ -188,6 +188,29 @@ describe('dsh-tool-subagent', () => {
       + 'Diagnostic: Claude Code denied a tool request\n'
       + 'Partial output before the run ended:\npartial assistant text',
     )
+  })
+
+  it('bounded return: a failed run truncates its preserved partial output to the cap', async () => {
+    // The failure channel re-enters the parent's context through the error
+    // message, so an over-budget partial must be structurally truncated exactly
+    // like a successful result — it must not bypass `returnCap`.
+    const longPartial = 'head ' + 'x'.repeat(9000) + ' tail unfinished'
+    const ctx = await setup(
+      { provider: 'mock', maxReturnTokens: 100 },
+      { reply: longPartial, stopReason: 'error', diagnostic: 'provider detail' },
+    )
+    const result = await callSubagent(ctx, { description: 'd', prompt: 'p' })
+    expect(result.isError).toBe(true)
+    const message = text(result)
+    // Headline and diagnostic survive; the middle of the partial is dropped.
+    expect(message).toContain('subagent run failed')
+    expect(message).toContain('Diagnostic: provider detail')
+    expect(message).toContain('head ')
+    expect(message).toContain('tail unfinished')
+    expect(message).toContain('中间工作转录已截断')
+    // The thrown message is bounded to the cap (chars/3); the registry prepends
+    // a fixed `Error: ` when converting the throw to an isError result.
+    expect(message.length).toBeLessThanOrEqual(100 * 3 + 'Error: '.length)
   })
 
   it('registers under a configurable toolName so multiple providers can coexist', async () => {
@@ -1247,8 +1270,14 @@ describe('dsh-tool-subagent continuable background mode', () => {
     }, { timeout: 5_000 })
     // The child id names a durable session carrying its continuation descriptor.
     const loaded = await loadStoredSession(ctx.sessionPersistence, SessionId(childId!))
-    expect(loaded.events.some(event => event.type === 'subagent/descriptor')).toBe(true)
+    const descriptor = loaded.events.find(event => event.type === 'subagent/descriptor')
+    expect(descriptor).toBeDefined()
     expect(loaded.events.some(event => event.type === 'assistant/message')).toBe(true)
+    // The tool handed its computed returnCap to `startContinuable`, so it is
+    // persisted in the descriptor and will bound the eventual settlement notice
+    // (surviving a cold resume). This parent declared no maxTokens, so the cap
+    // is the formula floor.
+    expect(descriptor?.data).toMatchObject({ returnCap: MIN_SUBAGENT_RETURN_CAP })
   })
 
   it('hides continuable guidance when the current agent cannot see the tool', async () => {
