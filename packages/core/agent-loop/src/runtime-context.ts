@@ -480,7 +480,7 @@ export class RuntimeContextProjection {
         // 前驱是运行时上下文 producer 的格式异常消息（多块/非文本快照 =
         // 上一次上下文交付失败）时推迟折叠：等下一轮折叠时机（前驱变为
         // assistant 或工具批末尾 toolResult）再展示积压的 delta。
-        if (isOwned(message) && textOf(message) === undefined) return false
+        if (isOwned(message as UserMessage) && textOf(message) === undefined) return false
         continue
       }
       if (message.role === 'assistant') return true
