@@ -31,7 +31,7 @@
 }
 
 .failure button {
-  border: 1px solid var(--dsw-alias-border-l2);
+  border: 0.5px solid var(--dsw-alias-border-l2);
   border-radius: 6px;
   padding: 4px 10px;
   background: transparent;
@@ -49,14 +49,14 @@
 .roster th {
   text-align: left;
   padding: 6px 10px;
-  border-bottom: 1px solid var(--dsw-alias-border-l1);
+  border-bottom: 0.5px solid var(--dsw-alias-border-l1);
   color: var(--dsw-alias-label-secondary);
   font-weight: 600;
 }
 
 .roster td {
   padding: 6px 10px;
-  border-bottom: 1px solid var(--dsw-alias-border-l1);
+  border-bottom: 0.5px solid var(--dsw-alias-border-l1);
   vertical-align: top;
 }
 
@@ -73,7 +73,7 @@
 }
 
 .actionsCell button {
-  border: 1px solid var(--dsw-alias-border-l2);
+  border: 0.5px solid var(--dsw-alias-border-l2);
   border-radius: 6px;
   padding: 3px 10px;
   background: transparent;
@@ -93,6 +93,7 @@
 .warningTag {
   display: inline-block;
   border-radius: 999px;
+  corner-shape: round;
   padding: 1px 8px;
   font-size: 11px;
   line-height: 16px;
@@ -157,7 +158,7 @@
 .presetRow input,
 .presets select,
 .presets button {
-  border: 1px solid var(--dsw-alias-border-l2);
+  border: 0.5px solid var(--dsw-alias-border-l2);
   border-radius: 6px;
   padding: 4px 10px;
   background: transparent;
