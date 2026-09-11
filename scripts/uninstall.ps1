@@ -1,8 +1,10 @@
-# zDSH uninstaller (Windows PowerShell 5.1+).
+# zDSH-go uninstaller (Windows PowerShell 5.1+).
 # Default mode: remove every gitignored artifact inside the repository checkout
 # (node_modules, build output, data\, env files), restoring a pristine checkout.
 #   -Purge        also delete the whole repository directory afterwards
-#   -CleanLegacy  also remove legacy zDSH home directories (~/.dsh-zdsh and friends)
+#   -CleanLegacy  also remove the zDSH-go home directory (~/.dsh-zdsh-go) and the
+#                 legacy plugin homes (~/.zdsh-*); the main-tree zDSH data
+#                 directory ~/.dsh-zdsh is NOT touched
 #   -Yes          answer "yes" to the interactive ~/.dsh confirmation (official-release data)
 # Usage: powershell -NoProfile -ExecutionPolicy Bypass -File scripts\uninstall.ps1 [-Purge] [-CleanLegacy] [-Yes]
 
@@ -23,7 +25,7 @@ if (-not $ROOT) { $ROOT = (Get-Location).Path }
 $homeBase = if ($env:USERPROFILE) { $env:USERPROFILE } else { $HOME }
 
 $legacyZdshDirs = @(
-    @{ Path = Join-Path $homeBase '.dsh-zdsh';           Label = 'zDSH legacy governance data (pre-DSH_HOME default)' },
+    @{ Path = Join-Path $homeBase '.dsh-zdsh-go';        Label = 'zDSH-go governance data (default home without DSH_HOME)' },
     @{ Path = Join-Path $homeBase '.zdsh-workbench';     Label = 'zDSH legacy workbench data' },
     @{ Path = Join-Path $homeBase '.zdsh-plugin-center'; Label = 'zDSH legacy plugin center data' }
 )
@@ -132,7 +134,7 @@ function Remove-KnownArtifacts {
         Remove-Item -Force
 }
 
-Write-Host 'zDSH uninstaller'
+Write-Host 'zDSH-go uninstaller'
 Write-Host "Repository root: $ROOT"
 Write-ResidueReport
 
@@ -186,7 +188,7 @@ else {
 
 if ($CleanLegacy) {
     Write-Host ''
-    Write-Host '[legacy] Removing existing legacy zDSH home directories'
+    Write-Host '[legacy] Removing existing zDSH-go home and legacy plugin home directories'
     foreach ($dir in $legacyZdshDirs) {
         if (Test-DirExists $dir.Path) {
             Remove-Item -LiteralPath $dir.Path -Recurse -Force

@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-# zDSH uninstaller (Linux/macOS/WSL/Git Bash).
+# zDSH-go uninstaller (Linux/macOS/WSL/Git Bash).
 # Default mode: remove every gitignored artifact inside the repository checkout
 # (node_modules, build output, data/, env files), restoring a pristine checkout.
 #   --purge        also delete the whole repository directory afterwards
-#   --clean-legacy also remove legacy zDSH home directories (~/.dsh-zdsh and friends)
+#   --clean-legacy also remove the zDSH-go home directory (~/.dsh-zdsh-go) and
+#                  the legacy plugin homes (~/.zdsh-*); the main-tree zDSH data
+#                  directory ~/.dsh-zdsh is NOT touched
 #   --yes          answer "yes" to the interactive ~/.dsh confirmation (official-release data)
 # Usage: ./scripts/uninstall.sh [--purge] [--clean-legacy] [--yes]
 
@@ -34,7 +36,7 @@ for argument in "$@"; do
 done
 
 LEGACY_ZDSH_DIRS=(
-  "$HOME/.dsh-zdsh|zDSH legacy governance data (pre-DSH_HOME default); remove with --clean-legacy"
+  "$HOME/.dsh-zdsh-go|zDSH-go governance data (default home without DSH_HOME); remove with --clean-legacy"
   "$HOME/.zdsh-workbench|zDSH legacy workbench data; remove with --clean-legacy"
   "$HOME/.zdsh-plugin-center|zDSH legacy plugin center data; remove with --clean-legacy"
 )
@@ -148,7 +150,7 @@ remove_known_artifacts() {
   find "$ROOT" -maxdepth 1 -name 'oxlint-contract-*.ts' -type f -exec rm -f -- {} +
 }
 
-echo 'zDSH uninstaller'
+echo 'zDSH-go uninstaller'
 echo "Repository root: $ROOT"
 print_residue_report
 
@@ -188,7 +190,7 @@ fi
 
 if [ "$CLEAN_LEGACY" -eq 1 ]; then
   echo ''
-  echo '[legacy] Removing existing legacy zDSH home directories'
+  echo '[legacy] Removing existing zDSH-go home and legacy plugin home directories'
   for entry in "${LEGACY_ZDSH_DIRS[@]}"; do
     path="${entry%%|*}"
     if dir_exists "$path"; then
