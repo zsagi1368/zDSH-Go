@@ -54,6 +54,13 @@ export interface Activation {
   readonly parentSession: SessionId
   /** The provider name recorded in the durable descriptor. */
   readonly provider: string
+  /**
+   * Bounded-return cap (tokens, §1.2) rebuilt from the durable descriptor.
+   * `notifySettlement` truncates the child's closing output to it before the
+   * `subagent-settled` notice re-enters the parent's context. `undefined` when
+   * the establishing caller supplied no cap, leaving settlement unbounded.
+   */
+  readonly returnCap: number | undefined
   /** The retained live Agent handle, disposed exactly once at settlement. */
   readonly handle: AgentHandle
   /** The Activation-local admission and close wrapper around the handle's Agent inbox. */
@@ -104,6 +111,12 @@ export interface MaterializeInputs {
   }
   agentOptions: AgentOptions
   composition: { persona?: string | undefined; toolFilter?: ToolRestriction | undefined }
+  /**
+   * Bounded-return cap (tokens, §1.2) for this child's settlement. Fresh
+   * creation takes it from the caller's start spec; cold resume rebuilds it
+   * from the durable descriptor, so the same cap governs the notice either way.
+   */
+  returnCap: number | undefined
   signal: AbortSignal
 }
 
@@ -609,6 +622,7 @@ export class ContinuableActivationRegistry {
       childId,
       parentSession: parent.id,
       provider,
+      returnCap: inputs.returnCap,
       handle,
       inbox: new SubagentInbox(handle.agent),
       ancestry: new WeakSet([handle.agent, ...parentLineage]),
@@ -825,7 +839,7 @@ export class ContinuableActivationRegistry {
     try {
       const parent = this.ctx.agents.get(activation.parentSession)
       if (parent === undefined) return
-      const message = createSettlementMessage(activation.childId, terminal)
+      const message = createSettlementMessage(activation.childId, terminal, activation.returnCap)
       if (this.closingTeardownFor(parent) !== undefined) {
         parent.inject(message)
         return

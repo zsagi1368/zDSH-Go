@@ -500,6 +500,18 @@ export interface BasicCompactionConfig extends CompactionPolicyConfig {
 export interface CompactionPolicyConfig {
   /** Compact at this fraction of the model's context window. Defaults to `0.8`. */
   thresholdRatio?: number
+  /**
+   * Use the proactive L4 trigger line `W − R_pess` instead of
+   * `thresholdRatio × W` (CONTEXT-CACHE-MANAGEMENT.md §1.2/§2 L4). Defaults to
+   * `false` so the legacy ratio mode stays the fallback; when enabled it is the
+   * recommended trigger. Below the legal domain (`W < 32768`) it falls back to
+   * `thresholdRatio` mode with a warning.
+   */
+  proactiveTrigger?: boolean
+  /** Parallel tool-result batch cap (BATCH_CAP) for the proactive trigger. Defaults to `2`. */
+  batchCap?: number
+  /** Max output hard cap (C) of the model, used by the proactive trigger. Defaults to `32768`. */
+  outputCap?: number
   /** Recent context retained as a fraction of the model's window. Defaults to `0.16`. */
   retainRatio?: number
   /** Absolute recent-context budget; mutually exclusive with `retainRatio`. */
@@ -525,7 +537,7 @@ export interface ModelCompactPolicyConfig extends CompactionPolicyConfig {
 }
 ```
 
-Source: [`packages/compaction/compaction-basic/src/types.ts:38`](../packages/compaction/compaction-basic/src/types.ts)
+Source: [`packages/compaction/compaction-basic/src/types.ts:50`](../packages/compaction/compaction-basic/src/types.ts)
 
 <a id="deepseek-aidsh-compaction-tool-result-pruner"></a>
 
@@ -1661,7 +1673,7 @@ export interface ModelSlotRouteConfig {
 }
 ```
 
-Source: [`packages/llm/model-slots/src/index.ts:89`](../packages/llm/model-slots/src/index.ts)
+Source: [`packages/llm/model-slots/src/index.ts:118`](../packages/llm/model-slots/src/index.ts)
 
 <a id="deepseek-aidsh-permission-presets"></a>
 
@@ -2638,7 +2650,7 @@ export interface Config {
 }
 ```
 
-Source: [`packages/subagent/subagent-fork-in-process/src/index.ts:31`](../packages/subagent/subagent-fork-in-process/src/index.ts)
+Source: [`packages/subagent/subagent-fork-in-process/src/index.ts:38`](../packages/subagent/subagent-fork-in-process/src/index.ts)
 
 <a id="deepseek-aidsh-subagent-spawn-in-process"></a>
 
@@ -3157,12 +3169,24 @@ export interface Config {
    * budget belongs to the child runtime or its own deployment.
    */
   maxDepth?: number | 'provider-managed'
+  /**
+   * Token cap for the subagent result returned into the parent's context
+   * (bounded return, §1.2 / L6 of CONTEXT-CACHE-MANAGEMENT.md v2.3). When
+   * omitted, the default is computed from the calling parent agent's
+   * `maxTokens` via the budget formula
+   * `max(2048, floor(0.25 × (reserve − maxTokens)))` (reserve =
+   * `ceil(maxTokens × 1.25) + 4096`); when the parent's `maxTokens` is
+   * unavailable, the formula floor {@link MIN_SUBAGENT_RETURN_CAP} applies.
+   * Outputs over the cap are structurally truncated (conclusion + changed
+   * files + unfinished items kept, middle work transcript dropped).
+   */
+  maxReturnTokens?: number
 }
 ```
 
 Depends on: [`AgentOptions`](subsystems/core.md)
 
-Source: [`packages/subagent/tool-subagent/src/index.ts:48`](../packages/subagent/tool-subagent/src/index.ts)
+Source: [`packages/subagent/tool-subagent/src/index.ts:52`](../packages/subagent/tool-subagent/src/index.ts)
 
 <a id="deepseek-aidsh-tool-terminal"></a>
 

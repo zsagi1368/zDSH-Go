@@ -47,6 +47,14 @@ export interface ContinuableStartSpec {
   readonly request: Omit<SubagentStartRequest, 'label' | 'signal' | 'outputSchema'>
   /** Caller cancellation, owning the operation only until inbox acceptance. */
   readonly signal: AbortSignal
+  /**
+   * Bounded-return cap (tokens, §1.2) the tool computed for this delegation.
+   * Persisted into the durable descriptor so the settlement notice truncates
+   * the child's closing output to it, and a cold resume rebuilds the same cap
+   * rather than injecting an uncapped transcript into the parent. Omission
+   * leaves settlement unbounded (the pre-cap behavior for direct API callers).
+   */
+  readonly returnCap?: number
 }
 
 /** Identities returned once a continuable child accepted its initial prompt. */

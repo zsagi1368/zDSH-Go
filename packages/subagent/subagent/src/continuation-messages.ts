@@ -9,6 +9,7 @@ import { boundContextSummary, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { ActivationTerminal } from './lifecycle.ts'
+import { truncateSubagentOutput } from './return-cap.ts'
 import type { SubagentResult } from './types.ts'
 
 /** Durable attribution for one model-authored message between adjacent Agents. */
@@ -130,19 +131,29 @@ function settlementSummary(childId: SessionId, stopReason: SubagentResult['stopR
  * Build the runtime-owned settlement notice delivered to a child's parent.
  * @param childId - durable child session id named in the notice.
  * @param terminal - recorded terminal state for the settled Activation.
+ * @param returnCap - bounded-return cap (tokens, §1.2) rebuilt from the durable
+ * descriptor; the child's closing output re-enters the parent's context through
+ * this notice, so it is truncated to the cap the delegation carried. `undefined`
+ * preserves the pre-cap behavior and leaves the output unbounded.
  * @returns the durable user-message representation delivered to the parent.
  */
 export function createSettlementMessage(
   childId: SessionId,
   terminal: ActivationTerminal,
+  returnCap: number | undefined,
 ): ReturnType<typeof createUserMessage> {
   const summary = settlementSummary(childId, terminal.stopReason)
+  const closingOutput = terminal.output === undefined
+    ? undefined
+    : returnCap === undefined
+      ? terminal.output
+      : truncateSubagentOutput(terminal.output, returnCap)
   return createUserMessage({
     content: [
       { type: 'text' as const, text: summary },
-      ...terminal.output === undefined
+      ...closingOutput === undefined
         ? [{ type: 'text' as const, text: 'It left no closing message.' }]
-        : [{ type: 'text' as const, text: 'Its closing message:' }, ...terminal.output],
+        : [{ type: 'text' as const, text: 'Its closing message:' }, ...closingOutput],
     ],
     source: {
       kind: 'subagent-settled' as const,

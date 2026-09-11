@@ -269,7 +269,7 @@ Source: [`packages/core/session/src/types.ts:321`](../packages/core/session/src/
 }
 ```
 
-Source: [`packages/core/agent-loop/src/agent.ts:64`](../packages/core/agent-loop/src/agent.ts)
+Source: [`packages/core/agent-loop/src/agent.ts:66`](../packages/core/agent-loop/src/agent.ts)
 
 ### `command/*`
 
