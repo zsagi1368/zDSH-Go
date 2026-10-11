@@ -12,6 +12,7 @@
 | --- | --- |
 | 官方底座（[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)） | `0.2.1-alpha.2` |
 | zDSH 主线底座（本仓库的上游） | `v0.2.1-alpha.2-zDSH20261011d` |
+| zDSH-Go 发布版本 | `v0.2.1-alpha.2-zDSH-Go20261012a` |
 
 zDSH-Go 跟踪上表所列的 zDSH 主线版本，随主线滚动同步。zDSH-Go 版本规则：`<官方版本>-zDSH-Go<日期><修订字母>`，日期为 zDSH-Go 战役收官日，字母为当日修订序号。根 `package.json` 保持官方底座版本零触碰；zDSH-Go 版本以配套发布 tag 为准。
 

@@ -364,7 +364,7 @@ pnpm run package:desktop:win:x64:unsigned
 
 先运行 `pnpm install --frozen-lockfile`，再运行 `pnpm run package:desktop:win:x64:unsigned --check` 校验配置和工具，最后执行上面的完整命令。打包自行执行完整构建和隔离的运行时 smoke，不调用在线模型。阶段日志保留在 `.desktop-build/packaging-runs/`；仅构建成功不代表安装包验证通过。依赖安装和运行时准备需要访问 npm、GitHub release 资源和 nodejs.org；网络需要时使用现有 registry 和代理配置。缓存与工具位置属于构建机器配置，不在跟踪文件中固定个人路径。
 
-[Windows 手动工作流](../../.github/workflows/windows-package.yml) 选择带有专用标签 `dsh-win-package-trial` 的自托管 Windows x64 runner，并调用同一个未签名命令。启动 runner 前需准备 PowerShell 7 和上述工具。必须填写策略部署环境和 HTTPS origin；测试部署还需填写逗号分隔的登录 origin。这些公开输入生成临时 `.env.windows`，不包含签名或上传凭据。`build_version` 默认为 `auto`，使用[发布版本](#release-versions)中说明的 CI 标识。显式版本复用现有产品版本校验器。解析后的版本在打包前显示于运行摘要，manifest 保持不变。
+[Windows 手动工作流](https://github.com/zsagi1368/deepseek-harness-zDSH/blob/zdsh-latest/.github/workflows/windows-package.yml) 不在本仓随附（属 zDSH 主线／上游基建）；它选择带有专用标签 `dsh-win-package-trial` 的自托管 Windows x64 runner，并调用同一个未签名命令。启动 runner 前需准备 PowerShell 7 和上述工具。必须填写策略部署环境和 HTTPS origin；测试部署还需填写逗号分隔的登录 origin。这些公开输入生成临时 `.env.windows`，不包含签名或上传凭据。`build_version` 默认为 `auto`，使用[发布版本](#release-versions)中说明的 CI 标识。显式版本复用现有产品版本校验器。解析后的版本在打包前显示于运行摘要，manifest 保持不变。
 
 工作流进入默认分支后，在 Actions 中选择它，选择源码分支、填写输入并点击 Run workflow。它不监听 push 或 PR，不改变现有自动 CI。打包日志和成功生成的 EXE 产物保留 14 天；安装、签名和发布是独立操作。依赖 Actions 打包前，先从默认分支运行一次，并检查保留的日志和安装包。Checkout 会清理 runner 专用源码目录，包括被忽略的文件；不得指向日常开发目录。运行共享一个并发组，不取消正在进行的构建；最多保留一个待运行任务，新的手动触发会替换该待运行任务。仅在成功完成干净检出后上传诊断日志；即使配置准备在写入后失败，也会清理生成的配置。
 

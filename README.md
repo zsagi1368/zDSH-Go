@@ -12,6 +12,7 @@ English | [中文](README.zh.md)
 | --- | --- |
 | Official base ([DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)) | `0.2.1-alpha.2` |
 | zDSH main-line base (this repository's upstream) | `v0.2.1-alpha.2-zDSH20261011d` |
+| zDSH-Go release | `v0.2.1-alpha.2-zDSH-Go20261012a` |
 
 zDSH-Go tracks the zDSH main-line release above and re-syncs whenever that line moves. zDSH-Go version rule: `<official-version>-zDSH-Go<date><revision-letter>`, where the date is the zDSH-Go campaign close date and the letter counts same-day revisions. The root `package.json` keeps the official base version untouched; the zDSH-Go version is declared on the matching release tag.
 
