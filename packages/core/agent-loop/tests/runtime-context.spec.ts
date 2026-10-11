@@ -1,15 +1,22 @@
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
+import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import { RuntimeContextProjection } from '../src/runtime-context.ts'
 
-const SOURCE = '@deepseek-ai/dsh-system-prompt'
+declare module '@deepseek-ai/dsh-llm' {
+  interface MessageSourceMap {
+    'test-compaction': { kind: 'test-compaction' } & ContextFormed
+  }
+}
+
+const SOURCE = 'runtime-context'
 
 function contextMessage(text: string) {
   return createUserMessage({
     content: [{ type: 'text', text }],
-    source: { kind: 'plugin', plugin: SOURCE, form: 'snapshot', sections: [{ name: 'policy', text }] },
+    source: { kind: SOURCE },
   })
 }
 
@@ -23,14 +30,14 @@ describe('RuntimeContextProjection (legacy restore & session isolation)', () => 
     const shadowed = session.append('user/message', contextMessage('shadowed'), { surfaceOp: 'append' })
     session.append('user/message', createUserMessage({
       content: [{ type: 'text', text: 'summary' }],
-      source: { kind: 'plugin', plugin: 'test-compaction' },
+      source: { kind: 'test-compaction' },
     }), {
       surfaceOp: { op: 'replace', startSeq: shadowed.seq, endSeq: shadowed.seq },
       sourceEventSeqs: [shadowed.seq],
     })
 
     const projection = new RuntimeContextProjection(ctx, session)
-    // 恢复后状态未变 → 无 delta。
+    // L2 口径（A″ 载体）：恢复后状态未变 → 无 delta（不产生完整快照消息）。
     projection.register('retained', [{ name: 'policy', text: 'retained' }])
     expect(projection.pendingDeltaText()).toBe('')
 

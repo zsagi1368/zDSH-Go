@@ -13,7 +13,16 @@ import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type Schema from '@deepseek-ai/schemastery'
 import type { Session } from '@deepseek-ai/dsh-session'
-import type { SettingsScope } from '@deepseek-ai/dsh-settings'
+// zDSH (SYNC-P2 compile adaptation): the official 0.1.7 settings rewrite removed
+// the SettingsProvider.register/SettingsScope surface this feature was built on.
+// The compat guard disables the feature on rc.2+ (probe failure -> fail-soft
+// auto-disable, getCompatRoster accounted); full functional re-adaptation onto
+// the official settings API is tracked as P4. The structural type below keeps
+// the 0.1.5-era registration path compilable until then.
+interface SettingsScope<T> {
+  get(): T
+  watch(listener: () => void): void
+}
 import { MODEL_SLOT_COMPACTION_SUMMARIZE, MODEL_SLOT_IDS, MODEL_SLOT_PLAN, MODEL_SLOT_SOURCES, MODEL_SLOT_TITLE, MODEL_SLOT_VISION, SlotId } from './vocabulary.ts'
 import { guardModelSlots } from './compat.ts'
 
@@ -59,7 +68,7 @@ export interface ModelRoute {
   readonly model: string
 }
 
-/** Provenance tier that produced one resolved auxiliary route. */
+/** Origin tier that produced one resolved auxiliary route. */
 export type ModelSlotSource = 'slot' | 'deployment-default' | 'main-route'
 
 /** Durable pre-dispatch record for one auxiliary-model dispatch. */
@@ -92,7 +101,7 @@ export interface ModelSlotResolveInput {
   readonly session?: Session
 }
 
-/** One resolved auxiliary route with its provenance tier. */
+/** One resolved auxiliary route with its origin tier. */
 export interface ResolvedModelSlot {
   /** Slot identity that was resolved. */
   readonly slot: SlotId
@@ -288,7 +297,18 @@ export class ModelSlotRegistry extends Service {
         ctx.logger.warn('model-slots: disabled by compat guard (settings section skipped)')
         return
       }
-      this.settingsScope = settingsCtx.settings.register(
+      const legacySettings = settingsCtx.settings as unknown as {
+        register?: (
+          ns: string,
+          schema: typeof MODEL_SLOTS_SETTINGS_SCHEMA,
+          options: { base: ModelSlotsConfig },
+        ) => SettingsScope<ModelSlotsConfig>
+      }
+      if (legacySettings.register === undefined) {
+        ctx.logger.warn('model-slots: settings register surface absent despite guard pass; section skipped')
+        return
+      }
+      this.settingsScope = legacySettings.register(
         MODEL_SLOTS_SETTINGS_NAMESPACE,
         MODEL_SLOTS_SETTINGS_SCHEMA,
         { base: config },

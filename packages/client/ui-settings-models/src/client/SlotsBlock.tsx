@@ -1,6 +1,6 @@
 /**
  * Read-only auxiliary-model slot block with a vision-slot editor. Shows every
- * built-in slot's effective route and provenance tier (explicit slot statement,
+ * built-in slot's effective route and origin tier (explicit slot statement,
  * deployment default, or the main-model route), following the same precedence
  * the `ModelSlotRegistry.resolve()` uses. The vision slot alone is editable
  * because its provider/model pair chooses which model digests images for a

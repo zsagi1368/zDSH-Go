@@ -111,7 +111,11 @@ const RESPONDING_SERVER =
 
 const locJson = () => JSON.stringify({ uri: pathToFileURL(join(ws, 'a.ts')).href, range: { start: { line: 0, character: 0 }, end: { line: 0, character: 3 } } })
 
-describe('LspInstance server-request handling', () => {
+// zDSH (FLAKE-BATCH, 2026-09-28): every suite here spawns fixture-server/inline-script child
+// processes; node spawn + handshake starves past the 5s default under full-run parallel load
+// (S-4 family, PDF-FLAKE precedent) — 30s suite budget, assertions unchanged. The
+// task.timeout consumer (waitForFile in the backpressure test) scales with the resolved value.
+describe('LspInstance server-request handling', { timeout: 30_000 }, () => {
   it('answers workspace/configuration with the static config per item', async () => {
     const instance = makeInstance({ LSP_FAKE_ON_OPEN: 'configuration', LSP_FAKE_DEF: locJson() })
     // The query drives didOpen, which makes the fake emit workspace/configuration; a healthy answer
@@ -135,7 +139,8 @@ describe('LspInstance server-request handling', () => {
   })
 })
 
-describe('LspInstance query and abort', () => {
+// zDSH (FLAKE-BATCH, 2026-09-28): 30s suite budget — child-process load flake, see marker above.
+describe('LspInstance query and abort', { timeout: 30_000 }, () => {
   it('sends includeDeclaration for references', async () => {
     const instance = makeInstance({ LSP_FAKE_REFS: JSON.stringify([JSON.parse(locJson())]) })
     await expect(run(instance, 'findReferences')).resolves.toMatchObject({ kind: 'locations' })
@@ -295,7 +300,8 @@ describe('LspInstance query and abort', () => {
 
 })
 
-describe('LspInstance disposal', () => {
+// zDSH (FLAKE-BATCH, 2026-09-28): 30s suite budget — child-process load flake, see marker in the first suite.
+describe('LspInstance disposal', { timeout: 30_000 }, () => {
   it('lets a server finish protocol exit before signal escalation', async () => {
     const marker = join(root, 'graceful-exit.log')
     const instance = makeInstance({

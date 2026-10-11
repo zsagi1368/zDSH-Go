@@ -1,0 +1,43 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/zdsh/plugin-governance-ui/README.md
+/:
+  en: 4bc4526d80bba3df
+  zh: 77ff7f6700f1fe4d
+/dsh-client-ui-plugin-governance:
+  en: b6025365e11546f9
+  zh: 15cfb6edfcb0ddb8
+/dsh-client-ui-plugin-governance/summary:
+  en: 043581276d8d113f
+  zh: 5daa76446beae460
+/dsh-client-ui-plugin-governance/table-of-contents:
+  en: b4683d2a53256fda
+  zh: 71aafd195c1e950a
+/dsh-client-ui-plugin-governance/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/dsh-client-ui-plugin-governance/model-experience/governance-roster:
+  en: 34a4fb671e9ff21e
+  zh: 5c3b507f48192ff4
+/dsh-client-ui-plugin-governance/model-experience/governance-roster/what-the-model-sees:
+  en: 6cce72c83a6c1a00
+  zh: 21231b025057d983
+/dsh-client-ui-plugin-governance/model-experience/governance-roster/what-the-model-sees/roster-view:
+  en: 457dce4f8c399306
+  zh: 15b4f5c81d3c0323
+/dsh-client-ui-plugin-governance/model-experience/governance-roster/token-effect:
+  en: 978cc75382c58f56
+  zh: d41234d7354a0af1
+/dsh-client-ui-plugin-governance/model-experience/governance-roster/kv-cache-effect:
+  en: b5c9ea43684164a8
+  zh: 67c770375e10666b
+/dsh-client-ui-plugin-governance/known-limitations-and-deferred-work:
+  en: efe0ea80e3b82dd3
+  zh: 10bbc950e1c408fd
+/dsh-client-ui-plugin-governance/known-limitations-and-deferred-work/dev-note:
+  en: 7de02cd33a767bd6
+  zh: b9e74c4e48779770
+/dsh-client-ui-plugin-governance/known-limitations-and-deferred-work/dev-note/future-visual-preset-orchestration:
+  en: e48b7f5a94ff7366
+  zh: ca2d7040428aa9a4

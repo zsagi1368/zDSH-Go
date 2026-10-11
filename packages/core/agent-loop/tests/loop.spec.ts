@@ -1,15 +1,32 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import LlmRuntime, { createUserMessage, ToolCallId, LlmError, ReasoningEffortId, StreamChunk, TRUNCATED_TOOL_CALL_CODE, expandAssistantStream } from '@deepseek-ai/dsh-llm'
+import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions } from '@deepseek-ai/dsh-llm'
-import SessionStore, { SessionId, TurnEndReason } from '@deepseek-ai/dsh-session'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import SessionStore, { Session, SessionId, TurnEndReason } from '@deepseek-ai/dsh-session'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { defineContentToolFixture } from '@deepseek-ai/dsh-tools'
 import AgentRegistry, { type Agent, type AssistantStreamFrame } from '@deepseek-ai/dsh-agent'
 
+import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { MockAdapter, maxTokensResponse, textResponse, toolCallResponse } from './mock-adapter.ts'
+
+declare module '@deepseek-ai/dsh-llm' {
+  interface MessageSourceMap {
+    'loop-test': { kind: 'loop-test' } & ContextFormed
+    'max-tokens-test': { kind: 'max-tokens-test' } & ContextFormed
+    'test': { kind: 'test' } & ContextFormed
+    'test-compaction': { kind: 'test-compaction' } & ContextFormed
+    'test-context': { kind: 'test-context' } & ContextFormed
+    'watcher': { kind: 'watcher' } & ContextFormed
+    'x': { kind: 'x' } & ContextFormed
+  }
+}
 
 function driverDone(agent: Agent): Promise<void> {
   return (agent as Agent & { done: Promise<void> }).done
@@ -49,6 +66,15 @@ function systemOf(request: GenerateOptions | undefined): string | undefined {
   const head = request?.messages[0]
   if (head?.role !== 'system') return undefined
   return head.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('')
+}
+
+/**
+ * The text of the newest real user message a request carried (the L2 delta fold
+ * carrier; A″ keeps the runtime context out of any `runtime-context` message).
+ */
+function carrierText(request: GenerateOptions | undefined): string | undefined {
+  const carrier = request?.messages.findLast(message => message.role === 'user' && message.source?.kind === 'user')
+  return carrier?.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('')
 }
 
 /** All user-message texts recorded in the log (to assert what actually ran). */
@@ -496,12 +522,11 @@ describe('agent loop', () => {
 
     // the second request's derived history contains the tool result
     const secondMessages = adapter.requests[1]!.messages
-    const toolResultMessage = secondMessages.find(m =>
-      m.content.some(b => b.type === 'tool-result'))
+    const toolResultMessage = secondMessages.find(m => m.role === 'tool')
     expect(toolResultMessage).toBeDefined()
-    const block = toolResultMessage!.content.find(b => b.type === 'tool-result')!
-    expect(block).toMatchObject({ toolCallId: 'c1', isError: false })
-    expect((block).content).toEqual([{ type: 'text', text: 'echo: ping' }])
+    const message = toolResultMessage!
+    expect(message).toMatchObject({ toolCallId: 'c1', isError: false })
+    expect(message.content).toEqual([{ type: 'text', text: 'echo: ping' }])
 
     // session log records call + result
     const types = agent.session.snapshotEvents().map(e => e.type)
@@ -533,9 +558,9 @@ describe('agent loop', () => {
     expect(request!.tools?.map(t => t.name)).toEqual(['noop'])
   })
 
-  it('resolves {{cwd}} from the agent session workspace (factory create with meta.cwd)', async () => {
+  it('keeps the Session directory out of system-prompt variables', async () => {
     const adapter = new MockAdapter([textResponse('ok')])
-    const ctx = await harness(adapter, 'Working in {{cwd}}.')
+    const ctx = await harness(adapter, 'A coding agent.')
     const handle = await ctx.agents.create({
       sessionId: SessionId('s-cwd'),
       meta: { cwd: '/work/space' },
@@ -546,13 +571,15 @@ describe('agent loop', () => {
     send(agent, 'hi')
     await waitForIdle(ctx, agent)
 
-    expect(systemOf(adapter.requests[0])).toBe('You are an AI agent powered by DeepSeek Harness.\n\nWorking in /work/space.')
+    expect(systemOf(adapter.requests[0])).toBe('You are an AI agent powered by DeepSeek Harness.\n\nA coding agent.')
+    expect((await ctx.systemPrompt.assemble({ agent, scope: agent })).variables).not.toHaveProperty('cwd')
   })
 
   it('contains a strict-variable render failure: the turn errors, the loop keeps serving turns', async () => {
-    // A missing cwd variable must fail one turn without preventing a later valid turn.
+    // A missing custom_directory variable must fail one turn without preventing a later valid turn.
     const adapter = new MockAdapter([textResponse('ok after rescue')])
-    const ctx = await harness(adapter, 'In {{cwd}}.')
+    const ctx = await harness(adapter, 'In {{custom_directory}}.')
+    ctx.systemPrompt.variable('custom_directory', () => undefined)
     const errors: Error[] = []
     ctx.on('agent/error', ({ error }) => {
       if (error instanceof Error) errors.push(error)
@@ -564,7 +591,7 @@ describe('agent loop', () => {
 
     expect(adapter.requests).toHaveLength(0) // the request was never sent
     expect(errors.map(error => error.message)).toEqual([
-      'prompt variable "{{cwd}}" has no value for this assembly (section "deployment:persona-prefix")',
+      'prompt variable "{{custom_directory}}" has no value for this assembly (section "deployment:persona-prefix")',
     ])
     const turnEnd = agent.session.snapshotEvents().find(e => e.type === 'turn/end')
     expect(turnEnd?.type === 'turn/end' && turnEnd.data.reason.kind).toBe('error')
@@ -572,10 +599,10 @@ describe('agent loop', () => {
       ? turnEnd.data.reason.error.message
       : '').toContain('no value for this assembly')
 
-    // The loop survived: a waterfall listener rescues {{cwd}} and the SAME
+    // The loop survived: a waterfall listener rescues {{custom_directory}} and the SAME
     // agent completes a real model turn.
     ctx.on('system-prompt/assemble', async (assembly, _context, next) => {
-      assembly.variables['cwd'] = '/rescued'
+      assembly.variables['custom_directory'] = '/rescued'
       return next()
     })
     send(agent, 'again')
@@ -669,17 +696,197 @@ describe('agent loop', () => {
     }
   })
 
+  it('folds changed runtime context into the next real user message without rewriting the system header', async () => {
+    const SNAPSHOT_HEADER = 'Current runtime context. This snapshot supersedes earlier runtime-context snapshots.'
+    const CLEARED_TEXT = 'Current runtime context: none. Earlier runtime-context snapshots no longer apply.'
+    const adapter = new MockAdapter([
+      textResponse('one'),
+      textResponse('two'),
+      textResponse('three'),
+      textResponse('four'),
+      textResponse('five'),
+    ])
+    const ctx = await harness(adapter)
+    let mode = 'read-only'
+    const dispose = ctx.systemPrompt.context({ name: 'policy', order: 0, text: () => `Mode: ${mode}.` })
+    const agent = await ctx.agentLoop.create(SessionId('a-runtime-context'), { provider: 'mock', model: 'mock' })
+
+    // 首轮：整段上下文作为首条 delta 折进真实 user 消息前缀（含快照头）。
+    send(agent, 'first')
+    await waitForIdle(ctx, agent)
+    expect(carrierText(adapter.requests[0])).toBe(`${SNAPSHOT_HEADER}\n\nMode: read-only.\n\nfirst`)
+
+    // 未变：不重发（折叠目标保持原文）。
+    send(agent, 'unchanged')
+    await waitForIdle(ctx, agent)
+    expect(carrierText(adapter.requests[1])).toBe('unchanged')
+
+    // 变更：只折变化的节文本（L2 节级 delta，无快照头）。
+    mode = 'danger-full-access'
+    send(agent, 'changed')
+    await waitForIdle(ctx, agent)
+    expect(carrierText(adapter.requests[2])).toBe('Mode: danger-full-access.\n\nchanged')
+
+    // 全部清空：下一次折叠携带 CLEARED 文案。
+    dispose()
+    send(agent, 'cleared')
+    await waitForIdle(ctx, agent)
+    expect(carrierText(adapter.requests[3])).toBe(`${CLEARED_TEXT}\n\ncleared`)
+
+    // 清空后状态未变：不重发。
+    send(agent, 'still clear')
+    await waitForIdle(ctx, agent)
+    expect(carrierText(adapter.requests[4])).toBe('still clear')
+
+    // 系统头不被改写；wire 上不存在 runtime-context 消息（A″ §4.3 判据 1）。
+    expect(adapter.requests.map(systemOf)).toEqual(Array(5).fill(systemOf(adapter.requests[0])))
+    expect(agent.session.snapshotEvents().filter(event => event.type === 'system/message')).toHaveLength(1)
+    expect(agent.session.snapshotEvents().filter(event =>
+      event.type === 'user/message' && event.data.source.kind === 'runtime-context')).toHaveLength(0)
+    expect(agent.session.snapshotEvents().flatMap(event =>
+      event.type === 'request/header' ? [event.data.reason] : [])).toEqual(['initial'])
+  })
+
+  // 退役登记（R1 §6 / §9 登记项 3，TD-2）：官方 D2「surface 替换吃掉已入账快照后
+  // 即使上下文未变也重发」在 L2 无等价物——L2 基线只是文本、不携带 surface 身份，
+  // 运行期无「载体被替换 → 重发」路径（仅回收 pending delta）。TD-2 落地后回收为改写。
+
+  it.each(['before', 'after'] as const)('folds runtime context refreshed %s the pre-step fallback', async (timing) => {
+    const adapter = new MockAdapter([textResponse('one'), textResponse('two')])
+    const ctx = await harness(adapter)
+    try {
+      let directory = '/workspace'
+      ctx.systemPrompt.context({ name: 'directory', order: 0, required: true, text: () => `Current working directory: ${directory}.` })
+      const agent = await ctx.agentLoop.create(SessionId(`runtime-context-pre-step-${timing}`), { provider: 'mock', model: 'mock' })
+      send(agent, 'first')
+      await agent.whenIdle()
+      expect(carrierText(adapter.requests[0])).toContain('/workspace')
+      ctx.on('agent/pre-step', async (_payload, next) => {
+        if (timing === 'before') directory = '/elsewhere'
+        const decision = await next()
+        if (timing === 'after') directory = '/elsewhere'
+        return decision
+      })
+      send(agent, 'second')
+      await agent.whenIdle()
+      // 请求准入点的 refreshContext 重读 provider 文本（官方刷新时机 + L2 载体）。
+      expect(carrierText(adapter.requests[1])).toContain('/elsewhere')
+      expect(carrierText(adapter.requests[1])).not.toContain('/workspace')
+      expect(agent.session.snapshotEvents().filter(event =>
+        event.type === 'user/message' && event.data.source.kind === 'runtime-context')).toHaveLength(0)
+      expect(agent.session.snapshotEvents().filter(event =>
+        event.type === 'user/message' && event.data.source.kind === 'user')).toHaveLength(2)
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
+  // 退役登记（R1 §6 / §9 登记项 1）：官方 N2「消息位置替换 / 入场一次」协议在 L2
+  // 无等价物——L2 不产生独立的 runtime-context 消息，故不存在可替换的位置槽位。
+
+  it('does not leak an optional context suppressed after the pre-step fallback', async () => {
+    const SNAPSHOT_HEADER = 'Current runtime context. This snapshot supersedes earlier runtime-context snapshots.'
+    const adapter = new MockAdapter([textResponse('done')])
+    const ctx = await harness(adapter)
+    try {
+      ctx.systemPrompt.context({ name: 'fact', order: 0, text: 'optional' })
+      const agent = await ctx.agentLoop.create(SessionId('context-suppressed-at-admission'), { provider: 'mock', model: 'mock' })
+      ctx.on('agent/pre-step', async (_payload, next) => {
+        const decision = await next()
+        ctx.systemPrompt.suppressRuntimeContext()
+        return decision
+      })
+      send(agent, 'accepted user')
+      await agent.whenIdle()
+      // 内容级断言（禁 kind 级）：被抑制的文案不得进入请求，也不得出现快照头。
+      expect(carrierText(adapter.requests[0])).toBe('accepted user')
+      expect(carrierText(adapter.requests[0])).not.toContain(SNAPSHOT_HEADER)
+      expect(carrierText(adapter.requests[0])).not.toContain('optional')
+      expect(agent.session.snapshotEvents().filter(event => event.type === 'user/message')).toHaveLength(1)
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('commits no pending user or prompt when a context provider cancels admission', async () => {
+    const adapter = new MockAdapter([])
+    const ctx = await harness(adapter)
+    try {
+      const agent = await ctx.agentLoop.create(SessionId('context-canceled-at-admission'), { provider: 'mock', model: 'mock' })
+      let evaluations = 0
+      ctx.systemPrompt.context({ name: 'cancel', order: 0, text: () => {
+        if (++evaluations === 2) agent.cancel({ kind: 'user' })
+        return 'pending'
+      } })
+      send(agent, 'do not commit')
+      await agent.whenIdle()
+      expect(evaluations).toBe(2)
+      expect(adapter.requests).toHaveLength(0)
+      expect(agent.session.snapshotEvents().filter(event => event.type === 'user/message' || event.type === 'system/message')).toHaveLength(0)
+      expect(agent.session.snapshotEvents().findLast(event => event.type === 'turn/end')?.data.reason.kind).toBe('aborted')
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
+  // 退役登记（R1 §6 / §9 登记项 2，TD-2）：官方 N5「重试期上下文重发」在 L2 无等价
+  // 面——折叠槽位只在首 attempt 存在（A″ 注记②），重试期变更成为 pending delta 随
+  // 下次折叠投递。TD-2 的 surface 感知扩展落地后可回收为改写。
+
+  it.each(['reject', 'empty'] as const)('does not commit required runtime context after a pre-step %s decision', async (decision) => {
+    const adapter = new MockAdapter([])
+    const ctx = await harness(adapter)
+    try {
+      ctx.systemPrompt.context({ name: 'directory', order: 0, required: true, text: 'Current working directory: /workspace.' })
+      const agent = await ctx.agentLoop.create(SessionId(`runtime-context-${decision}`), { provider: 'mock', model: 'mock' })
+      ctx.on('agent/pre-step', async () => decision === 'reject' ? { kind: 'reject' as const } : { kind: 'enter' as const, messages: [] })
+      send(agent, 'do not admit')
+      await agent.whenIdle()
+      expect(adapter.requests).toHaveLength(0)
+      expect(agent.session.snapshotEvents().filter(event => event.type === 'user/message')).toHaveLength(0)
+      expect(agent.session.snapshotEvents().filter(event => event.type === 'step/start')).toHaveLength(0)
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('folds a cleared runtime context after the active set becomes empty', async () => {
+    const CLEARED_TEXT = 'Current runtime context: none. Earlier runtime-context snapshots no longer apply.'
+    const adapter = new MockAdapter([textResponse('one'), textResponse('two')])
+    const ctx = await harness(adapter)
+    const dispose = ctx.systemPrompt.context({ name: 'policy', order: 0, text: 'Mode: read-only.' })
+    const agent = await ctx.agentLoop.create(SessionId('a-runtime-context-compacted-clear'), { provider: 'mock', model: 'mock' })
+
+    send(agent, 'first')
+    await waitForIdle(ctx, agent)
+    // L2 载体 = 折叠后的真实 user 消息；压缩把它替换为摘要。
+    const carrier = agent.session.snapshotEvents().find(event =>
+      event.type === 'user/message' && event.data.source.kind === 'user')
+    if (carrier?.type !== 'user/message') throw new Error('first turn did not fold runtime context')
+    agent.session.append('user/message', createUserMessage({
+      content: [{ type: 'text', text: 'summary retaining old mode: read-only' }],
+      source: { kind: 'test-compaction' },
+    }), {
+      surfaceOp: { op: 'replace', startSeq: carrier.seq, endSeq: carrier.seq },
+      sourceEventSeqs: [carrier.seq],
+    })
+    dispose()
+
+    send(agent, 'after compaction')
+    await waitForIdle(ctx, agent)
+    expect(carrierText(adapter.requests[1])).toBe(`${CLEARED_TEXT}\n\nafter compaction`)
+  })
   it('does not clear runtime context after an unrelated replacement', async () => {
     const adapter = new MockAdapter([textResponse('ok')])
     const ctx = await harness(adapter)
     const agent = await ctx.agentLoop.create(SessionId('a-runtime-context-unrelated-compaction'), { provider: 'mock', model: 'mock' })
     const original = agent.session.append('user/message', createUserMessage({
       content: [{ type: 'text', text: 'old context' }],
-      source: { kind: 'plugin', plugin: 'test-context' },
+      source: { kind: 'test-context' },
     }), { surfaceOp: 'append' })
     agent.session.append('user/message', createUserMessage({
       content: [{ type: 'text', text: 'compacted summary' }],
-      source: { kind: 'plugin', plugin: 'test-compaction' },
+      source: { kind: 'test-compaction' },
     }), {
       surfaceOp: { op: 'replace', startSeq: original.seq, endSeq: original.seq },
       sourceEventSeqs: [original.seq],
@@ -688,11 +895,56 @@ describe('agent loop', () => {
     send(agent, 'after compaction')
     await waitForIdle(ctx, agent)
     expect(adapter.requests[0]?.messages.some(message =>
-      message.role === 'user'
-      && message.source.kind === 'plugin'
-      && message.source.plugin === '@deepseek-ai/dsh-system-prompt')).toBe(false)
+      message.role === 'user' && message.source?.kind === 'runtime-context')).toBe(false)
   })
 
+  it('defers the fold past a malformed owned snapshot and then delivers the complete context', async () => {
+    const SNAPSHOT_HEADER = 'Current runtime context. This snapshot supersedes earlier runtime-context snapshots.'
+    const adapter = new MockAdapter([textResponse('one'), textResponse('two')])
+    const ctx = await harness(adapter)
+    ctx.systemPrompt.context({ name: 'policy', order: 0, text: 'Mode: read-only.' })
+    const agent = await ctx.agentLoop.create(SessionId('a-runtime-context-malformed'), { provider: 'mock', model: 'mock' })
+    agent.session.append('user/message', createUserMessage({
+      content: [{ type: 'text', text: 'broken' }, { type: 'text', text: 'snapshot' }],
+      source: { kind: 'runtime-context' },
+    }), { surfaceOp: 'append' })
+
+    // 畸形 owned 前驱（多块/非文本 = 上次交付失败）→ 推迟折叠，pending delta 不丢。
+    send(agent, 'repair context')
+    await waitForIdle(ctx, agent)
+    expect(carrierText(adapter.requests[0])).toBe('repair context')
+
+    // 下一次折叠投递完整上下文（含快照头）。
+    send(agent, 'after repair')
+    await waitForIdle(ctx, agent)
+    expect(carrierText(adapter.requests[1])).toBe(`${SNAPSHOT_HEADER}\n\nMode: read-only.\n\nafter repair`)
+  })
+
+  it('folds the initial runtime context into the first request (TD-1 first-attempt regression)', async () => {
+    const SNAPSHOT_HEADER = 'Current runtime context. This snapshot supersedes earlier runtime-context snapshots.'
+    const adapter = new MockAdapter([textResponse('done')])
+    const ctx = await harness(adapter)
+    try {
+      ctx.systemPrompt.context({ name: 'directory', order: 0, required: true, text: 'Current working directory: /workspace.' })
+      const agent = await ctx.agentLoop.create(SessionId('runtime-context-first-attempt'), { provider: 'mock', model: 'mock' })
+      // §4.3 判据 3：请求期 request.messages 与派生历史一致。
+      ctx.on('llm/stream', (request, next) => {
+        expect(request.messages).toEqual(Session.create(agent.id, agent.session.snapshotEvents(), agent.session.header).deriveMessages())
+        return next()
+      })
+      send(agent, 'first')
+      await agent.whenIdle()
+      // 注记①回归：折叠求值在 systemPrompt.project 提交之前，首轮 delta 必须上线
+      //（若在提交后折叠，前驱变为 system 消息 → canFoldAfter 推迟 → 无快照头）。
+      expect(carrierText(adapter.requests[0])).toBe(
+        `${SNAPSHOT_HEADER}\n\nCurrent working directory: /workspace.\n\nfirst`,
+      )
+      // §4.3 判据 1：wire 上不存在 runtime-context 消息。
+      expect(adapter.requests[0]?.messages.some(message => message.source?.kind === 'runtime-context')).toBe(false)
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
   it('records exact replay chunks inside the durable assistant message', async () => {
     const adapter = new MockAdapter([textResponse('abc')])
     const ctx = await harness(adapter)
@@ -809,7 +1061,7 @@ describe('agent loop', () => {
     const ctx = await harness(adapter)
     const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
 
-    agent.inject(createUserMessage({ content: [{ type: 'text', text: 'file changed: a.ts' }], source: { kind: 'plugin', plugin: 'watcher' } }))
+    agent.inject(createUserMessage({ content: [{ type: 'text', text: 'file changed: a.ts' }], source: { kind: 'watcher' } }))
     expect(agent.status).toBe('idle')
     expect(adapter.requests).toHaveLength(0)
     expect(agent.session.snapshotEvents().filter(event => event.type === 'turn/start')).toHaveLength(0)
@@ -820,7 +1072,7 @@ describe('agent loop', () => {
         inserted: [{
           role: 'user',
           content: [{ type: 'text', text: 'file changed: a.ts' }],
-          source: { kind: 'plugin', plugin: 'watcher' },
+          source: { kind: 'watcher' },
         }],
       },
     })
@@ -838,13 +1090,13 @@ describe('agent loop', () => {
     const ctx = await harness(adapter)
     const agent = await ctx.agentLoop.create(SessionId('raw-context'), { provider: 'mock', model: 'mock' })
     const text = '<system-reminder>Additional instructions from: pkg/AGENTS.md</system-reminder>'
-    agent.inject(createUserMessage({ content: [{ type: 'text', text }], source: { kind: 'plugin', plugin: 'agent-instructions' } }))
+    agent.inject(createUserMessage({ content: [{ type: 'text', text }], source: { kind: 'agent-instructions', form: 'instructions', changes: [] } }))
     send(agent, 'go')
     await waitForIdle(ctx, agent)
 
-    const contextEvent = agent.session.snapshotEvents().find(event => event.type === 'user/message' && event.data.source.kind === 'plugin')
+    const contextEvent = agent.session.snapshotEvents().find(event => event.type === 'user/message' && event.data.source.kind === 'agent-instructions')
     expect(contextEvent?.type === 'user/message' && contextEvent.data.source)
-      .toEqual({ kind: 'plugin', plugin: 'agent-instructions' })
+      .toEqual({ kind: 'agent-instructions', form: 'instructions', changes: [] })
     const requestText = JSON.stringify(adapter.requests[0]!.messages)
     expect(requestText).toContain('Additional instructions from: pkg/AGENTS.md')
     expect(requestText).not.toContain('<context source=')
@@ -865,10 +1117,10 @@ describe('agent loop', () => {
       async execute() {
         await Promise.resolve()
         const first = { type: 'text' as const, text: 'mid-turn notice' }
-        agent.inject(createUserMessage({ content: [first], source: { kind: 'plugin', plugin: 'x' } }))
+        agent.inject(createUserMessage({ content: [first], source: { kind: 'x' } }))
         first.text = 'mutated after inject'
-        agent.inject(createUserMessage({ content: [{ type: 'text', text: 'second notice' }], source: { kind: 'plugin', plugin: 'x' } }))
-        visibleDuringTool = agent.session.snapshotEvents().some(e => e.type === 'user/message' && e.data.source.kind === 'plugin')
+        agent.inject(createUserMessage({ content: [{ type: 'text', text: 'second notice' }], source: { kind: 'x' } }))
+        visibleDuringTool = agent.session.snapshotEvents().some(e => e.type === 'user/message' && e.data.source.kind === 'x')
         return [{ type: 'text', text: 'ok' }]
       },
     }))
@@ -883,7 +1135,7 @@ describe('agent loop', () => {
     const turnStarts = agent.session.snapshotEvents().filter(e => e.type === 'turn/start')
     expect(turnStarts).toHaveLength(1)
     const result = agent.session.snapshotEvents().find(e => e.type === 'tool/result')!
-    const contexts = agent.session.snapshotEvents().filter(e => e.type === 'user/message' && e.data.source.kind === 'plugin')
+    const contexts = agent.session.snapshotEvents().filter(e => e.type === 'user/message' && e.data.source.kind === 'x')
     expect(contexts).toHaveLength(2)
     expect(result.seq).toBeLessThan(contexts[0]!.seq)
     expect(contexts.flatMap(event => event.type === 'user/message' ? event.data.content : []))
@@ -893,8 +1145,7 @@ describe('agent loop', () => {
       ])
 
     const secondRequest = adapter.requests[1]!.messages
-    const resultIndex = secondRequest.findIndex(message =>
-      message.content.some(block => block.type === 'tool-result'))
+    const resultIndex = secondRequest.findIndex(message => message.role === 'tool')
     const contextIndexes = secondRequest.flatMap((message, index) =>
       message.content.some(block => block.type === 'text'
         && (block.text.includes('mid-turn notice') || block.text.includes('second notice')))
@@ -918,7 +1169,7 @@ describe('agent loop', () => {
       parameters: {},
       async execute() {
         expect(() => {
-          agent.inject(createUserMessage({ content: [{ type: 'text', text: 'invalid' }], source: { kind: 'plugin', plugin: 'test', bigint: 1n } as never }))
+          agent.inject(createUserMessage({ content: [{ type: 'text', text: 'invalid' }], source: { kind: 'test', bigint: 1n } as never }))
         }).toThrow('agent context must be losslessly JSON-serializable')
         return [{ type: 'text', text: 'rejected invalid context' }]
       },
@@ -927,7 +1178,7 @@ describe('agent loop', () => {
     send(agent, 'go')
     await waitForIdle(ctx, agent)
 
-    expect(agent.session.snapshotEvents().some(event => event.type === 'user/message' && event.data.source.kind === 'plugin')).toBe(false)
+    expect(agent.session.snapshotEvents().some(event => event.type === 'user/message' && event.data.source.kind === 'test')).toBe(false)
   })
 
   it('agent/turn-stopping can steer another step (/loop pattern)', async () => {
@@ -943,7 +1194,7 @@ describe('agent loop', () => {
     ctx.on('session/event', (_session, event) => { if (event.type === 'step/end') steps++ })
     ctx.on('agent/turn-stopping', ({ agent: subject }) => {
       if (steps < 3) {
-        subject.steer(createUserMessage({ content: [{ type: 'text', text: 'continue' }], source: { kind: 'plugin', plugin: 'loop-test' } }))
+        subject.steer(createUserMessage({ content: [{ type: 'text', text: 'continue' }], source: { kind: 'loop-test' } }))
       }
     })
 
@@ -1171,7 +1422,7 @@ describe('agent loop', () => {
     // (step 2 is a plain stop with no tool calls → stops).
     ctx.on('agent/turn-stopping', ({ agent: subject }) => {
       if (steps < 2) {
-        subject.steer(createUserMessage({ content: [{ type: 'text', text: 'continue after truncation' }], source: { kind: 'plugin', plugin: 'max-tokens-test' } }))
+        subject.steer(createUserMessage({ content: [{ type: 'text', text: 'continue after truncation' }], source: { kind: 'max-tokens-test' } }))
       }
     })
 
@@ -1200,7 +1451,7 @@ describe('agent loop', () => {
         id: expect.any(String) as unknown,
         role: 'user',
         content: [{ type: 'text', text: 'continue after truncation' }],
-        source: { kind: 'plugin', plugin: 'max-tokens-test' },
+        source: { kind: 'max-tokens-test' },
       },
     ])
     // A max-token step is sticky: the later completed step must not
@@ -1609,7 +1860,7 @@ describe('agent loop', () => {
     const idle = waitForIdle(ctx, agent)
     agent.followup(createUserMessage({ content: [{ type: 'text', text: 'user message' }], source: { kind: 'user' } }))
     await Promise.resolve()
-    agent.followup(createUserMessage({ content: [{ type: 'text', text: 'plugin message' }], source: { kind: 'plugin', plugin: 'test' } }))
+    agent.followup(createUserMessage({ content: [{ type: 'text', text: 'plugin message' }], source: { kind: 'test' } }))
     await idle
 
     const turns = agent.session.snapshotEvents().filter(event => event.type === 'turn/start')
@@ -1619,7 +1870,7 @@ describe('agent loop', () => {
     expect(turns).toHaveLength(2)
     expect(sources).toEqual([
       { kind: 'user' },
-      { kind: 'plugin', plugin: 'test' },
+      { kind: 'test' },
     ])
   })
 
@@ -1798,5 +2049,116 @@ describe('agent loop', () => {
     expect(replayed.snapshotEvents().slice(0, agent.session.seq).map(e => e.type)).toEqual(
       agent.session.snapshotEvents().map(e => e.type))
     expect(replayed.snapshotEvents().at(-1)?.type).toBe('session/end-seed')
+  })
+})
+
+// zDSH (E2E-TEAM-FIX, SYNC-017, 2026-09-29): race-regression lock for the
+// declarative-agent persistence race — an AgentLoop constructed while the
+// session-persistence sibling is still mounting behind the loader's
+// concurrent Promise.all (vendor/loader config/group.ts) used to leave the
+// declarative Lead session unstored forever (R6 keyless Agent Team:
+// "did not persist its Lead"). The fix is the loader-await lazy compensation
+// in createStoredSession; root cause chain, E4 preload experiment, and
+// ruling: zDSH-docs Plan/campaigns/2026-09-28-sync-017/E2E-TEAM-ruling.md §5.2.
+describe('declarative agent persistence race (E2E-TEAM-FIX)', () => {
+  const roots: string[] = []
+  const contexts: Context[] = []
+  afterEach(async () => {
+    for (const ctx of contexts.splice(0)) await ctx.fiber.dispose().catch(() => {})
+    for (const dir of roots.splice(0)) await rm(dir, { recursive: true, force: true })
+  })
+
+  /** Harness with a caller-released `loader` readiness gate and no persistence yet. */
+  async function raceHarness(adapter: MockAdapter): Promise<{ ctx: Context; root: string; settleLoader: () => void }> {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-loop-race-'))
+    roots.push(root)
+    const ctx = new Context()
+    contexts.push(ctx)
+    await ctx.plugin(LlmRuntime)
+    await ctx.plugin(SessionStore)
+    await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(SystemPrompt)
+    await ctx.plugin(ToolRuntime)
+    await ctx.plugin(AgentRegistry)
+    let settleLoader!: () => void
+    const settled = new Promise<void>((resolve) => { settleLoader = resolve })
+    // Structural loader stub: agent-loop only consumes the readiness `await()`
+    // (headless.spec precedent; `as never` keeps provide well-typed whether or
+    // not the loader augmentation is in this program).
+    ctx.provide('loader', { await: () => settled } as never)
+    ctx.llm.registerAdapter(['mock'], adapter)
+    return { ctx, root, settleLoader }
+  }
+
+  it('stores the declarative main agent when persistence mounts after agent-loop', async () => {
+    const adapter = new MockAdapter([textResponse('race stored')])
+    const { ctx, root, settleLoader } = await raceHarness(adapter)
+    // agent-loop constructs FIRST — the persistence sibling is still pending
+    // behind the loader gate: the concurrent-mount order the R6 leg hit.
+    const loopFiber = await ctx.plugin(AgentLoop, {
+      agents: [{ id: SessionId('main'), provider: 'mock', model: 'mock' }],
+    })
+
+    // Discriminating lock: startup must park on the readiness gate instead of
+    // publishing an unstored agent right away (the pre-fix behavior published
+    // within microtasks because the synchronous read saw no backend).
+    await new Promise(resolve => setTimeout(resolve, 30))
+    expect(ctx.agents.list()).toHaveLength(0)
+
+    // The sibling finishes mounting, then the loader settles — the order
+    // every real boot completes in before `loader.await()` returns.
+    await ctx.plugin(JsonlSessionPersistence, { root })
+    settleLoader()
+
+    const agent = await vi.waitFor(() => {
+      const published = ctx.agents.list()[0]
+      if (published === undefined) throw new Error('declarative agent not published')
+      return published
+    }, { timeout: 10_000, interval: 20 })
+    expect(agent.id).toMatch(/^main-session-/)
+
+    send(agent, 'hi')
+    await waitForIdle(ctx, agent)
+
+    // The late-mounted backend owns the Lead session: the header stored at
+    // publication plus the live turn routed through the handle.
+    await ctx.sessionPersistence.flush()
+    const snapshot = await ctx.sessionPersistence.stat(agent.session.id)
+    expect(snapshot?.header.id).toBe(agent.session.id)
+    const reader = await ctx.sessionPersistence.open(agent.session.id, 'read')
+    try {
+      const storedTypes = (await reader.read()).events.map(event => event.type)
+      expect(storedTypes).toContain('user/message')
+      expect(storedTypes).toContain('assistant/message')
+    } finally {
+      await reader.close()
+    }
+
+    // Teardown in mount-safe order: the loop drains its live writer into the
+    // still-open backend (resume.spec harness comment), then afterEach
+    // disposes the tree and removes the temp root.
+    await loopFiber.dispose()
+  })
+
+  it('still publishes unstored when the loader settles with no backend mounted', async () => {
+    const adapter = new MockAdapter([textResponse('unstored')])
+    const { ctx, settleLoader } = await raceHarness(adapter)
+    await ctx.plugin(AgentLoop, {
+      agents: [{ id: SessionId('main'), provider: 'mock', model: 'mock' }],
+    })
+    settleLoader()
+
+    const agent = await vi.waitFor(() => {
+      const published = ctx.agents.list()[0]
+      if (published === undefined) throw new Error('declarative agent not published')
+      return published
+    }, { timeout: 10_000, interval: 20 })
+    send(agent, 'hi')
+    await waitForIdle(ctx, agent)
+
+    // No-persistence profile semantics are untouched: settled loader and
+    // still no backend → unstored run, full turn, no hang and no throw.
+    expect(ctx.get('sessionPersistence')).toBeUndefined()
+    expect(userTexts(agent)).toEqual(['hi'])
   })
 })

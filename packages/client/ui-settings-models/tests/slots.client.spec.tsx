@@ -30,6 +30,9 @@ const SlotsSchema = Schema.object({
 
 function namespace(value: JsonValue, revision = 0): SettingsNamespaceView {
   return {
+    // zDSH (SYNC-P2): 0.1.7 added autoGenerate to the wire view; the slots
+    // namespace renders through the models section block, never a generated page.
+    autoGenerate: false,
     ns: MODEL_SLOTS_SETTINGS_NAMESPACE,
     schema: JSON.parse(JSON.stringify(SlotsSchema.toJSON())) as JsonValue,
     value,

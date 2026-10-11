@@ -27,6 +27,10 @@ const originalProbe = process.env[PROBE_NAME]
 const roots: string[] = []
 const dshBuildWorkflows = [
   'ci.yml',
+  // The zDSH overlay lane adopted with the 0.2.1-alpha.2 base builds the host
+  // library and runs the client-facing static gates; it only sets
+  // DSH_TELEMETRY_DISABLED, so the public-value check below must cover it too.
+  'zdsh-ci.yml',
 ]
 
 afterEach(() => {

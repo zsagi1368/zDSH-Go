@@ -18,7 +18,16 @@ pre-commit:
       glob: '*.{ts,tsx,mts,cts,mjs}'
       exclude:
         - 'vendor/*/src/**'
-      run: node_modules/.bin/tsx scripts/run-oxlint.ts --config .oxlintrc.staged.json --fix --no-error-on-unmatched-pattern {staged_files}
+      # zDSH (SYNC-P1-FIX, 2026-09-29; source: sync-017 D4-5 STAGED-OXLINT-CONTRACT-BREAK,
+      # preserves MAIN-HYGIENE rulings §8 intent): this typeAware:false fast-screen lane never
+      # runs the two type-aware rules exempted by the zDSH line-level directives (dsh-compat
+      # probe.ts:92, plugin-governance-host preinstaller.ts:366), so unused-directive reporting
+      # here would emit 2 permanent false warnings per pre-commit. The opt-out lives on THIS
+      # invocation as a CLI flag (takes precedence over config, oxlint schema) instead of in
+      # .oxlintrc.staged.json: the official oxlint-contract spec pins that config file and
+      # asserts unused-directive reporting when it is invoked without extra flags. The
+      # repo-wide main config (.oxlintrc.json, typeAware:true) still reports dead directives.
+      run: node_modules/.bin/tsx scripts/run-oxlint.ts --config .oxlintrc.staged.json --fix --report-unused-disable-directives-severity=off --no-error-on-unmatched-pattern {staged_files}
       stage_fixed: true
 
     # Regenerate rather than reject: a dependency edit that forgot the notices
@@ -28,7 +37,7 @@ pre-commit:
     # lefthook only inspects files present on disk — so that one case still
     # falls through to the freshness assertion in the test lane.
     - name: third-party notices (staged)
-      glob: '{package.json,*/package.json,*/*/package.json,*/*/*/package.json,*/*/*/*/package.json,pnpm-workspace.yaml,*/*/pnpm-workspace.yaml,pnpm-lock.yaml,vendor/README.md,python/*/pyproject.toml,scripts/gen-third-party-notices.ts,scripts/browser-bundled-externals.ts,scripts/build-exe-for-python-sdk.ts,tsconfig.base*.json,packages/*/*/src/**/*,packages/*/*/tsdown.config.ts,packages/client/tsdown.client.ts,apps/*/src/**/*,apps/*/vite.config.ts}'
+      glob: '{package.json,*/package.json,*/*/package.json,*/*/*/package.json,*/*/*/*/package.json,pnpm-workspace.yaml,*/*/pnpm-workspace.yaml,pnpm-lock.yaml,vendor/README.md,python/*/pyproject.toml,scripts/primary-runtime/lock.json,scripts/gen-third-party-notices.ts,scripts/browser-bundled-externals.ts,scripts/build-exe-for-python-sdk.ts,tsconfig.base*.json,packages/*/*/src/**/*,packages/*/*/tsdown.config.ts,packages/client/tsdown.client.ts,apps/*/src/**/*,apps/*/vite.config.ts}'
       run: node_modules/.bin/tsx scripts/gen-third-party-notices.ts && git add THIRD_PARTY_NOTICES.md
 
     - name: whitespace (staged)

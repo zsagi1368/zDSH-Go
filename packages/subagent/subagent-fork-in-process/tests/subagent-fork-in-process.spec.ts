@@ -1,3 +1,5 @@
+import { mountWorkingDirectoryFixture } from '../../subagent/tests/working-directory-fixture.ts'
+import { mountLocalActivations, startTestActivation as start } from '../../subagent/tests/local-activation.ts'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
@@ -6,45 +8,28 @@ import AgentRegistry from '@deepseek-ai/dsh-agent'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
-import InvariantRegistry from '@deepseek-ai/dsh-invariants'
-import * as SessionInvariant from '@deepseek-ai/dsh-session/invariant'
-import * as AgentInvariant from '@deepseek-ai/dsh-agent/invariant'
-import * as AgentLoopInvariant from '@deepseek-ai/dsh-agent-loop/invariant'
-import SubagentRuntime, { type SubagentStartRequest } from '@deepseek-ai/dsh-subagent'
+import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { MockAdapter, textResponse, toolCallResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import type { StreamChunk } from '@deepseek-ai/dsh-llm'
 import * as fork from '../src/index.ts'
-import { STRUCTURED_OUTPUT_TOOL } from '@deepseek-ai/dsh-subagent-in-process-driver'
+import { STRUCTURED_OUTPUT_TOOL } from '@deepseek-ai/dsh-subagent'
 
 type Script = ConstructorParameters<typeof MockAdapter>[0]
-
-async function mountInvariants(ctx: Context): Promise<void> {
-  await ctx.plugin(InvariantRegistry)
-  await ctx.plugin(SessionInvariant)
-  await ctx.plugin(AgentInvariant)
-  await ctx.plugin(AgentLoopInvariant)
-}
-
-function start(ctx: Context, provider: string, request: Omit<SubagentStartRequest, 'signal'> & { signal?: AbortSignal }) {
-  return ctx.subagents.start(provider, { signal: request.signal ?? new AbortController().signal, ...request })
-}
 
 /** A bare `stop` finish that streams no content → the turn ends `completed`
  * with NO `assistant/message` of its own. */
 const emptyStop: StreamChunk[] = [{ type: 'finish', reason: { kind: 'stop' } }]
 
 /**
- * Drives the REAL fork backend with a real loop + scripted mock MODEL + the
- * real invariant service and package companions. The session contribution replays a seeded child log on
- * `session/created`, so a malformed (unbalanced) fork seed makes these tests
- * THROW — that is the regression guard for the completed-turn-prefix boundary.
+ * Drives the REAL fork backend with a real loop + scripted mock MODEL.
  */
 async function setup(script: Script) {
   const ctx = new Context()
   await mountAgentLoopTestDependencies(ctx)
-  await mountInvariants(ctx)
+  await mountLocalActivations(ctx)
   await ctx.plugin(AgentLoop, { agents: [] })
+  await mountWorkingDirectoryFixture(ctx)
   await ctx.plugin(SubagentRuntime)
   await ctx.plugin(fork, { providerName: 'fork' })
   ctx.llm.registerAdapter(['mock'], new MockAdapter(script))
@@ -52,7 +37,7 @@ async function setup(script: Script) {
   return { ctx, parent }
 }
 
-function text(blocks: { type: string; text?: string }[]): string {
+function text(blocks: readonly { type: string; text?: string }[]): string {
   return blocks.filter(b => b.type === 'text').map(b => b.text).join('')
 }
 
@@ -82,7 +67,7 @@ describe('dsh-subagent-fork-in-process', () => {
     const result = await run.result
     expect(result.stopReason).toBe('completed')
     expect(text(result.output)).toBe('fresh child')
-    const child = ctx.agents.get(run.id)!
+    const child = run.localAgent
     // Only the child's own turn — no seeded parent turns.
     expect(child.session.snapshotEvents().filter(e => e.type === 'turn/end')).toHaveLength(1)
     expect(child.session.header.isSeeded).toBe(false)
@@ -99,7 +84,7 @@ describe('dsh-subagent-fork-in-process', () => {
 
     const run = await start(ctx, 'fork', { prompt: [{ type: 'text', text: 'child q' }], parent })
     await run.result
-    const child = ctx.agents.get(run.id)!
+    const child = run.localAgent
     // No seed boundary: the child's log is entirely its own.
     expect(child.session.header.isSeeded).toBe(false)
     expect(child.session.inheritedEventCount).toBe(0)
@@ -118,7 +103,7 @@ describe('dsh-subagent-fork-in-process', () => {
     expect(result.stopReason).toBe('completed')
     expect(text(result.output)).toBe('child answer')
 
-    const child = ctx.agents.get(run.id)!
+    const child = run.localAgent
     // The child's log contains exactly ONE user message — its own prompt — and
     // NO parent user message: parent history is never copied into the child's
     // context (the runtime-context injection is the child's own, not the parent's).
@@ -156,7 +141,7 @@ describe('dsh-subagent-fork-in-process', () => {
     expect(result.stopReason).toBe('completed')
     expect(text(result.output)).toBe('child')
 
-    const child = ctx.agents.get(run.id)!
+    const child = run.localAgent
     // The child's log has exactly ITS OWN completed turn (no seed to balance).
     const seedTurnEnds = child.session.snapshotEvents().filter(e => e.type === 'turn/end')
     expect(seedTurnEnds.length).toBe(1)
@@ -215,6 +200,7 @@ describe('dsh-subagent-fork-in-process', () => {
   it('unregisters the provider when its fiber is disposed (HMR safety)', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionProjectionRegistry)
+    await mountWorkingDirectoryFixture(ctx)
     await ctx.plugin(SubagentRuntime)
     await ctx.plugin(AgentRegistry)
     const fiber = await ctx.plugin(fork, { providerName: 'fork' })
@@ -230,6 +216,7 @@ describe('dsh-subagent-fork-in-process', () => {
 
     // Before any completed parent turn there is nothing to inherit — fresh child.
     const fresh = await provider.prepareContinuable!({
+      cwd: process.cwd(),
       sessionId: SessionId('continuable-fresh'),
       parent,
       signal,
@@ -241,6 +228,7 @@ describe('dsh-subagent-fork-in-process', () => {
     parent.followup(createUserMessage({ content: [{ type: 'text', text: 'hello' }], source: { kind: 'user' } }))
     await parent.whenIdle()
     const seeded = await provider.prepareContinuable!({
+      cwd: process.cwd(),
       sessionId: SessionId('continuable-seeded'),
       parent,
       signal,

@@ -48,7 +48,7 @@
       "path": "../../packages/core/tools"
     },
     {
-      "path": "../../packages/plugins/plugin-project-root"
+      "path": "../../packages/zdsh/plugin-project-root"
     },
     {
       "path": "../../packages/util/launch-environment"
@@ -73,6 +73,12 @@
     },
     {
       "path": "../../packages/shell/tool-bash"
+    },
+    {
+      "path": "../../packages/boot/plugin-manager"
+    },
+    {
+      "path": "../../packages/util/atomic-write"
     }
   ]
 }

@@ -19,10 +19,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup pnpm 11.7.0
+      - name: Setup pnpm 11.28.5
         uses: pnpm/action-setup@v4
         with:
-          version: 11.7.0
+          version: 11.28.5
 
       - name: Setup Node 24
         uses: actions/setup-node@v4

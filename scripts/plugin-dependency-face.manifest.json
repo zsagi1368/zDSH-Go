@@ -1,0 +1,52 @@
+{
+  "$comment": "zDSH dependency-face lint configuration (A2, upgrade process v2.0 section 6). Contract face = the published host surface plugin repositories may import (bare package specifiers and their declared export subpaths such as /client). Anything under the host org outside the contract face is a violation: deep-path reaches into src/internal, build-output (dist, lib) segments, or direct source files; internal-face imports of host wiring packages; and non-contract-face imports of unpublished or non-plugin-facing host packages. defaultTargets = the six true-source repositories carrying the eight factory-seeded artifacts (seed.json entries: webstack-verticals/webstack-bridge/webstack live in WebStack; omnivision in Omnivision; filehub in FileHub; plugin-center in PluginCenter; autopilot in AutoPilot; workbench in Workbench). TC-O3 adds @deepseek-ai/dsh-host-webserver to the contract face: the published host route-contract surface, consumed type-only by workbench. pluginsRoot accepts a relative path, resolved against the repository root and therefore portable across workstations (the ../zDSH-plugins default assumes the plugins workspace is a sibling of the zDSH-main checkout), an absolute path, or the --plugins-root override. Exemptions are load-bearing records, not silencers: each needs a reason and is reported on every run.",
+  "hostOrgPrefix": "@deepseek-ai/",
+  "pluginsRoot": "../zDSH-plugins",
+  "defaultTargets": [
+    { "name": "WebStack", "dir": "WebStack" },
+    { "name": "Omnivision", "dir": "Omnivision" },
+    { "name": "FileHub", "dir": "FileHub" },
+    { "name": "PluginCenter", "dir": "PluginCenter" },
+    { "name": "AutoPilot", "dir": "AutoPilot" },
+    { "name": "Workbench", "dir": "Workbench" }
+  ],
+  "contractFace": [
+    "@deepseek-ai/cordis",
+    "@deepseek-ai/schemastery",
+    "@deepseek-ai/dsh-agent",
+    "@deepseek-ai/dsh-api-remotes",
+    "@deepseek-ai/dsh-attachment",
+    "@deepseek-ai/dsh-client-locale",
+    "@deepseek-ai/dsh-client-store",
+    "@deepseek-ai/dsh-client-ui-conversation",
+    "@deepseek-ai/dsh-client-ui-input-trigger",
+    "@deepseek-ai/dsh-client-ui-renderer",
+    "@deepseek-ai/dsh-client-ui-settings",
+    "@deepseek-ai/dsh-client-ui-slots",
+    "@deepseek-ai/dsh-credentials",
+    "@deepseek-ai/dsh-host-webserver",
+    "@deepseek-ai/dsh-invariants",
+    "@deepseek-ai/dsh-llm",
+    "@deepseek-ai/dsh-session",
+    "@deepseek-ai/dsh-settings",
+    "@deepseek-ai/dsh-tools",
+    "@deepseek-ai/dsh-typert-protocol",
+    "@deepseek-ai/dsh-web"
+  ],
+  "internalFace": [
+    "@deepseek-ai/dsh-compat",
+    "@deepseek-ai/dsh-plugin-governance",
+    "@deepseek-ai/dsh-plugin-governance-host",
+    "@deepseek-ai/dsh-plugin-project-root",
+    "@deepseek-ai/zdsh-factory-bundle",
+    "@deepseek-ai/dsh-client-test-runtime",
+    "@deepseek-ai/dsh-app-boot"
+  ],
+  "exemptions": [
+    {
+      "repo": "ContextManagement",
+      "specifierPrefix": "@deepseek-ai/",
+      "reason": "zDSH-Go exclusive (process v2.0 D2/NG3): not in defaultTargets; its 372+ host imports / 15 deep paths are recorded legacy debt owned by the Go line, not gated here."
+    }
+  ]
+}

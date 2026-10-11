@@ -1,90 +1,149 @@
-/** Governance roster/lifecycle/health/presets tab registered into Web Settings. */
-
+/**
+ * Plugin manager, browser half: the **Plugins** entry of the sidebar and the
+ * management page it opens in the main column. The page installs, enables,
+ * disables, and removes the bundles of the Host's profile through the
+ * `pluginManager` Remote and switches their rows in the profile's user layer.
+ * A plugin that carries its own configuration renders it on this page through
+ * the slots the page declares (`slot-contract.ts`).
+ */
+import type {} from '@deepseek-ai/dsh-client-product-analytics/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
-import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
+// Type-only: the root `main` keyed slot the page registers into, declared by
+// ui-layout with the panel id brand, and the `sidebar.panellist` list the
+// entry registers into, declared by ui-sidebar.
+import type { MainPanelId } from '@deepseek-ai/dsh-client-ui-layout/client'
+import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
-import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
-import type { GovernanceResult } from '@deepseek-ai/dsh-plugin-governance-host/types'
-import type { GovernedPluginRef } from './PluginManagerSettingsTab.tsx'
-import { PluginManagerSettingsTab, type PluginManagerSettingsTabInjected } from './PluginManagerSettingsTab.tsx'
+// Type-only: the ctx.remote Context merge and the forwarded-event key face.
+import type {} from '@deepseek-ai/dsh-api-remotes/client'
+// Type-only: the forwarded events' own declaration (`$on`'s key face resolves
+// through the owning package's client-safe types subpath).
+import type {} from '@deepseek-ai/dsh-plugin-manager/types'
+import { PluginManagerPage } from './PluginManagerPage.tsx'
+import { PluginRefreshToast, type PluginRefreshToastFace } from './PluginRefreshToast.tsx'
+import { PluginsPanelIcon } from './PluginsPanelIcon.tsx'
+import { configLedgerSource } from './config-ledger.ts'
+import { PluginManagerController } from './manager-store.ts'
 import { en, zh, type PluginManagerLocaleKey } from './locales.ts'
+import { createNavigationStore } from './navigation-store.ts'
+import type {} from './slot-contract.ts'
 
-export type { PluginManagerSettingsTabInjected, PluginManagerSettingsTabProps } from './PluginManagerSettingsTab.tsx'
+declare module '@deepseek-ai/cordis' {
+  interface Context {
+    /** Cross-plugin navigation to the Plugins panel. */
+    pluginNavigation: {
+      /**
+       * Open a bundle's details without changing the current Session.
+       * An absent bundle displays the plugin list after loading.
+       * @param packageName - npm package name of the bundle.
+       */
+      openBundle(packageName: string): void
+    }
+  }
+}
+
+export type { PluginManagerPageProps } from './PluginManagerPage.tsx'
+export type { ConfigLedger, OfficialItem } from './config-ledger.ts'
+export type { PluginManagerFace } from './manager-store.ts'
 export type { PluginManagerLocaleKey } from './locales.ts'
+export type {
+  ConfigPageForm, PluginActivationOwnerProps, PluginAddActionsProps,
+  PluginConfigViewProps, PluginDetailProps, PluginPackageRef, PluginRowRef, PluginsSubject,
+} from './slot-contract.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
-    /** Plugin governance manager copy. */
-    'settings.pluginManager': PluginManagerLocaleKey
+    /** Plugin manager tab copy. */
+    'pluginManager': PluginManagerLocaleKey
   }
 }
 
 /** Dictionary namespace owned by this plugin. */
-export const NS = 'settings.pluginManager'
+export const NS = 'pluginManager'
 
-/** Services required by the Settings registration and generated Remote face. */
-export const inject = ['slots', 'locale', 'remote', 'remote.pluginGovernance']
+/** The id shared by the sidebar entry and the main panel it opens. */
+export const PANEL_ID = 'plugins' as MainPanelId
+
+/** Services required by the sidebar registration and the Remote methods; the inventory says whether the Host manages a profile. */
+export const inject = ['slots', 'locale', 'remote', 'remote.pluginManager', 'remote.pluginInventory', 'remote.pluginRegistryProbe', 'configForms', 'layout']
 
 /**
- * Unwrap the generated transport envelope (`RemoteResult`) and the service's
- * own business envelope (`GovernanceResult`), turning any failure into a loud
- * error carrying the stable code.
+ * Contribute the Plugins entry to the sidebar with the management page it
+ * opens, and keep it current on the Host's change events.
+ * @param ctx - the browser plugin context.
  */
-async function call<T>(promise: Promise<RemoteResult<GovernanceResult<T>>>): Promise<T> {
-  const transport = await promise
-  if (!transport.ok) {
-    throw new Error(`pluginGovernance transport failed: ${transport.error.code}: ${transport.error.message}`)
-  }
-  const business = transport.value
-  if (!business.ok) {
-    throw new Error(`pluginGovernance failed: ${business.error.code}: ${business.error.message}`)
-  }
-  return business.value
-}
-
-/** Unwrap methods that return the transport envelope only (list, health). */
-async function callRaw<T>(promise: Promise<RemoteResult<T>>): Promise<T> {
-  const transport = await promise
-  if (!transport.ok) {
-    throw new Error(`pluginGovernance transport failed: ${transport.error.code}: ${transport.error.message}`)
-  }
-  return transport.value
-}
-
-/** Contribute the governance management tab to the Plugins settings section. */
 export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-plugin-manager: dictionaries')
-
   const t = ctx.locale.bind(NS)
-  const governance = ctx.remote.pluginGovernance
-  const injected = (): PluginManagerSettingsTabInjected => ({
-    list: async () => callRaw(governance.list()),
-    health: async () => callRaw(governance.health()),
-    enable: async (pluginId: GovernedPluginRef) => {
-      await call(governance.enable({ pluginId }))
-    },
-    disable: async (pluginId: GovernedPluginRef) => {
-      await call(governance.disable({ pluginId, reason: null }))
-    },
-    approve: async (pluginId: GovernedPluginRef) => {
-      await call(governance.approve({ pluginId }))
-    },
-    presetSave: async (name: string) => {
-      await call(governance.presetSave({ name }))
-    },
-    presetLoad: async (name: string) => call(governance.presetLoad({ name })),
-    presetDelete: async (name: string) => {
-      await call(governance.presetDelete({ name }))
-    },
-  })
+  const controller = new PluginManagerController(ctx)
+  ctx.effect(() => () => { controller.dispose() }, 'ui-plugin-manager: controller')
+  // The Host says when what is installed, enabled, or composed changed — from
+  // this page, the CLI, or another browser — and streams install output.
+  ctx.effect(() => {
+    // A page never rendered holds no snapshot to refresh.
+    const refresh = (): void => {
+      if (controller.getSnapshot().status !== 'idle') void controller.load()
+    }
+    const disposers = [
+      ctx.remote.$on('plugin-manager/changed', refresh),
+      ctx.remote.$on('plugin-manager/install-log', (chunk) => { controller.appendLog(chunk) }),
+      ctx.remote.$on('plugin-manager/install-state', (progress) => { controller.installProgress(progress) }),
+      ctx.on('connection/reset', refresh),
+    ]
+    return () => { for (const dispose of disposers) dispose() }
+  }, 'ui-plugin-manager: host invalidations')
 
-  ctx.slots.inject('settings.plugins.tab', () => ctx.slots.register({
-    name: 'settings.plugins.tab',
-    id: 'governance',
-    order: 20,
-    label: () => t('tab'),
+  // The page is a global panel: it belongs to the profile, not to a Session,
+  // and the sidebar's entry selects it. What is installed and switched on is
+  // the page's own; a plugin's configuration arrives through the slots the
+  // page declares here, so the page never names a configurable plugin.
+  const configLedger = configLedgerSource(ctx)
+  const face = controller.inject(configLedger, text => ctx.locale.resolveText(text))
+  ctx.slots.inject('shell.overlay', () => ctx.slots.register({
+    name: 'shell.overlay', id: 'plugin-manager.refresh-toast', locale: NS,
+    inject: (): PluginRefreshToastFace => ({
+      hooks: { pluginManager: face.hooks.pluginManager },
+      dismissNotice: face.dismissNotice,
+    }),
+  }, PluginRefreshToast))
+  ctx.slots.inject('main', function* () {
+    const handle = createNavigationStore(), instance = handle.create()
+    const store: typeof handle = { ...handle, create: () => instance }
+    yield ctx.slots.register({
+      name: 'main',
+      key: PANEL_ID,
+      locale: NS,
+      store,
+      inject: () => face,
+      children: {
+        'plugins.add.actions': { kind: 'list', scope: 'root' },
+        'plugins.item': { kind: 'list', scope: 'root' },
+        'plugins.bundle.activation': { kind: 'keyed', scope: 'root' },
+        'plugins.bundle.config': { kind: 'keyed', scope: 'root' },
+        'plugins.row.config': { kind: 'keyed', scope: 'root' },
+        'plugins.detail.actions': { kind: 'list', scope: 'root' },
+        'plugins.detail.badge': { kind: 'list', scope: 'root' },
+        'plugins.detail.section': { kind: 'list', scope: 'root' },
+      },
+    }, PluginManagerPage)
+    yield ctx.layout.panelInfo.subscribe(() => {
+      if (ctx.layout.panelInfo.getSnapshot().activePanelId !== PANEL_ID) instance.actions.setView({ kind: 'list' })
+    })
+    const disposeNavigation = ctx.reflect.provide('pluginNavigation', {
+      openBundle: (packageName: string) => {
+        ctx.layout.selectPanel(PANEL_ID)
+        instance.actions.setView({ kind: 'package', name: packageName })
+      },
+    })
+    yield () => { void disposeNavigation() }
+  })
+  ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({
+    name: 'sidebar.panellist',
+    id: PANEL_ID,
+    order: 0,
+    label: () => t('panel'),
     locale: NS,
-    inject: injected,
-  }, PluginManagerSettingsTab))
+  }, PluginsPanelIcon))
+
 }

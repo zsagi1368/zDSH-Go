@@ -42,7 +42,7 @@
       "path": "../../interaction/user-approval"
     },
     {
-      "path": "../../compat/dsh-compat"
+      "path": "../../zdsh/dsh-compat"
     }
   ]
 }

@@ -4,7 +4,7 @@
 
 zDSH 增强服务层在官方 DeepSeek Harness 核心之上新增三个主机侧能力接缝：模型槽位路由（`ctx.modelSlots`）、插件治理（`ctx.pluginGovernance`）与项目插件层（`ctx.projectPluginLayer`）。三者均版本自适应——兼容守卫会探测已安装核心，当与官方表面冲突时自动停用增强。
 
-源接缝：[`packages/llm/model-slots`](../../packages/llm/model-slots)、[`packages/host/plugin-governance-host`](../../packages/host/plugin-governance-host)、[`packages/plugins/plugin-project-root`](../../packages/plugins/plugin-project-root)。
+源接缝：[`packages/llm/model-slots`](../../packages/llm/model-slots)、[`packages/zdsh/plugin-governance-host`](../../packages/zdsh/plugin-governance-host)、[`packages/zdsh/plugin-project-root`](../../packages/zdsh/plugin-project-root)。
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -160,6 +160,28 @@ The host governance service. It owns one PluginRegistry and one PluginPersistenc
 @Remote('presetDelete') presetDelete(request: PresetNameRequest): GovernanceResult<GovernanceAcknowledgement>
 
 /**
+ * Read the durable factory preinstall result ledger (§1.4): one row per seed
+ * entry recording whether it installed, was skipped, or failed, plus the
+ * `userUninstalled` tombstone. The plugin-center discovery-install hub
+ * consumes this alongside the catalog. A read-only, synchronous projection
+ * of the on-disk ledger — it triggers no install work and never fails; an
+ * absent ledger reports an empty result set.
+ * @returns the point-in-time preinstall report.
+ */
+@Remote('preinstallReport') preinstallReport(): PreinstallReport
+
+/**
+ * Await the in-flight or last factory preinstall pass to settle. Test seam
+ * mirroring {@link syncMountedPlugins}: boot calls the pass fire-and-forget,
+ * so a caller that needs the durable outcome calls this to join it. When the
+ * boot pass was gated off (`factorySeeds`, SYNC-P3-CFIX) nothing is in flight
+ * and this seam runs the pass itself — the awaited outcome is one complete
+ * pass either way.
+ * @returns when the current pass has committed or decided to write nothing.
+ */
+settlePreinstall(): Promise<void>
+
+/**
  * Mirror the Cordis Loader's currently mounted plugin entries into the
  * governed registry, so the roster and the plugin-manager UI report real
  * production data instead of an empty list. Each entry is wrapped through
@@ -175,7 +197,7 @@ The host governance service. It owns one PluginRegistry and one PluginPersistenc
 async syncMountedPlugins(): Promise<void>
 ```
 
-Source: [`packages/host/plugin-governance-host/src/index.ts`](../../packages/host/plugin-governance-host/src/index.ts)
+Source: [`packages/zdsh/plugin-governance-host/src/index.ts`](../../packages/zdsh/plugin-governance-host/src/index.ts)
 
 <a id="ctxprojectpluginlayer--projectpluginlayer"></a>
 
@@ -192,11 +214,11 @@ The host-side project plugin layer service.
 mount(accepted: ProjectPluginCandidate[]): Promise<MountResult>
 
 /**
- * Provenance of one mounted loader entry id.
+ * Origin of one mounted loader entry id.
  * @param entryId - loader entry id returned by mount.
- * @returns the provenance record, or `undefined` when the id is unknown.
+ * @returns the origin record, or `undefined` when the id is unknown.
  */
-provenanceOf(entryId: string): ProjectPluginProvenance | undefined
+originOf(entryId: string): ProjectPluginOrigin | undefined
 
 /**
  * The guarded manifest of one mounted loader entry id.
@@ -245,5 +267,5 @@ subprocessEntryIds(): string[]
 dispose(): void
 ```
 
-Source: [`packages/plugins/plugin-project-root/src/plugin.ts`](../../packages/plugins/plugin-project-root/src/plugin.ts)
+Source: [`packages/zdsh/plugin-project-root/src/plugin.ts`](../../packages/zdsh/plugin-project-root/src/plugin.ts)
 <!-- END GENERATED cordis-surface -->

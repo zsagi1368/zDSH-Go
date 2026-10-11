@@ -1,0 +1,40 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/zdsh/dsh-compat/README.md
+/:
+  en: 1c55ef98ec889ee2
+  zh: 557e7e539da8e48f
+/deepseek-ai-dsh-compat:
+  en: f61e56c8a0c040dc
+  zh: c18c6b508b51e4f4
+/deepseek-ai-dsh-compat/summary:
+  en: bbebabfc1c9cf0c0
+  zh: 1a4ef7834c401226
+/deepseek-ai-dsh-compat/table-of-contents:
+  en: 0cd5e1d1e8c5acbe
+  zh: 527b526a3b8bb0c5
+/deepseek-ai-dsh-compat/api:
+  en: 40caf66c4de56e46
+  zh: 40caf66c4de56e46
+/deepseek-ai-dsh-compat/api/probesymbol:
+  en: 961193a101fd694f
+  zh: 665f69e720c8418e
+/deepseek-ai-dsh-compat/api/memberof:
+  en: 4cfdb08fc88aabdc
+  zh: 77c0255b9580908e
+/deepseek-ai-dsh-compat/api/versionof:
+  en: 5b2bc393b5c48f95
+  zh: 811a8475b7170985
+/deepseek-ai-dsh-compat/api/guardfeature:
+  en: 8da1c4d2f8fc7cf7
+  zh: f012474ec6db7119
+/deepseek-ai-dsh-compat/api/getcompatroster:
+  en: 13da24b610106ded
+  zh: 6a93dc4788a7a8b6
+/deepseek-ai-dsh-compat/design-constraints:
+  en: cfbc8bec16d6a9f2
+  zh: 8257ae966a62e5b3
+/deepseek-ai-dsh-compat/design-constraints/dev-note:
+  en: d4ea501d75e271df
+  zh: e03e1fde4153e4c8

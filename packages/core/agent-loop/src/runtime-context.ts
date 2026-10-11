@@ -15,12 +15,17 @@
  */
 
 import { createSystemMessage, freezeMessage } from '@deepseek-ai/dsh-llm'
-import type { ContentBlock, ContextSnapshotSection, Message, UserMessage } from '@deepseek-ai/dsh-llm'
+import type { ContentBlock, ContextFormed, ContextSnapshotSection, Message, UserMessage } from '@deepseek-ai/dsh-llm'
 import type { Session, SurfaceIntent, SystemMessage } from '@deepseek-ai/dsh-session'
 import { isReplacementSurfaceEvent, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { Context } from '@deepseek-ai/cordis'
+declare module '@deepseek-ai/dsh-llm' {
+  interface MessageSourceMap {
+    'runtime-context': { kind: 'runtime-context' } & ContextFormed
+  }
+}
 
-const SOURCE = '@deepseek-ai/dsh-system-prompt'
+const SOURCE = 'runtime-context'
 const CLEARED = 'Current runtime context: none. Earlier runtime-context snapshots no longer apply.'
 const DELTA_SEPARATOR = '\n\n'
 /**
@@ -91,9 +96,9 @@ export interface RuntimeContextProjectionOptions {
   deferFoldAfterToolResult?: boolean
 }
 
-/** 判断消息是否由运行时上下文 producer 拥有（plugin 源标记复用）。 */
+/** 判断消息是否由运行时上下文 producer 拥有（归属判定 = 源 kind，不再靠 plugin 名）。 */
 function isOwned(message: UserMessage): boolean {
-  return message.source.kind === 'plugin' && message.source.plugin === SOURCE
+  return message.source.kind === SOURCE
 }
 
 function textOf(message: Message): string | undefined {
@@ -101,21 +106,22 @@ function textOf(message: Message): string | undefined {
   return message.content.length === 1 && block?.type === 'text' ? block.text : undefined
 }
 
-/** 工具结果消息（user 角色 + tool 源标记）。 */
+/** 工具结果消息（新词表：独立 `tool` 角色 + tool 源标记）。 */
 function isToolResultMessage(message: Message): boolean {
-  return message.role === 'user' && message.source.kind === 'tool'
+  return message.role === 'tool' && message.source.kind === 'tool'
 }
 
-/** 真实 user 消息（user 源标记——真实用户输入，区别于 plugin 注入与工具上下文）。 */
+/** 真实 user 消息（user 源标记——真实用户输入，区别于 producer 注入的上下文与工具结果）。 */
 function isRealUserMessage(message: Message): boolean {
   return message.role === 'user' && message.source.kind === 'user'
 }
 
-/** 展平文本块（含嵌套 tool-result 内文本），用于工具覆盖检查。 */
+/**
+ * 展平文本块，用于工具覆盖检查（新词表：工具结果是独立 `tool` 消息，正文即
+ * 其 content 的文本块；旧的嵌套 `tool-result` 块形态已不存在）。
+ */
 function flattenBlocks(blocks: readonly ContentBlock[]): string {
-  return blocks.map(block => block.type === 'text'
-    ? block.text
-    : block.type === 'tool-result' ? flattenBlocks(block.content) : '').join('')
+  return blocks.map(block => block.type === 'text' ? block.text : '').join('')
 }
 
 /** assistant 消息是否携带与某 toolResult 匹配的 tool-call。 */
@@ -154,9 +160,9 @@ export interface SystemPromptDecisionInput {
   /** Whether the prepared route for this attempt reads a later `system` message as the effective prompt. */
   inHistory: boolean
   /**
-   * Whether this step's request starts a new model-message series: a pre-step
-   * listener declared one, the surface was replaced since the last request, or
-   * the assembled tool schemas differ from the logged header.
+   * Whether prompt admission must consolidate: a pre-step listener declared a
+   * new series, the surface changed since the last request, or assembled tools
+   * changed on a route without tool-update support.
    */
   startsSeries: boolean
 }
@@ -196,7 +202,7 @@ export class SystemPromptProjection {
     const nodes = this.systemNodes()
     const head = nodes[0]
     if (head === undefined) {
-      return [{ message: createSystemMessage(rendered, SOURCE), intent: { surfaceOp: 'append' } }]
+      return [{ message: createSystemMessage(rendered), intent: { surfaceOp: 'append' } }]
     }
     const latest = nodes.findLast(node => node.text !== '') ?? head
     if (!input.inHistory || input.startsSeries || rendered.length === 0) {
@@ -206,12 +212,12 @@ export class SystemPromptProjection {
       return updates
     }
     if (latest.text === rendered) return []
-    return [{ message: createSystemMessage(rendered, SOURCE), intent: { surfaceOp: 'append' } }]
+    return [{ message: createSystemMessage(rendered), intent: { surfaceOp: 'append' } }]
   }
 
   private replace(seq: SessionSeq, text: string): SystemPromptCommit {
     return {
-      message: createSystemMessage(text, SOURCE),
+      message: createSystemMessage(text),
       intent: { surfaceOp: { op: 'replace', startSeq: seq, endSeq: seq }, sourceEventSeqs: [seq] },
     }
   }
@@ -289,7 +295,9 @@ export class RuntimeContextProjection {
 
   /**
    * 从 surface 回放重建基线：
-   * - 旧格式（Phase 4 前）：最后一条 owned `plugin/snapshot` 快照消息（文本 + 节表）。
+   * - 旧格式（Phase 4 前）：最后一条 owned 且 `form === 'snapshot'` 的上下文
+   *   消息（`kind === 'runtime-context'`，文本 + 节表；v3→v4 迁移产物无 form，
+   *   节表按不可恢复处理）。
    * - 新格式（Phase 4）：运行时上下文折叠进真实 user 消息的文本前缀
    *   （`<delta>\n\n<原文本>`），回放最后一条带 delta 前缀的真实 user 消息，按
    *   最后出现 {@link DELTA_SEPARATOR} 的位置切出前缀作为基线——即"最新折叠
@@ -308,8 +316,10 @@ export class RuntimeContextProjection {
       const event = session.eventAt(SessionSeq(index))
       if (event?.type !== 'user/message' || !isOwned(event.data)) continue
       if (!surface.has(event.seq)) continue
-      const sections = event.data.source.kind === 'plugin'
-        && event.data.source.form === 'snapshot'
+      // 节表恢复主判据 = `form === 'snapshot'`（B8 细化）：v3→v4 迁移产出的旧
+      // 快照源只映射到 `{kind:'runtime-context'}`（无 form），若以 kind 判据提取
+      // 节表会永久丢失（表现为保守全量重登记）；归属已由上方 isOwned 保证。
+      const sections = event.data.source.kind === SOURCE && event.data.source.form === 'snapshot'
         ? event.data.source.sections
         : undefined
       return { text: textOf(event.data), sections }
@@ -476,7 +486,10 @@ export class RuntimeContextProjection {
     for (let index = targetIndex - 1; index >= 0; index -= 1) {
       // oxlint-disable-next-line typescript/no-non-null-assertion -- index < targetIndex <= prospective.length
       const message = prospective[index]!
-      if (message.role === 'user' && message.source.kind === 'plugin') {
+      // producer 注入的 user 消息（工具上下文、迁移快照等，非真实用户输入）向前
+      // 跳过，不阻断折叠。新词表已无 catch-all 的 `plugin` kind，故按「非真实
+      // user、非工具结果」判定（与 Go 原 `kind === 'plugin'` 语义等价的最小泛化）。
+      if (message.role === 'user' && message.source.kind !== 'user' && !isToolResultMessage(message)) {
         // 前驱是运行时上下文 producer 的格式异常消息（多块/非文本快照 =
         // 上一次上下文交付失败）时推迟折叠：等下一轮折叠时机（前驱变为
         // assistant 或工具批末尾 toolResult）再展示积压的 delta。
@@ -487,8 +500,8 @@ export class RuntimeContextProjection {
       // 前驱是工具批末尾 toolResult：默认放行折叠；集成方声明延迟
       // （deferFoldAfterToolResult，openai-completions 且垫片未启用）时推迟。
       if (isToolResultMessage(message)) return !this.deferFoldAfterToolResult
-      // 前驱是真实 user 消息（非 plugin、非 toolResult）→ 保守推迟：实现只跳过
-      // plugin 注入消息，遇到真实 user 即停，不越过它去够更早的 assistant/toolResult。
+      // 前驱是真实 user 消息（非注入、非 toolResult）→ 保守推迟：实现只跳过
+      // 注入消息，遇到真实 user 即停，不越过它去够更早的 assistant/toolResult。
       return false
     }
     return true

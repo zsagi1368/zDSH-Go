@@ -9,10 +9,16 @@
   ],
   "references": [
     {
+      "path": "../../host/webserver"
+    },
+    {
+      "path": "../../../vendor/schemastery"
+    },
+    {
       "path": "../../../vendor/cordis"
     },
     {
-      "path": "../../compat/dsh-compat"
+      "path": "../../zdsh/dsh-compat"
     },
     {
       "path": "../../llm/model-slots"
@@ -30,13 +36,16 @@
       "path": "../ui-renderer"
     },
     {
-      "path": "../ui-settings"
+      "path": "../ui-settings/tsconfig.client.json"
     },
     {
-      "path": "../locale"
+      "path": "../locale/tsconfig.client.json"
     },
     {
       "path": "../../api/remotes/tsconfig.client.json"
+    },
+    {
+      "path": "../product-analytics/tsconfig.client.json"
     }
   ]
 }

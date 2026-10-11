@@ -37,13 +37,19 @@ describe('dsh-base bundle', () => {
       __jsExpr: "process.env.DSH_TELEMETRY_MODE || 'FEEDBACK_ONLY'",
     })
     expect(rows.find(row => row.id === 'hmr')).toMatchObject({
-      disabled: true,
-      config: { root: ['.'] },
+      config: { root: [] },
     })
     expect(rows.filter(row => row.id === 'subagent-codex')).toHaveLength(0)
     expect(rows.filter(row => row.id === 'subagent-claude-code')).toHaveLength(0)
     expect(rows.find(row => row.id === 'web')?.config).toMatchObject({ fetchProvider: 'http' })
     expect(rows.find(row => row.id === 'web-fetch-http')).toBeDefined()
+    // The self-developed governance gateway is mounted here (Q1 activation):
+    // its roster, preinstall report, and admission Remotes are unreachable
+    // without this base-plane row, so assert its presence explicitly.
+    expect(rows.find(row => row.id === 'plugin-governance')).toMatchObject({
+      name: '@deepseek-ai/dsh-plugin-governance-host',
+    })
+    expect(manifest.dependencies).toHaveProperty('@deepseek-ai/dsh-plugin-governance-host')
     expect(rows.find(row => row.id === 'tool-web')?.config).toMatchObject({ fetch: true })
     expect(manifest.dependencies).not.toHaveProperty('@deepseek-ai/dsh-subagent-codex')
     expect(manifest.dependencies).not.toHaveProperty('@deepseek-ai/dsh-subagent-claude-code')

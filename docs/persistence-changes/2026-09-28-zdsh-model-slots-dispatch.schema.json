@@ -1,0 +1,111 @@
+{
+  "formatVersion": 2,
+  "roots": [
+    {
+      "key": "event:slots/dispatch",
+      "kind": "event",
+      "event": "slots/dispatch",
+      "surface": false,
+      "digest": "0157f9509d34e97fd492929b5596f7c74705e5b5209efbb2f11021d214cc98a6",
+      "schema": {
+        "root": 0,
+        "nodes": [
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "data",
+                "type": 1,
+                "optional": false
+              },
+              {
+                "name": "ignorable",
+                "type": 7,
+                "optional": true
+              },
+              {
+                "name": "seq",
+                "type": 8,
+                "optional": false
+              },
+              {
+                "name": "time",
+                "type": 8,
+                "optional": false
+              },
+              {
+                "name": "type",
+                "type": 9,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "model",
+                "type": 2,
+                "optional": false
+              },
+              {
+                "name": "provider",
+                "type": 2,
+                "optional": false
+              },
+              {
+                "name": "slot",
+                "type": 2,
+                "optional": false
+              },
+              {
+                "name": "source",
+                "type": 3,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "primitive",
+            "type": "string"
+          },
+          {
+            "kind": "union",
+            "types": [
+              4,
+              5,
+              6
+            ]
+          },
+          {
+            "kind": "literal",
+            "value": "deployment-default"
+          },
+          {
+            "kind": "literal",
+            "value": "main-route"
+          },
+          {
+            "kind": "literal",
+            "value": "slot"
+          },
+          {
+            "kind": "literal",
+            "value": true
+          },
+          {
+            "kind": "primitive",
+            "type": "number"
+          },
+          {
+            "kind": "literal",
+            "value": "slots/dispatch"
+          }
+        ]
+      }
+    }
+  ],
+  "types": []
+}

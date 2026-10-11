@@ -43,10 +43,19 @@ export async function guardModelSlots(
         name: 'settings:register',
         run: async () => {
           try {
-            const { SettingsProvider } = await import('@deepseek-ai/dsh-settings')
-            return typeof SettingsProvider === 'function' && typeof SettingsProvider.prototype.register === 'function'
+            // zDSH (SYNC-P2): probe through a string index — the official 0.1.7
+            // settings rewrite removed the SettingsProvider export, and a static
+            // destructure would fail the compile surface instead of failing soft.
+            const mod = await import('@deepseek-ai/dsh-settings') as Record<string, unknown>
+            const provider: unknown = mod['SettingsProvider']
+            // SYNC-P4 plan B (registered degradation): the reason wording is
+            // the roster audit's attribution face — keep the raw probe signal
+            // as the prefix (P2/P3 audit continuity) plus the removable-surface
+            // attribution and the debt pointer; tests/compat.spec.ts locks it.
+            return typeof provider === 'function'
+              && typeof (provider as { prototype?: { register?: unknown } }).prototype?.register === 'function'
               ? null
-              : 'register not a function'
+              : 'register not a function (official 0.1.7 settings rewrite retired the SettingsProvider registration surface; user-layer slot overrides fail-soft disabled by design, service core unaffected — see DEBT-MODEL-SLOTS)'
           } catch {
             return 'cannot import SettingsProvider'
           }

@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import * as yaml from 'js-yaml'
 import { describe, expect, it } from 'vitest'
@@ -15,10 +15,13 @@ const root = resolve(import.meta.dirname, '..')
  * node-addon-system(-release).yml / sandbox.yml / weighted-approval(-review-event).yml /
  * expected-filenames.yml / build-preview-cloudflare.yml / pi-ai-provider-e2e.yml.
  * The zDSH-Go line deliberately removed every inherited upstream workflow and
- * ships exactly ONE workflow: `.github/workflows/ci.yml` (a standalone Windows
- * quality gate). The tests below pin that factual inventory instead of the
- * upstream file set, and keep the upstream checks that still anchor real files
- * in this tree (wine gate script, GitLab CI, lefthook, vitest config).
+ * ships exactly TWO workflows: `.github/workflows/ci.yml` (a standalone Windows
+ * quality gate) and `.github/workflows/zdsh-ci.yml` (the zDSH overlay contract
+ * lane, adopted with the 0.2.1-alpha.2 base and retargeted from the zDSH line's
+ * `zdsh-latest` push branch to this line's `main`). The tests below pin that
+ * factual inventory instead of the upstream file set, and keep the upstream
+ * checks that still anchor real files in this tree (wine gate script, GitLab CI,
+ * lefthook, vitest config).
  *
  * Unlike the historical vendored-plugins layout, the 0.1.5 in-tree layout ships
  * two buildable libraries (host + client); there is no `build:lib:plugins`.
@@ -49,14 +52,51 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
+function workflowSteps(job: Record<string, unknown>, workflowName: string): Record<string, unknown>[] {
+  if (!Array.isArray(job.steps)) throw new TypeError(`${workflowName} job must define steps`)
+  return job.steps.filter(isRecord)
+}
+
+function runCommandsOf(job: Record<string, unknown>, workflowName: string): string {
+  return workflowSteps(job, workflowName)
+    .flatMap(step => typeof step.run === 'string' ? [step.run] : [])
+    .join('\n')
+}
+
+/** The version handed to pnpm/action-setup; both lanes must track packageManager. */
+function pnpmSetupVersion(job: Record<string, unknown>, workflowName: string): unknown {
+  const setup = workflowSteps(job, workflowName)
+    .find(step => typeof step.uses === 'string' && step.uses.startsWith('pnpm/action-setup@'))
+  if (!isRecord(setup) || !isRecord(setup.with)) throw new TypeError(`${workflowName} must configure pnpm/action-setup`)
+  return setup.with.version
+}
+
+function packageManagerVersion(): string {
+  const manifest: unknown = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'))
+  if (!isRecord(manifest) || typeof manifest.packageManager !== 'string') {
+    throw new TypeError('package.json must declare packageManager')
+  }
+  return manifest.packageManager
+}
+
+function packageScriptNames(): string[] {
+  const manifest: unknown = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'))
+  if (!isRecord(manifest) || !isRecord(manifest.scripts)) throw new TypeError('package.json must define scripts')
+  return Object.keys(manifest.scripts)
+}
+
 function ciWorkflow(): Record<string, unknown> {
   return loadWorkflow(`${WORKFLOW_DIR}/ci.yml`)
 }
 
+function zdshCiWorkflow(): Record<string, unknown> {
+  return loadWorkflow(`${WORKFLOW_DIR}/zdsh-ci.yml`)
+}
+
 describe('CI workflow (zDSH-Go standalone quality gate)', () => {
-  it('is the ONLY GitHub Actions workflow in the repository', () => {
+  it('is the only GitHub Actions workflow besides the zDSH overlay lane', () => {
     const entries = readdirSync(resolve(root, WORKFLOW_DIR)).sort()
-    expect(entries).toEqual(['ci.yml'])
+    expect(entries).toEqual(['ci.yml', 'zdsh-ci.yml'])
   })
 
   it('runs the quality gate on main pushes, PRs, and manual dispatch on a Windows runner', () => {
@@ -68,8 +108,7 @@ describe('CI workflow (zDSH-Go standalone quality gate)', () => {
 
     const quality = workflowJob(workflow, 'quality-gate')
     expect(quality['runs-on']).toBe('windows-latest')
-    if (!Array.isArray(quality.steps)) throw new TypeError('quality-gate job must define steps')
-    const steps = quality.steps.filter(isRecord)
+    const steps = workflowSteps(quality, 'ci.yml')
 
     // The checkout action stays pinned so a dependabot bump is a reviewed change.
     const checkout = steps.find(step => typeof step.uses === 'string' && step.uses.startsWith('actions/checkout@'))
@@ -82,6 +121,12 @@ describe('CI workflow (zDSH-Go standalone quality gate)', () => {
     expect(runCommands).toContain('pnpm run test')
     expect(runCommands).toContain('pnpm run lint:contracts-ready')
     expect(runCommands).toContain('pnpm run test:docs')
+  })
+
+  it('pins the pnpm installer to the repository packageManager version', () => {
+    const pinned = pnpmSetupVersion(workflowJob(ciWorkflow(), 'quality-gate'), 'ci.yml')
+
+    expect(packageManagerVersion()).toBe(`pnpm@${String(pinned)}`)
   })
 
   it('cancels superseded runs per ref and bounds the job wall clock', () => {
@@ -107,6 +152,85 @@ describe('CI workflow (zDSH-Go standalone quality gate)', () => {
 
     expect(config).not.toContain("pool: process.platform === 'win32' ? 'threads' : 'forks'")
     expect(config.match(/pool: 'forks'/g)).toHaveLength(2)
+  })
+})
+
+describe('zDSH overlay lane (zdsh-ci.yml)', () => {
+  const JOB = 'zdsh-contract-gates'
+
+  it('runs the contract lane on main pushes, PRs, and manual dispatch on the hosted Linux runner', () => {
+    const workflow = zdshCiWorkflow()
+    if (!isRecord(workflow.on)) throw new TypeError('zdsh-ci.yml must define on')
+    expect(Object.keys(workflow.on).sort()).toEqual(['pull_request', 'push', 'workflow_dispatch'])
+    const push = workflowEvent(workflow, 'push')
+    // The lane was authored against the zDSH line's `zdsh-latest` branch.
+    expect(push).toMatchObject({ branches: ['main'] })
+
+    const job = workflowJob(workflow, JOB)
+    expect(job['runs-on']).toBe('ubuntu-latest')
+    expect(job['timeout-minutes']).toBe(90)
+
+    const checkout = workflowSteps(job, 'zdsh-ci.yml')
+      .find(step => typeof step.uses === 'string' && step.uses.startsWith('actions/checkout@'))
+    expect(checkout).toBeDefined()
+  })
+
+  it('pins the pnpm installer to the repository packageManager version', () => {
+    const pinned = pnpmSetupVersion(workflowJob(zdshCiWorkflow(), JOB), 'zdsh-ci.yml')
+
+    expect(packageManagerVersion()).toBe(`pnpm@${String(pinned)}`)
+  })
+
+  it('cancels superseded runs per workflow/ref and reads repository contents only', () => {
+    const workflow = zdshCiWorkflow()
+    expect(workflow.concurrency).toMatchObject({ 'cancel-in-progress': true })
+    const group = (workflow.concurrency as Record<string, unknown>).group
+    expect(group).toBe('${{ github.workflow }}-${{ github.ref }}')
+    expect(workflow.permissions).toMatchObject({ contents: 'read' })
+  })
+
+  it('installs immutably before the static gates, then the host build, then the contract specs', () => {
+    const commands = runCommandsOf(workflowJob(zdshCiWorkflow(), JOB), 'zdsh-ci.yml')
+
+    expect(commands).toContain('pnpm install --frozen-lockfile')
+    for (const script of [
+      'constraints',
+      'verify-tsconfig-paths',
+      'verify-config-catalog',
+      'verify-package-readme-summaries',
+      'build:lib:host',
+    ]) {
+      expect(commands).toContain(`pnpm run ${script}`)
+    }
+
+    const installIndex = commands.indexOf('pnpm install --frozen-lockfile')
+    const hostBuildIndex = commands.indexOf('pnpm run build:lib:host')
+    const specsIndex = commands.indexOf('pnpm exec vitest run')
+    expect(installIndex).toBeLessThan(hostBuildIndex)
+    expect(hostBuildIndex).toBeLessThan(specsIndex)
+  })
+
+  it('invokes only package scripts and specs that exist in this tree', () => {
+    const commands = runCommandsOf(workflowJob(zdshCiWorkflow(), JOB), 'zdsh-ci.yml')
+
+    const invoked = [...commands.matchAll(/pnpm run ([A-Za-z0-9:_-]+)/g)].map(match => match[1]!)
+    expect(invoked.length).toBeGreaterThan(0)
+    const declared = packageScriptNames()
+    for (const script of invoked) expect(declared).toContain(script)
+
+    // The tsx/vitest entrypoints the lane names by path (the exec forms cannot
+    // be covered by the package.json lookup above).
+    for (const path of [
+      'scripts/audit-compat-roster.ts',
+      'scripts/verify-compatible-window.ts',
+      'scripts/verify-zdsh-external-links.ts',
+      'scripts/verify-zdsh-residence-map.ts',
+      'scripts/verify-zdsh-residence-map.spec.ts',
+      'scripts/lint-plugin-dependency-face.spec.ts',
+      'scripts/gen-config-catalog.spec.ts',
+    ]) {
+      expect(existsSync(resolve(root, path)), path).toBe(true)
+    }
   })
 })
 

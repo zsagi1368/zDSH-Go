@@ -2,13 +2,15 @@
  * Expand the workspace path aliases that a wildcard would otherwise resolve by
  * probing every package group in turn.
  *
- * `tsconfig.base.json` is the resolution facade for the whole repository, and
- * two of its aliases used one key per *group* rather than per package:
- * `@deepseek-ai/dsh-*` listed 49 candidate globs and `@deepseek-ai/dsh-*\/invariant`
- * listed 45. TypeScript and tsx try those candidates in order, so a specifier
- * whose package sits late in the list pays for every earlier miss. Under tsx's
- * ESM hook each miss is an `ERR_MODULE_NOT_FOUND` that Node decorates with a
- * full CommonJS resolution walk, which dominated source-launch boot.
+ * `tsconfig.base.json` is the resolution facade for the whole repository. A
+ * `@deepseek-ai/dsh-*` wildcard would list one candidate glob per package
+ * group, and the `@deepseek-ai/dsh-*\/invariant` companion alias one per
+ * package carrying `src/invariant.ts` (the zDSH-retained package-owned
+ * invariant companions). TypeScript and tsx try those candidates in order, so
+ * a specifier whose package sits late in the list pays for every earlier miss.
+ * Under tsx's ESM hook each miss is an `ERR_MODULE_NOT_FOUND` that Node
+ * decorates with a full CommonJS resolution walk, which dominated
+ * source-launch boot.
  *
  * This generator writes one explicit entry per package into a marked region of
  * `tsconfig.base.json`, leaving every hand-written alias and comment outside

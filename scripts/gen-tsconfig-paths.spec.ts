@@ -16,10 +16,12 @@ describe('generated tsconfig package aliases', () => {
   it('maps each package to its own source directory', () => {
     const aliases = collectPackageAliases()
     expect(aliases.length).toBeGreaterThan(100)
-    const session = aliases.find(alias => alias.specifier === '@deepseek-ai/dsh-session')
-    expect(session).toEqual({
-      specifier: '@deepseek-ai/dsh-session',
-      source: './packages/core/session/src',
+    // The 0.2.1-alpha.2 sync removed the official packages' `src/invariant.ts`
+    // companions, so the invariant-alias assertion uses a zDSH-retained package.
+    const modelSlots = aliases.find(alias => alias.specifier === '@deepseek-ai/dsh-model-slots')
+    expect(modelSlots).toEqual({
+      specifier: '@deepseek-ai/dsh-model-slots',
+      source: './packages/llm/model-slots/src',
       hasInvariant: true,
     })
     // Sorted, so a package added anywhere lands in a stable spot in the diff.

@@ -1,0 +1,203 @@
+/* Styles for the plugin governance management tab. Layout mirrors the
+   inventory tab; visual tokens come from the shared design aliases. */
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  max-width: 760px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.rosterHeading h3,
+.status,
+.failure p {
+  margin: 0;
+}
+
+.status,
+.failure {
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.failure {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.failure button {
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: 6px;
+  padding: 4px 10px;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.roster {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.roster th {
+  text-align: left;
+  padding: 6px 10px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l1);
+  color: var(--dsw-alias-label-secondary);
+  font-weight: 600;
+}
+
+.roster td {
+  padding: 6px 10px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l1);
+  vertical-align: top;
+}
+
+.pluginCell,
+.versionCell,
+.statusBadge,
+.sourceBadge {
+  white-space: nowrap;
+}
+
+.actionsCell {
+  display: flex;
+  gap: 8px;
+}
+
+.actionsCell button {
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: 6px;
+  padding: 3px 10px;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.actionsCell button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.approvalBadge,
+.deferredTag,
+.sourceBadge,
+.warningTag {
+  display: inline-block;
+  border-radius: 999px;
+  corner-shape: round;
+  padding: 1px 8px;
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.warningTag {
+  color: var(--dsw-alias-state-warning-primary);
+}
+
+.sourceBadge {
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* Project-root origin shown next to the source badge for source='project'
+   rows. The value is served by the governance roster (server-side), never
+   inferred by the client. */
+.projectRoot {
+  display: block;
+  margin-top: 2px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  line-height: 15px;
+  color: var(--dsw-alias-label-tertiary);
+  white-space: normal;
+  word-break: break-all;
+}
+
+.healthStrip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 0;
+}
+
+.healthChips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.healthLabel {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.healthValue {
+  font-weight: 600;
+}
+
+.presets {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.presetRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.presetRow input,
+.presets select,
+.presets button {
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: 6px;
+  padding: 4px 10px;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+}
+
+.presets button {
+  cursor: pointer;
+}
+
+.notice {
+  margin: 0;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.noticeDetail {
+  margin: 4px 0 0;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* Phone breakpoint: the governance roster keeps its nowrap columns and
+   scrolls horizontally instead of overflowing its column. `display: block`
+   turns the table itself into the scroll clip (an anonymous table box keeps
+   the internal layout), so no wrapper element is needed. */
+@media (max-width: 768px) {
+  .roster {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}

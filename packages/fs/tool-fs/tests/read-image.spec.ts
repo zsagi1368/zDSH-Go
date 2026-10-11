@@ -6,13 +6,14 @@
  * regression that `read` keeps its text-only contract.
  */
 
+import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
-import { CodeRuntime } from '@deepseek-ai/dsh-code-runtime'
-import type { CodeRunRequest, CodeRunResult } from '@deepseek-ai/dsh-code-runtime'
+import { PtcRuntime } from '@deepseek-ai/dsh-ptc-runtime'
+import type { PtcRunRequest, PtcRunResult } from '@deepseek-ai/dsh-ptc-runtime'
 import { ToolCallId, LlmAdapter, LlmRuntime } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, LlmModelInfo, LlmResolvedModelInfo, Message, StreamChunk } from '@deepseek-ai/dsh-llm'
 import ModelSlotRegistry from '@deepseek-ai/dsh-model-slots'
@@ -71,12 +72,14 @@ class CatalogAdapter extends LlmAdapter {
 }
 
 /** In-process PTC mode seam fake that invokes the real registry bindings. */
-class FakeRuntime extends CodeRuntime {
+class FakeRuntime extends PtcRuntime {
+  resolve(request: import('@deepseek-ai/dsh-ptc-runtime').PtcRunRequest): import('@deepseek-ai/dsh-ptc-runtime').PtcRunSpec { return { ...request, cwd: request.cwd ?? process.cwd(), timeoutMs: request.timeoutMs ?? 120_000 } }
+
   readonly language = 'typescript'
   readonly isolation = 'fake'
-  behavior: (request: CodeRunRequest) => Promise<CodeRunResult> = () => Promise.resolve({ logs: [] })
+  behavior: (request: PtcRunRequest) => Promise<PtcRunResult> = () => Promise.resolve({ logs: [] })
 
-  run(request: CodeRunRequest): Promise<CodeRunResult> {
+  run(request: PtcRunRequest): Promise<PtcRunResult> {
     return this.behavior(request)
   }
 }
@@ -135,9 +138,10 @@ interface SetupOptions {
 
 async function setup(options: SetupOptions = {}) {
   const ctx = new Context()
+  provideWorkingDirectoryFixture(ctx)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime, { mode: options.toolMode ?? 'native' })
-  if (options.toolMode === 'ptc' || options.toolMode === 'both') {
+  if (options.toolMode === 'ptc') {
     await ctx.plugin(FakeRuntime)
   }
   await ctx.plugin(LocalFileSystem, { cwd: dir })
@@ -261,7 +265,7 @@ describe('read_image happy path', () => {
     expect(image.attachment.bytes).toBe(PNG_1X1.length)
     expect(image.attachment.name).toBe('red.png')
     expect(image.attachment.attachmentId).toMatch(/^sha256:[0-9a-f]{64}$/)
-    expect(text(result)).toBe(formatImageReadOutput(join(dir, 'red.png'), {
+    expect(text(result)).toBe(formatImageReadOutput(await realpath(join(dir, 'red.png')), {
       attachmentId: image.attachment.attachmentId,
       mediaType: 'image/png',
       bytes: PNG_1X1.length,
@@ -293,7 +297,7 @@ describe('read_image happy path', () => {
     expect(image.attachment.bytes).toBe(72)
     expect(image.attachment.name).toBe('red.gif')
     expect(image.attachment.attachmentId).toMatch(/^sha256:[0-9a-f]{64}$/)
-    expect(text(result)).toBe(formatImageReadOutput(join(dir, 'red.gif'), {
+    expect(text(result)).toBe(formatImageReadOutput(await realpath(join(dir, 'red.gif')), {
       attachmentId: image.attachment.attachmentId,
       mediaType: 'image/webp',
       bytes: 72,
@@ -330,7 +334,7 @@ describe('read_image happy path', () => {
   it('forwards a nested PTC mode image through the outer run_code context', async () => {
     await writeFile(join(dir, 'red.png'), PNG_1X1)
     const ctx = await setup({ toolMode: 'ptc' })
-    const runtime = ctx.codeRuntime as FakeRuntime
+    const runtime = ctx.ptcRuntime as FakeRuntime
     runtime.behavior = async (request) => {
       const value = await request.bindings[0]!.functions.read_image!({ file_path: 'red.png' })
       return { logs: [], value }
@@ -384,7 +388,7 @@ describe('extension-less paths', () => {
     const reread = (second.content[1] as { attachment: ImageAttachmentRef }).attachment
     expect(reread.attachmentId).toBe(ref.attachmentId)
     expect(reread.mediaType).toBe('image/png')
-    expect(text(second)).toContain(`<path>${objectPath}</path>`)
+    expect(text(second)).toContain(`<path>${await realpath(objectPath)}</path>`)
   })
 
   it('reads an ordinary extension-less image file by sniffing its content', async () => {
@@ -539,7 +543,7 @@ describe('strict image-modality gate', () => {
 })
 
 describe('vision slot digestion (S-45 M3)', () => {
-  it('digests through the vision slot and serves a provenance-bearing text block on a text-only route', async () => {
+  it('digests through the vision slot and serves a source-tagged text block on a text-only route', async () => {
     await writeFile(join(dir, 'red.png'), PNG_1X1)
     const visionAdapter = new VisionDigestAdapter('A red square.')
     const ctx = await setup({
@@ -558,7 +562,7 @@ describe('vision slot digestion (S-45 M3)', () => {
     expect(envelope).toContain(`<path>${join(dir, 'red.png')}</path>`)
     expect(envelope).toContain('<type>image-description</type>')
     expect(envelope).toContain('<description>A red square.</description>')
-    expect(envelope).toContain('<provenance>')
+    expect(envelope).toContain('<origin>')
     expect(envelope).toContain('<slot>vision</slot>')
     expect(envelope).toContain('<provider>vision-assist</provider>')
     expect(envelope).toContain('<model>vision-model</model>')
@@ -921,6 +925,7 @@ describe('image admission failures', () => {
 describe('registration surface', () => {
   it('withdraws read_image when the tool-fs fiber or the attachment store is disposed (HMR safety)', async () => {
     const ctx = new Context()
+    provideWorkingDirectoryFixture(ctx)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime, { mode: 'native' })
     await ctx.plugin(LocalFileSystem, { cwd: dir })
@@ -1003,7 +1008,7 @@ describe('image result presentation', () => {
     const ctx = await setup()
     const result = await call(ctx, 'read_image', { file_path: 'red.png' }, agentOn('vision-model'))
     expect(result.isError).toBe(false)
-    expect(result.meta).toEqual({ path: join(dir, 'red.png') })
+    expect(result.meta).toEqual({ path: await realpath(join(dir, 'red.png')) })
     const image = result.content.find(block => block.type === 'image')
     expect(image?.attachment.width).toBe(1)
     expect(image?.attachment.height).toBe(1)

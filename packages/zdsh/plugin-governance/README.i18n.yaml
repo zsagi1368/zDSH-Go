@@ -1,0 +1,46 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/zdsh/plugin-governance/README.md
+/:
+  en: 95323b8ee12dde8e
+  zh: 27b2c787a673478f
+/dsh-plugin-governance:
+  en: 9007e9a896a8a30b
+  zh: f130a5aa92fe7376
+/dsh-plugin-governance/summary:
+  en: 756bf39992882a07
+  zh: 32e0ac07c6bddb64
+/dsh-plugin-governance/table-of-contents:
+  en: c43d2e9387c7a0b5
+  zh: b510d1dc716dddbd
+/dsh-plugin-governance/version-adaptation-compat-guard:
+  en: dda218629e3a4477
+  zh: dd2a5144d2ba3bea
+/dsh-plugin-governance/model-experience:
+  en: 215e7ba838619b7b
+  zh: 215e7ba838619b7b
+/dsh-plugin-governance/model-experience/guard-kernel:
+  en: 144de3e6dabd89e6
+  zh: 144de3e6dabd89e6
+/dsh-plugin-governance/model-experience/guard-kernel/what-the-model-sees:
+  en: 4553b687d91f8537
+  zh: 4553b687d91f8537
+/dsh-plugin-governance/model-experience/guard-kernel/what-the-model-sees/guard-contract:
+  en: 6059887a94a78884
+  zh: 6059887a94a78884
+/dsh-plugin-governance/model-experience/guard-kernel/token-effect:
+  en: 97b5c73c06d84305
+  zh: 97b5c73c06d84305
+/dsh-plugin-governance/model-experience/guard-kernel/kv-cache-effect:
+  en: 8c96dbb73019471f
+  zh: eb52553c7fa48b14
+/dsh-plugin-governance/known-limitations-and-deferred-work:
+  en: 242a42d9fb730bce
+  zh: 8f6cec5b8b0242de
+/dsh-plugin-governance/known-limitations-and-deferred-work/dev-note:
+  en: 7de02cd33a767bd6
+  zh: b9e74c4e48779770
+/dsh-plugin-governance/known-limitations-and-deferred-work/dev-note/future-enforced-runtime-resource-limits:
+  en: 0b5a0aa98ab5a2c1
+  zh: 7cb6ffd6c38de367

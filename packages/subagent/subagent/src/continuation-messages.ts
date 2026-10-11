@@ -8,11 +8,10 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import { boundContextSummary, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { SessionId } from '@deepseek-ai/dsh-session'
-import type { ActivationTerminal } from './lifecycle.ts'
 import { truncateSubagentOutput } from './return-cap.ts'
 import type { SubagentResult } from './types.ts'
 
-/** Durable attribution for one model-authored message between adjacent Agents. */
+/** Durable attribution for one model-authored message between Agents. */
 export interface AgentMessageSource {
   readonly kind: 'agent-message'
   /** A message another agent addressed to this one (`relay` context form). */
@@ -102,13 +101,16 @@ export function withContinuableReturnGuidance(
  * the parent's own task vocabulary.
  * @param childId - the durable child the parent knows by id.
  * @param stopReason - how the child's last ordinary turn ended.
+ * @param continuable - whether the child accepts a later message.
  * @returns the model-facing opening line of the settlement notice.
  */
-function settlementSummary(childId: SessionId, stopReason: SubagentResult['stopReason']): string {
+function settlementSummary(childId: SessionId, stopReason: SubagentResult['stopReason'], continuable: boolean): string {
   const subject = `Background subagent ${childId}`
   switch (stopReason) {
     case 'completed':
-      return `${subject} finished and will do no further work unless you send it more.`
+      return continuable
+        ? `${subject} finished and will do no further work unless you send it more.`
+        : `${subject} finished. It cannot receive follow-up messages.`
     case 'aborted':
       return `${subject} was stopped before it finished.`
     case 'max-tokens':
@@ -128,9 +130,10 @@ function settlementSummary(childId: SessionId, stopReason: SubagentResult['stopR
 }
 
 /**
- * Build the runtime-owned settlement notice delivered to a child's parent.
+ * Build the runtime-owned settlement notice from the child's nonempty closing text.
  * @param childId - durable child session id named in the notice.
  * @param terminal - recorded terminal state for the settled Activation.
+ * @param continuable - whether the child can accept another task.
  * @param returnCap - bounded-return cap (tokens, §1.2) rebuilt from the durable
  * descriptor; the child's closing output re-enters the parent's context through
  * this notice, so it is truncated to the cap the delegation carried. `undefined`
@@ -139,21 +142,30 @@ function settlementSummary(childId: SessionId, stopReason: SubagentResult['stopR
  */
 export function createSettlementMessage(
   childId: SessionId,
-  terminal: ActivationTerminal,
-  returnCap: number | undefined,
+  terminal: SubagentResult,
+  continuable = true,
+  returnCap?: number,
 ): ReturnType<typeof createUserMessage> {
-  const summary = settlementSummary(childId, terminal.stopReason)
-  const closingOutput = terminal.output === undefined
-    ? undefined
-    : returnCap === undefined
-      ? terminal.output
-      : truncateSubagentOutput(terminal.output, returnCap)
+  const summary = settlementSummary(childId, terminal.stopReason, continuable)
+  // Parent providers receive this notice as a user message and may reject
+  // nontext assistant blocks. Keep this conversion local so SDK/UI consumers
+  // retain the complete child output.
+  const closingText = terminal.output.flatMap(block =>
+    block.type === 'text' && block.text.length > 0 ? [block] : [],
+  )
+  // Go 上下文移植（returnCap）：子输出经本通知回注父上下文，故按委托携带的 cap
+  // 截断；structured/diagnostic 段落不截断（官方语义必需品，token 量小）。
+  const closingOutput = returnCap === undefined ? closingText : truncateSubagentOutput(closingText, returnCap)
   return createUserMessage({
     content: [
       { type: 'text' as const, text: summary },
-      ...closingOutput === undefined
+      ...closingOutput.length === 0
         ? [{ type: 'text' as const, text: 'It left no closing message.' }]
         : [{ type: 'text' as const, text: 'Its closing message:' }, ...closingOutput],
+      ...terminal.structured !== undefined
+        ? [{ type: 'text' as const, text: `Structured result: ${JSON.stringify(terminal.structured)}` }] : [],
+      ...terminal.diagnostic !== undefined
+        ? [{ type: 'text' as const, text: terminal.diagnostic }] : [],
     ],
     source: {
       kind: 'subagent-settled' as const,

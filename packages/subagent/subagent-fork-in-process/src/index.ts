@@ -21,11 +21,9 @@ import z from '@deepseek-ai/schemastery'
 import type {
   ContinuableCreateRequest,
   ContinuableCreateSpec,
-  ResolvedSubagentStartRequest,
   SubagentCapabilities,
   SubagentProvider,
 } from '@deepseek-ai/dsh-subagent'
-import { startInProcessRun } from '@deepseek-ai/dsh-subagent-in-process-driver'
 
 export const name = 'subagent-fork-in-process'
 // `tools` is deliberately NOT injected — same rationale as subagent-spawn-in-process: the
@@ -65,16 +63,10 @@ class ForkInProcessProvider implements SubagentProvider {
 
   constructor(readonly name: string) {}
 
-  start(request: ResolvedSubagentStartRequest) {
-    // Fresh child: no seed. The shared driver mints ids, stamps cwd/lineage/
-    // depth, drives the one-shot (including the structured capture when the
-    // request carries an outputSchema), and maps the result.
-    return startInProcessRun(request, {})
-  }
-
   prepareContinuable(_request: ContinuableCreateRequest): Promise<ContinuableCreateSpec> {
-    // A forked child starts fresh, so it contributes no seed; the continuation
-    // manager owns every later operation on it.
+    // L6（Go 意图，对上游的行为偏离已登记）：fork 子会话**不 seed** 父历史；
+    // 官方 0.2.x 的 start() 已由 driver 包删除，provider 只需声明 continuable
+    // 创建贡献——这里恒为空，续跑与冷恢复由 continuation manager 负责。
     return Promise.resolve({})
   }
 }

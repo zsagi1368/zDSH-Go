@@ -1,31 +1,26 @@
 /**
- * Cross-version recovery over archived on-disk artifacts. `fixtures/` holds
- * real `session_projcache` media, each produced by driving the named release
- * through its own web app (session created over RPC, real model turns, a
- * rename): the v3 whole-unit file (published 0.1.1-rc.2), a v4 per-record
+ * Cross-version recovery and lossless checkpoint JSON validation. The released
+ * `session_projcache` fixtures were captured through their own web app
+ * (session created over RPC, real model turns, a rename): the v3 whole-unit
+ * file (published 0.1.1-rc.2), a v4 per-record
  * document (published 0.1.2-alpha.3), a published v5 document, and the
  * v5-stamped lineage-less document reproducing byte-for-byte what the
  * formerly unguarded legacy bootstrap wrote over v3 records. Each must open
  * through the real storage stack without becoming a fold shortcut for the
  * current Session format, then accept a current checkpoint rewrite. A record
  * that fails schema validation is backed up and skipped instead of failing the
- * boot.
+ * boot. The synthetic V7 fixture comes from the real StorageDomain per-record
+ * writer and contains opaque keys and arrays, independent of Session messages.
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-// Every test here boots the full storage stack (Storage → json → domain →
-// SessionStore → projection registry → cache) over real temp-dir files, so
-// under full-suite parallelism the default 5s testTimeout flakily expires on
-// cold caches. 30s matches the heavy-suite precedent (workflow-worker-thread)
-// and keeps real regressions failing loudly.
-vi.setConfig({ testTimeout: 30_000 })
 import { cp, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { Context } from '@deepseek-ai/cordis'
 import { z } from 'zod'
-import SessionStore, { SESSION_FORMAT_VERSION, SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
+import SessionStore, { SESSION_FORMAT_VERSION, SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionHeader } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
@@ -37,7 +32,7 @@ import {
   apply as storageDomainApply, Config as storageDomainConfig, inject as storageDomainInject, name as storageDomainName,
 } from '@deepseek-ai/dsh-storage-domain'
 import SessionProjectionCache from '../src/index.ts'
-import { projectionCacheDomainSpec } from '../src/spec.ts'
+import { checkpointRow, projectionCacheDomainSpec } from '../src/spec.ts'
 
 // Declarations must match the shipped title unit's exactly (the repo-wide
 // compile face sees both).
@@ -101,13 +96,18 @@ function headerFor(id: SessionId, identity: FixtureDoc['record']['identity']): S
 const contexts: Context[] = []
 const roots: string[] = []
 
-async function harness(root: string) {
-  roots.push(root)
+async function storageHarness(root: string) {
+  if (!roots.includes(root)) roots.push(root)
   const ctx = new Context()
   contexts.push(ctx)
   await ctx.plugin(Storage)
   await ctx.plugin({ name: storageJsonName, inject: storageJsonInject, apply: storageJsonApply, Config: storageJsonConfig }, { root })
   await ctx.plugin({ name: storageDomainName, inject: storageDomainInject, apply: storageDomainApply, Config: storageDomainConfig }, { backend: 'json' })
+  return ctx
+}
+
+async function harness(root: string) {
+  const ctx = await storageHarness(root)
   await ctx.plugin(SessionStore)
   await ctx.plugin(SessionProjectionRegistry)
   ctx.sessionProjections.register(titleUnit)
@@ -131,18 +131,16 @@ async function placeDoc(root: string, id: string, name: string): Promise<Fixture
 async function assertRewrite(ctx: Context, root: string, id: SessionId): Promise<void> {
   const session = ctx.sessions.create(id)
   session.append('fixtures-test/set-title', { title: '重写标题' })
-  session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
+  await ctx.sessionProjectionCache.write(session)
   const path = join(root, projectionCacheDomainSpec.name, 'sessions', `${id}.json`)
-  await vi.waitFor(async () => {
-    const doc = JSON.parse(await readFile(path, 'utf8')) as FixtureDoc
-    expect(doc.version).toBe(projectionCacheDomainSpec.version)
-    expect(doc.record.identity).toMatchObject({
-      formatVersion: SESSION_FORMAT_VERSION,
-      isSeeded: false,
-      inheritedEventCount: 0,
-    })
-    expect(doc.record.rows['title']?.val).toBe('重写标题')
-  }, { timeout: 20_000 })
+  const doc = JSON.parse(await readFile(path, 'utf8')) as FixtureDoc
+  expect(doc.version).toBe(projectionCacheDomainSpec.version)
+  expect(doc.record.identity).toMatchObject({
+    formatVersion: SESSION_FORMAT_VERSION,
+    isSeeded: false,
+    inheritedEventCount: 0,
+  })
+  expect(doc.record.rows['title']?.val).toBe('重写标题')
 }
 
 afterEach(async () => {
@@ -150,7 +148,54 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })))
 })
 
-describe('archived version recovery', () => {
+// zDSH (FLAKE-BATCH, 2026-09-28): 30s suite budget (PDF-FLAKE precedent) as the
+// full-run parallel-load margin for this suite. Assertions unchanged.
+// SYNC-P2: budget replayed onto the official checkpoint JSON preservation suite (0.1.7-rc.2) too.
+describe('checkpoint JSON preservation', { timeout: 30_000 }, () => {
+  it('preserves opaque keys through StorageDomain read, put, and reopen', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-projcache-opaque-'))
+    const id = SessionId('opaque-fixture')
+    const archived = await placeDoc(root, id, 'v7-opaque-session-doc.json')
+    expect(archived.version).toBe(7)
+    const ctx = await storageHarness(root)
+    const domain = await ctx.storageDomain.open(projectionCacheDomainSpec)
+    const record = domain.table('sessions').get(id)!
+    expect(JSON.stringify(record.rows)).toBe(JSON.stringify(archived.record.rows))
+    const rewritten = { ...record, identity: { ...record.identity, formatVersion: SESSION_FORMAT_VERSION } }
+    await domain.table('sessions').put(id, rewritten)
+    await ctx.fiber.dispose()
+    contexts.splice(contexts.indexOf(ctx), 1)
+
+    const reopenedCtx = await storageHarness(root)
+    const reopened = await reopenedCtx.storageDomain.open(projectionCacheDomainSpec)
+    const restored = reopened.table('sessions').get(id)!
+    expect(JSON.stringify(restored)).toBe(JSON.stringify(rewritten))
+    expect(JSON.stringify(restored.rows)).toBe(JSON.stringify(archived.record.rows))
+    const onDisk = JSON.parse(await readFile(join(root, projectionCacheDomainSpec.name, 'sessions', `${id}.json`), 'utf8')) as FixtureDoc
+    expect(onDisk.version).toBe(7)
+    expect(JSON.stringify(onDisk.record.rows)).toBe(JSON.stringify(archived.record.rows))
+  })
+
+  it.each([
+    ['undefined', undefined], ['function', () => {}], ['symbol', Symbol('opaque')], ['bigint', 1n],
+    ['nonfinite number', Number.NaN], ['infinity', Number.POSITIVE_INFINITY],
+    ['class instance', new Date(0)], ['map', new Map([['saved', true]])],
+  ])('rejects non-JSON checkpoint state: %s', (_name, val) => {
+    expect(checkpointRow.safeParse({ ver: 1, seq: 0, val }).success).toBe(false)
+  })
+
+  it('rejects cycles and JSON-lossy nested values without changing valid state objects', () => {
+    const cyclic: { self?: unknown } = {}
+    cyclic.self = cyclic
+    for (const val of [cyclic, { nested: { value: undefined } }, [undefined], [, 'hole'], { negativeZero: -0 }]) {
+      expect(() => checkpointRow.parse({ ver: 1, seq: 0, val })).toThrow()
+    }
+    const val = JSON.parse('{"__proto__":{"saved":true},"constructor":{"saved":false},"nested":{"__proto__":[null,true,4,"text"]}}') as Record<string, unknown>
+    expect(checkpointRow.parse({ ver: 1, seq: 0, val }).val).toBe(val)
+  })
+})
+
+describe('archived version recovery', { timeout: 30_000 }, () => {
   it('recovers the v3 whole-unit archive through the legacy bootstrap', async () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-projcache-fx-'))
     await cp(join(FIXTURES, 'v3-single-unit.json'), join(root, `${projectionCacheDomainSpec.name}.json`))
@@ -165,14 +210,12 @@ describe('archived version recovery', () => {
     const { ctx, cache } = await harness(root)
     expect(cache.cachedSnapshot(
       headerFor(SessionId(sid), record.identity),
-      SessionLogOffset(0),
       ['title'],
     )).toBeUndefined()
     expect(cache.cachedPredecessorTitle(
       headerFor(SessionId(sid), record.identity),
-      SessionLogOffset(0),
     )).toEqual({
-      asOfSeq: -1,
+      asOfSeq: record.rows.title?.seq,
       values: { title: record.rows.title?.val },
     })
 
@@ -199,14 +242,12 @@ describe('archived version recovery', () => {
       const { ctx, cache } = await harness(root)
       expect(cache.cachedSnapshot(
         headerFor(id, doc.record.identity),
-        SessionLogOffset(0),
         ['title'],
       )).toBeUndefined()
       expect(cache.cachedPredecessorTitle(
         headerFor(id, doc.record.identity),
-        SessionLogOffset(0),
       )).toEqual({
-        asOfSeq: -1,
+        asOfSeq: doc.record.rows.title?.seq,
         values: { title: doc.record.rows.title?.val },
       })
 
@@ -246,25 +287,25 @@ describe('archived version recovery', () => {
       cwd: '/work',
       isSeeded: false,
     })
-    expect(cache.cachedPredecessorTitle(listed('older'), SessionLogOffset(0))).toEqual({
-      asOfSeq: -1,
+    expect(cache.cachedPredecessorTitle(listed('older'))).toEqual({
+      asOfSeq: 2,
       values: { title: 'older title' },
     })
-    expect(cache.cachedPredecessorTitle(listed('current'), SessionLogOffset(0))).toBeUndefined()
-    expect(cache.cachedPredecessorTitle(listed('newer'), SessionLogOffset(0))).toBeUndefined()
-    expect(cache.cachedPredecessorTitle(listed('stale-title'), SessionLogOffset(0))).toBeUndefined()
-    expect(cache.cachedPredecessorTitle(listed('missing'), SessionLogOffset(0))).toBeUndefined()
+    expect(cache.cachedPredecessorTitle(listed('current'))).toBeUndefined()
+    expect(cache.cachedPredecessorTitle(listed('newer'))).toBeUndefined()
+    expect(cache.cachedPredecessorTitle(listed('stale-title'))).toBeUndefined()
+    expect(cache.cachedPredecessorTitle(listed('missing'))).toBeUndefined()
   })
 
-  it('refuses a lineage-less archive for a seeded caller (identity mismatch, cold rebuild)', async () => {
+  it('refuses a lineage-less archive for a seeded caller (lifecycle mismatch, cold rebuild)', async () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-projcache-fx-'))
     const id = SessionId('fixture-seeded')
     const doc = await placeDoc(root, id, 'v5-lineageless-doc.json')
 
     const { cache } = await harness(root)
     const seeded = { ...headerFor(id, doc.record.identity), isSeeded: true }
-    expect(cache.cachedSnapshot(seeded, SessionLogOffset(2), ['title'])).toBeUndefined()
-    expect(cache.cachedPredecessorTitle(seeded, SessionLogOffset(2))).toBeUndefined()
+    expect(cache.cachedSnapshot(seeded, ['title'])).toBeUndefined()
+    expect(cache.cachedPredecessorTitle(seeded)).toBeUndefined()
   })
 
   it('backs up and skips a record that fails schema validation instead of failing the boot', async () => {
@@ -306,11 +347,10 @@ describe('archived version recovery', () => {
     // The broken record reads as absent; its predecessor-stamped neighbor
     // remains available for a safe current rewrite.
     const cache = ctx.sessionProjectionCache
-    expect(cache.cachedSnapshot(headerFor(SessionId('broken'), { createdAt: 0 }), SessionLogOffset(0)))
+    expect(cache.cachedSnapshot(headerFor(SessionId('broken'), { createdAt: 0 })))
       .toBeUndefined()
     expect(cache.cachedSnapshot(
       headerFor(SessionId('survivor'), good.record.identity),
-      SessionLogOffset(0),
       ['title'],
     )).toBeUndefined()
     await assertRewrite(ctx, root, SessionId('survivor'))

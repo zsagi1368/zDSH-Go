@@ -12,7 +12,7 @@
  * S-45 M3 second branch: when the calling main model does not declare `image`
  * input, the gate consults the deployment `vision` model slot
  * (`modelSlots.resolve('vision')`). A resolved slot routes the image to the
- * visual-assist model and injects a provenance-bearing TEXT description block
+ * visual-assist model and injects a source-tagged TEXT description block
  * instead of the image bytes, so the text-only main model still learns the
  * picture's content. The privacy gate `privacy.localFirstVision` (default
  * true) refuses this outbound vision digestion: the tool-fs layer cannot
@@ -99,6 +99,7 @@ const IMAGE_VALUE_SCHEMA = {
 
 /** The structured outcome declared by the `read_image` output schema. */
 export interface ImageReadValue {
+  /** Canonical absolute path in the filesystem provider's execution world. */
   path: string
   image: {
     attachmentId: string
@@ -117,26 +118,26 @@ export interface ImageReadValue {
 
 /**
  * The vision-assisted outcome: a text description of the image plus the exact
- * model-slot provenance that produced it, instead of image bytes.
+ * model-slot origin that produced it, instead of image bytes.
  */
 export interface VisionImageReadValue {
   path: string
   /** Plain-text visual-assist description of the image content. */
   description: string
-  /** Provenance marker naming the slot/provider/model/source tier that produced the description. */
-  provenance: string
+  /** Origin marker naming the slot/provider/model/source tier that produced the description. */
+  origin: string
 }
 
 /**
  * The value shape the `read_image` output schema declares: `path` plus either
- * an `image` block (native route) or the `description`/`provenance` pair
+ * an `image` block (native route) or the `description`/`origin` pair
  * (vision-assisted route). Exactly one branch is ever populated.
  */
 export interface ImageReadOutputValue {
   path: string
   image?: ImageReadValue['image']
   description?: string
-  provenance?: string
+  origin?: string
 }
 
 /**
@@ -180,7 +181,7 @@ export type ImageRouteDecision =
  * options) and requires the exact resolved route to declare `image` input.
  * When the route is text-only, the gate consults the deployment `vision`
  * model slot: a resolved slot under a permitted privacy posture routes the
- * read to visual-assisted digestion (a provenance-bearing text description);
+ * read to visual-assisted digestion (a source-tagged text description);
  * an unresolvable slot, or a slot refused by `privacy.localFirstVision`,
  * throws the same text-only refusal as before.
  * @param ctx - the plugin context used to resolve the optional `llm`/`modelSlots` services.
@@ -307,30 +308,30 @@ ${image.mediaType} image, ${image.width}x${image.height} px, ${image.bytes} byte
 }
 
 /**
- * Format the vision-assisted read result as a text block with provenance.
+ * Format the vision-assisted read result as a text block with origin.
  * The main model receives this description instead of image bytes.
  * @param displayPath - the backend-resolved path rendered in the envelope's `<path>` element.
  * @param description - the visual-assist model's description text.
- * @param provenance - the provenance marker naming slot/provider/model/source tier.
+ * @param origin - the origin marker naming slot/provider/model/source tier.
  * @returns the model-facing text envelope.
  */
-export function formatVisionReadOutput(displayPath: string, description: string, provenance: string): string {
+export function formatVisionReadOutput(displayPath: string, description: string, origin: string): string {
   return `<path>${displayPath}</path>
 <type>image-description</type>
 <content>
 <description>${description}</description>
 </content>
-<provenance>
-${provenance}
-</provenance>`
+<origin>
+${origin}
+</origin>`
 }
 
 /**
- * Build the provenance marker string from one resolved vision slot.
+ * Build the origin marker string from one resolved vision slot.
  * @param slot - the resolved model slot.
- * @returns a multi-line provenance block the model may inspect.
+ * @returns a multi-line origin block the model may inspect.
  */
-function formatVisionProvenance(slot: ResolvedModelSlot): string {
+function formatVisionOrigin(slot: ResolvedModelSlot): string {
   return `<slot>${slot.slot}</slot>
 <provider>${slot.provider}</provider>
 <model>${slot.model}</model>
@@ -390,7 +391,11 @@ async function describeImageWithVision(
       { type: 'text', text: `Describe the content of this ${mediaType} image in one sentence, plain text only.` },
       { type: 'image', attachment: ref },
     ],
-    source: { kind: 'plugin', plugin: 'dsh-tool-fs' },
+    // zDSH (SYNC-P2, official B18 adaptation): the shared `kind: 'plugin'` source was
+    // removed in 0.1.7. This auxiliary prompt is a one-shot internal call that is
+    // never durable, so it rides the base user kind; the vision-slot attribution
+    // the main session sees is carried by the origin-tagged description output.
+    source: { kind: 'user' },
   })]
   const options = deepFreeze({
     provider: slot.provider,
@@ -425,14 +430,14 @@ async function describeImageWithVision(
  *   result carries only text.
  */
 function renderReadImageResult(value: ImageReadOutputValue): ContentBlock[] {
-  if (value.description !== undefined && value.provenance !== undefined) {
-    return [{ type: 'text', text: formatVisionReadOutput(value.path, value.description, value.provenance) }]
+  if (value.description !== undefined && value.origin !== undefined) {
+    return [{ type: 'text', text: formatVisionReadOutput(value.path, value.description, value.origin) }]
   }
   if (value.image !== undefined) {
     return imageReadContent({ path: value.path, image: value.image })
   }
   // The tool body always produces one complete shape, so this is defensive.
-  throw new Error('read_image: result must carry either an image block or a description block with provenance')
+  throw new Error('read_image: result must carry either an image block or a description block with origin')
 }
 
 /**
@@ -456,10 +461,8 @@ export function applyReadImageTool(
   ctx.tools.register(defineTool({
     name: 'read_image',
     description: 'Read a PNG/JPEG/WebP/GIF file and return the image itself. '
-      + 'A path without a file extension is accepted; the format is detected from the file content, so normalized attachment paths can be passed directly without copying or renaming. '
-      + 'Harness validates and downscales large supported images before the next model request, so use this tool directly instead of installing image libraries or creating thumbnails merely to inspect an image. '
-      + 'Independent files may be read concurrently in small batches. '
-      + 'Requires the current model to accept image input; a text-only model is served a provenance-tagged text description when the deployment configures a vision slot.',
+      + 'Large images are downscaled automatically; do not install image libraries or create thumbnails to inspect an image. '
+      + 'Requires the current model to accept image input; a text-only model is served a source-tagged text description when the deployment configures a vision slot.',
     parameters: {
       file_path: { type: 'string', required: true, description: 'Path to the image file, resolved by the filesystem backend.' },
     },
@@ -468,10 +471,10 @@ export function applyReadImageTool(
         type: 'object',
         additionalProperties: false,
         properties: {
-          path: { type: 'string', required: true },
+          path: { type: 'string', required: true, description: 'Canonical absolute path in the filesystem execution world.' },
           image: IMAGE_VALUE_SCHEMA,
           description: { type: 'string' },
-          provenance: { type: 'string' },
+          origin: { type: 'string' },
         },
       },
       render: (_args, value) => renderReadImageResult(value),
@@ -575,12 +578,12 @@ export function applyReadImageTool(
       ctx.emit('fs/observed', target, { kind: 'present', version: info.version }, exec)
       if (route.kind === 'vision') {
         // S-45 M3: digest through the vision slot and serve the main model a
-        // provenance-bearing text description instead of the image bytes.
+        // source-tagged text description instead of the image bytes.
         const description = await describeImageWithVision(ctx, exec, route.slot, ref, mediaType)
-        return { path: target.displayPath, description, provenance: formatVisionProvenance(route.slot) }
+        return { path: target.displayPath, description, origin: formatVisionOrigin(route.slot) }
       }
       const value: ImageReadValue = {
-        path: target.displayPath,
+        path: ctx.fs.processPath(target),
         image: {
           attachmentId: ref.attachmentId,
           mediaType: ref.mediaType,

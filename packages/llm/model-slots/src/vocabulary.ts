@@ -40,7 +40,7 @@ export const MODEL_SLOT_IDS: ReadonlySet<string> = new Set([
   MODEL_SLOT_PLAN,
 ])
 
-/** Every provenance tier a resolved auxiliary route can carry. */
+/** Every origin tier a resolved auxiliary route can carry. */
 export const MODEL_SLOT_SOURCES: ReadonlySet<string> = new Set([
   'slot',
   'deployment-default',

@@ -1,0 +1,149 @@
+name: zDSH CI
+
+# zDSH overlay lane (upgrade process v2.0 §6 A1) — contract-gate CI.
+#
+# Why this file exists: the official lanes do not run for this fork.
+# The inherited upstream workflows are not shipped here (this line keeps the
+# single Go-side quality gate ci.yml plus this overlay lane), the upstream
+# ci.yml resolved its Linux jobs through enterprise runner pools
+# (dsh-ubuntu-24-04-16core / blacksmith / self-hosted vm-backup) that this
+# line does not have, and ci-master.yml triggered on pushes to master. Work
+# lands as pushes to main, which had zero CI coverage, so the contract gates
+# (packages/zdsh factory-bundle gate-p / ra1 / governance-host preinstall
+# family) only ran manually. This workflow moves that loud failure forward to
+# "right after the push/merge" (P3 in the v2.0 pipeline). It is additive: no
+# workflow file is edited by it.
+#
+# Trigger adaptation: this lane was authored against the zDSH main line's
+# zdsh-latest branch. On this line the default branch is main (see ci.yml),
+# so the push trigger is pinned to main; pull_request / workflow_dispatch are
+# unchanged.
+#
+# Runner choice: hosted ubuntu-latest stays as authored — Linux hosted is this
+# lane's original validation environment. The zDSH-Go line runs its quality
+# gate on windows-latest and carries patches/vitest@4.1.11.patch (forks-pool
+# cacheFs=false, the mitigation for the runner-side tmp wipe that cascaded
+# suite failures); that patch is applied in-tree on this line too but is a
+# no-op on Linux, and moving this lane to a Windows runner would re-open the
+# bash/network/timeout surface for no coverage gain. Vitest per-project CLI
+# --testTimeout is used for the slow-runner budget (empirically propagates to
+# projects on the vitest 4.x line, unlike a root config testTimeout).
+#
+# Scope is deliberately minimal (build + contract-gate specs + static
+# verify-* gates + A6 residence map). The full 21954-test matrix stays a
+# local/pre-push discipline; A2 dependency-face lint scans external plugin
+# repositories and therefore also stays local (see the T5 gap analysis in
+# zDSH-docs Plan/campaigns/2026-09-27-upgrade-process-v2/).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# A superseded push cancels the in-flight run of the same workflow/ref.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  PRIMARY_NODE_VERSION: '24'
+  # CI runs must never report to the production telemetry endpoint.
+  DSH_TELEMETRY_DISABLED: '1'
+
+jobs:
+  zdsh-contract-gates:
+    name: zdsh / build + contract gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      # Runner-private pnpm destination, house pattern from ci.yml. The
+      # version is pinned to the merged packageManager value so the installer
+      # and the lockfile are produced by the same release line.
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.28.5
+          dest: ${{ runner.temp }}/setup-pnpm-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.PRIMARY_NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install (immutable)
+        run: pnpm install --frozen-lockfile
+
+      - name: Static workspace gates (constraints / tsconfig paths / config catalog / readme summaries)
+        run: |
+          pnpm run constraints
+          pnpm run verify-tsconfig-paths
+          pnpm run verify-config-catalog
+          pnpm run verify-package-readme-summaries
+
+      # Compat roster audit (MAIN-HYGIENE, sync-017 DEBT rulings §15): runs
+      # all six zDSH guards in one module graph (bare-specifier dsh-compat
+      # via tsconfig paths; src-level, no build prerequisite) and fail-closes
+      # unless exactly six roster entries booked — the TMP predecessor's
+      # file://-vs-bare-specifier channel split silently read an empty
+      # roster. stdout carries the COMPAT_ROSTER_JSON / DISABLED_LIST
+      # evidence contract (skill P6 citation face).
+      - name: zDSH compat roster audit (fail-closed, six guards)
+        run: pnpm exec tsx scripts/audit-compat-roster.ts
+
+      # Compatible-window gate (sync-020 / DECIDE-dsh-compatible-RULING step
+      # 0.1): reads the eight factory-seeded artifacts' RESOLVED manifests
+      # under node_modules/.pnpm (wildcard over the `<dirName>@` prefix — the
+      # hash suffix changes on every lock regeneration, so no hardcoded hash)
+      # and asserts each dsh.compatible upper bound against rule R (upper =
+      # the base minor's next minor, exclusive), allowing a non-expired entry
+      # from scripts/verify-compatible-window.waiver.json. A missing resolved
+      # product throws instead of skipping. Self-invalidating: when the base
+      # advances past an entry's (major, minor) — either field — the waiver
+      # entries expire and this step goes RED and reports the derived bound.
+      # Needs the install above; non-spec by design
+      # (aggregate baseline count untouched).
+      - name: zDSH compatible window (fail-closed, eight factory artifacts)
+        run: pnpm exec tsx scripts/verify-compatible-window.ts
+
+      # External-link liveness for the zDSH identity docs (MAIN-HYGIENE,
+      # sync-017 DEBT rulings §5): the official verify-md-links gate skips
+      # scheme URLs by design (zDSH zero-diff), and the P7 incident was four
+      # dead issue links in the release-notes README. Observation period =
+      # continue-on-error; promotion trigger (20 consecutive runs or two
+      # weeks with zero false red) is documented in the script header. The
+      # blocking face for release paperwork is the P7 pre-publish checklist
+      # in skill zdsh-upstream-sync (local run must be 0 red).
+      - name: zDSH external links (observation, non-blocking)
+        continue-on-error: true
+        run: pnpm exec tsx scripts/verify-zdsh-external-links.ts
+
+      - name: Fetch upstream ref (A6 residence map input)
+        run: |
+          git remote add upstream https://github.com/deepseek-ai/deepseek-harness.git
+          git fetch --no-tags upstream master
+
+      - name: zDSH residence map gate (A6)
+        run: pnpm exec tsx scripts/verify-zdsh-residence-map.ts --ref upstream/master
+
+      # Host build owns typert contract generation, the scripts/ typecheck,
+      # and the lib/ artifacts some contract specs consume (for example
+      # preinstall-lock.spec.ts imports util/atomic-write/lib/index.js), so
+      # it must settle before the spec lane.
+      - name: Host build (tsc -b + tsdown host face)
+        run: pnpm run build:lib:host
+
+      - name: Contract-gate specs (packages/zdsh) + A6/A2/catalog script specs
+        run: >-
+          pnpm exec vitest run
+          packages/zdsh
+          scripts/verify-zdsh-residence-map.spec.ts
+          scripts/lint-plugin-dependency-face.spec.ts
+          scripts/gen-config-catalog.spec.ts
+          --testTimeout=60000

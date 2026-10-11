@@ -1,0 +1,43 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/zdsh/plugin-governance-host/README.md
+/:
+  en: ae3e6ba1f481d143
+  zh: 66d7db7f4ed0c8c3
+/dsh-plugin-governance-host:
+  en: e5c9c1add194f8c0
+  zh: 578ab6d98ebe84ad
+/dsh-plugin-governance-host/summary:
+  en: 71ed8271137602b6
+  zh: 47ae20d189b8fd14
+/dsh-plugin-governance-host/table-of-contents:
+  en: b4683d2a53256fda
+  zh: 71aafd195c1e950a
+/dsh-plugin-governance-host/model-experience:
+  en: 215e7ba838619b7b
+  zh: 215e7ba838619b7b
+/dsh-plugin-governance-host/model-experience/governance-gateway:
+  en: 5088736252ef7902
+  zh: 5088736252ef7902
+/dsh-plugin-governance-host/model-experience/governance-gateway/what-the-model-sees:
+  en: cf1278acfb2483c0
+  zh: cf1278acfb2483c0
+/dsh-plugin-governance-host/model-experience/governance-gateway/what-the-model-sees/remote-surface:
+  en: 25e2bc4426048030
+  zh: 25e2bc4426048030
+/dsh-plugin-governance-host/model-experience/governance-gateway/token-effect:
+  en: 30d60870b37f8a74
+  zh: 30d60870b37f8a74
+/dsh-plugin-governance-host/model-experience/governance-gateway/kv-cache-effect:
+  en: 09631ad57a5c163f
+  zh: d422cb74dfc89492
+/dsh-plugin-governance-host/known-limitations-and-deferred-work:
+  en: 4c38aa82f79d1f8a
+  zh: 456e8e5201ebdf1b
+/dsh-plugin-governance-host/known-limitations-and-deferred-work/dev-note:
+  en: 7de02cd33a767bd6
+  zh: b9e74c4e48779770
+/dsh-plugin-governance-host/known-limitations-and-deferred-work/dev-note/future-range-resolution-for-npm-sources:
+  en: 82c20d61e9477175
+  zh: 9b01c17666ac0445

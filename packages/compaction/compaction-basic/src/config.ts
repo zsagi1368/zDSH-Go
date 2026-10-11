@@ -36,6 +36,7 @@ const POLICY_CONFIG_KEYS = [
   'proactiveTrigger',
   'batchCap',
   'outputCap',
+  'headroomTokens',
   'retainRatio',
   'retainTokens',
   'summarizationProvider',
@@ -82,11 +83,22 @@ export function resolveConfig(config: BasicCompactionConfig = {}): ResolvedConfi
     throw new Error('BasicCompactionConfig: auto must be a boolean')
   }
 
+  const headroomTokens = config.headroomTokens ?? 65_536
+  const maxTokens = config.maxTokens ?? headroomTokens
+  assertPositiveInteger('BasicCompactionConfig.maxTokens (explicit or from headroomTokens)', maxTokens)
   const thresholdRatio = config.thresholdRatio ?? DEFAULT_THRESHOLD_RATIO
   const retention = resolveRetention(config, { retainRatio: DEFAULT_RETAIN_RATIO })
   validateRatioRetention(thresholdRatio, retention, 'BasicCompactionConfig')
   const modelPolicies = resolveModelPolicies(config.modelPolicies)
   for (const [index, policy] of modelPolicies.entries()) {
+    if (policy.maxTokens === undefined && config.maxTokens === undefined
+      && policy.headroomTokens !== undefined) {
+      policy.maxTokens = policy.headroomTokens
+    }
+    assertPositiveInteger(
+      `BasicCompactionConfig: modelPolicies[${index}].maxTokens (explicit or from headroomTokens)`,
+      policy.maxTokens ?? maxTokens,
+    )
     validateRatioRetention(
       policy.thresholdRatio ?? thresholdRatio,
       resolveRetention(policy, retention),
@@ -99,10 +111,11 @@ export function resolveConfig(config: BasicCompactionConfig = {}): ResolvedConfi
     proactiveTrigger: config.proactiveTrigger ?? false,
     batchCap: config.batchCap ?? BATCH_CAP,
     outputCap: config.outputCap ?? DEFAULT_OUTPUT_CAP,
+    headroomTokens,
     ...retention,
     summarizationProvider: config.summarizationProvider ?? '',
     summarizationModel: config.summarizationModel ?? '',
-    maxTokens: config.maxTokens ?? 8192,
+    maxTokens,
     compactionRetries: config.compactionRetries ?? 1,
     maxOverflowRetries: config.maxOverflowRetries ?? 1,
     modelPolicies,
@@ -132,6 +145,7 @@ export function resolveTargetPolicy(
     proactiveTrigger: override?.proactiveTrigger ?? config.proactiveTrigger,
     batchCap: override?.batchCap ?? config.batchCap,
     outputCap: override?.outputCap ?? config.outputCap,
+    headroomTokens: override?.headroomTokens ?? config.headroomTokens,
     ...resolveRetention(override ?? {}, inheritedRetention),
     summarizationProvider: override?.summarizationProvider ?? config.summarizationProvider,
     summarizationModel: override?.summarizationModel ?? config.summarizationModel,
@@ -143,8 +157,14 @@ export function resolveTargetPolicy(
 
 /**
  * Scale one routed policy into concrete token budgets for its model capacity.
+ *
+ * Pressure is capped by both the window fraction and the capacity remaining
+ * after the routed output reservation plus compaction headroom. Retention scales
+ * the message budget before headroom is deducted.
+ *
  * @param policy - merged policy for the exact routed target.
  * @param contextWindow - positive adapter-owned capacity for that target.
+ * @param reservedCompletionTokens - output tokens one routed request reserves.
  * @returns detached immutable pressure and retention budgets.
  *
  * With `proactiveTrigger` the pressure line is the proactive L4 trigger
@@ -162,6 +182,7 @@ export function resolveTargetPolicy(
 export function resolveCompactSpec(
   policy: ResolvedTargetPolicy,
   contextWindow: number,
+  reservedCompletionTokens: number,
 ): ResolvedCompactSpec {
   const targetKey = `${policy.target.provider}/${policy.target.model}`
   if (!Number.isInteger(contextWindow) || contextWindow <= 0) {
@@ -170,8 +191,34 @@ export function resolveCompactSpec(
       `BasicCompactionConfig: contextWindow (${contextWindow}) must be a positive integer`,
     )
   }
+  if (!Number.isInteger(reservedCompletionTokens) || reservedCompletionTokens < 0) {
+    throw new TargetPressureConfigError(
+      targetKey,
+      `BasicCompactionConfig: reservedCompletionTokens (${reservedCompletionTokens}) `
+      + 'must be a non-negative integer',
+    )
+  }
+  const messageBudgetTokens = contextWindow - reservedCompletionTokens
+  if (messageBudgetTokens <= 0) {
+    throw new TargetPressureConfigError(
+      targetKey,
+      `compaction-basic: ${targetKey} reserves ${reservedCompletionTokens} completion tokens `
+      + `of its ${contextWindow}-token context window, leaving no message budget; configure `
+      + "the adapter model's contextWindow above the effective request maxTokens",
+    )
+  }
+  const pressureBudgetTokens = messageBudgetTokens - policy.headroomTokens
+  if (pressureBudgetTokens <= 0) {
+    throw new TargetPressureConfigError(
+      targetKey,
+      `compaction-basic: ${targetKey} reserves ${reservedCompletionTokens} completion tokens `
+      + `and ${policy.headroomTokens} headroom tokens of its ${contextWindow}-token context `
+      + 'window, leaving no pressure budget; reduce the effective request maxTokens or '
+      + 'compaction headroomTokens, or configure a larger adapter model contextWindow',
+    )
+  }
   const retainTokens = policy.retainTokens === undefined
-    ? Math.floor(contextWindow * policy.retainRatio)
+    ? Math.floor(messageBudgetTokens * policy.retainRatio)
     : policy.retainTokens
 
   let proactiveTrigger = policy.proactiveTrigger
@@ -182,16 +229,18 @@ export function resolveCompactSpec(
     if (contextWindow < MIN_WINDOW) {
       // Legal-domain rejection (design §1.1: W < 32768 is the 16k reject domain).
       proactiveTrigger = false
-      thresholdTokens = Math.floor(contextWindow * policy.thresholdRatio)
+      thresholdTokens = Math.floor(Math.min(contextWindow * policy.thresholdRatio, pressureBudgetTokens))
       warning = `BasicCompactionConfig: ${targetKey} requested the proactive trigger `
         + `for window ${contextWindow} below the legal domain ${MIN_WINDOW}; fell back to `
         + 'thresholdRatio mode (16k domain rejected: r_min=76% and compression storm)'
     } else {
       budget = computeBudget(contextWindow, policy.outputCap, policy.batchCap)
-      thresholdTokens = budget.trigger
+      // Go 触发线（W − R_pess）不得突破官方的容量硬上限（窗口 − 真实预留 − headroom）。
+      thresholdTokens = Math.min(budget.trigger, pressureBudgetTokens)
     }
   } else {
-    thresholdTokens = Math.floor(contextWindow * policy.thresholdRatio)
+    // Go 触发线之外仍保留官方的容量硬上限（窗口 − 真实预留 − headroom）。
+    thresholdTokens = Math.floor(Math.min(contextWindow * policy.thresholdRatio, pressureBudgetTokens))
   }
 
   if (retainTokens >= thresholdTokens) {
@@ -286,6 +335,7 @@ function validatePolicy(
   const proactiveTrigger = config.proactiveTrigger
   const batchCap = config.batchCap
   const outputCap = config.outputCap
+  const headroomTokens = config.headroomTokens
   const retainRatio = config.retainRatio
   const retainTokens = config.retainTokens
   const maxTokens = config.maxTokens
@@ -315,6 +365,7 @@ function validatePolicy(
       `${name}.outputCap (${shown}) must be an integer >= ${MIN_OUTPUT_CAP}`,
     )
   }
+  if (headroomTokens !== undefined) assertNonNegativeInteger(`${name}.headroomTokens`, headroomTokens)
   if (retainRatio !== undefined) assertRatio(`${name}.retainRatio`, retainRatio)
   if (retainTokens !== undefined) assertNonNegativeInteger(`${name}.retainTokens`, retainTokens)
   if (retainRatio !== undefined && retainTokens !== undefined) {
