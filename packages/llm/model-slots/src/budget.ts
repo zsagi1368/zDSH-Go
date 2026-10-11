@@ -78,32 +78,62 @@ export interface ProfileValidation {
 
 // ── Pure formula functions ──────────────────────────────────────────────────
 
-/** maxTokens = min(C, floor(W × 0.10)). */
+/**
+ * maxTokens = min(C, floor(W × 0.10)).
+ * @param w - context window W (tokens).
+ * @param cap - output cap C (tokens).
+ * @returns maxTokens (tokens).
+ */
 export function computeMaxTokens(w: number, cap: number): number {
   return Math.min(cap, Math.floor(w * 0.10))
 }
 
-/** reserve = ceil(maxTokens × 1.25) + 4096. */
+/**
+ * reserve = ceil(maxTokens × 1.25) + 4096.
+ * @param maxTokens - output budget (tokens).
+ * @returns reserve (tokens).
+ */
 export function computeReserve(maxTokens: number): number {
   return Math.ceil(maxTokens * 1.25) + 4096
 }
 
-/** toolCap = max(1024, floor(0.25 × (reserve - maxTokens))). */
+/**
+ * toolCap = max(1024, floor(0.25 × (reserve - maxTokens))).
+ * @param maxTokens - output budget (tokens).
+ * @param reserve - reserve budget (tokens).
+ * @returns toolCap (tokens).
+ */
 export function computeToolCap(maxTokens: number, reserve: number): number {
   return Math.max(1024, Math.floor(0.25 * (reserve - maxTokens)))
 }
 
-/** R_pess = maxTokens + BATCH_CAP × toolCap + 4096. */
+/**
+ * R_pess = maxTokens + BATCH_CAP × toolCap + 4096.
+ * @param maxTokens - output budget (tokens).
+ * @param toolCap - per-tool cap (tokens).
+ * @param batchCap - batch multiplier (defaults to BATCH_CAP).
+ * @returns R_pess (tokens).
+ */
 export function computeRPess(maxTokens: number, toolCap: number, batchCap: number = BATCH_CAP): number {
   return maxTokens + batchCap * toolCap + 4096
 }
 
-/** trigger = W - R_pess. */
+/**
+ * trigger = W - R_pess.
+ * @param w - context window W (tokens).
+ * @param rPess - pessimistic retention R_pess (tokens).
+ * @returns trigger line (tokens).
+ */
 export function computeTrigger(w: number, rPess: number): number {
   return w - rPess
 }
 
-/** keepRecent = min(max(floor(W × 0.12), min(20000, floor(W × 0.30))), floor(0.8 × trigger)). */
+/**
+ * keepRecent = min(max(floor(W × 0.12), min(20000, floor(W × 0.30))), floor(0.8 × trigger)).
+ * @param w - context window W (tokens).
+ * @param trigger - trigger line (tokens).
+ * @returns keepRecent (tokens).
+ */
 export function computeKeepRecent(w: number, trigger: number): number {
   const floor12 = Math.floor(w * 0.12)
   const floor30 = Math.floor(w * 0.30)
@@ -112,38 +142,74 @@ export function computeKeepRecent(w: number, trigger: number): number {
   return Math.min(lower, Math.floor(0.8 * trigger))
 }
 
-/** summaryInputMax = max(0, trigger - keepRecent). */
+/**
+ * summaryInputMax = max(0, trigger - keepRecent).
+ * @param trigger - trigger line (tokens).
+ * @param keepRecent - retained recent tokens.
+ * @returns summaryInputMax (tokens).
+ */
 export function computeSummaryInputMax(trigger: number, keepRecent: number): number {
   return Math.max(0, trigger - keepRecent)
 }
 
-/** summaryOutput = min(C, maxTokens, floor(0.8 × reserve), max(8192, floor(W × 0.01))). */
+/**
+ * summaryOutput = min(C, maxTokens, floor(0.8 × reserve), max(8192, floor(W × 0.01))).
+ * @param w - context window W (tokens).
+ * @param cap - output cap C (tokens).
+ * @param maxTokens - output budget (tokens).
+ * @param reserve - reserve budget (tokens).
+ * @returns summaryOutput (tokens).
+ */
 export function computeSummaryOutput(w: number, cap: number, maxTokens: number, reserve: number): number {
   const capSum = Math.max(8192, Math.floor(w * 0.01))
   return Math.min(cap, maxTokens, Math.floor(0.8 * reserve), capSum)
 }
 
-/** subagentReturn = max(2048, floor(0.25 × (reserve - maxTokens))). */
+/**
+ * subagentReturn = max(2048, floor(0.25 × (reserve - maxTokens))).
+ * @param maxTokens - output budget (tokens).
+ * @param reserve - reserve budget (tokens).
+ * @returns subagentReturn (tokens).
+ */
 export function computeSubagentReturn(maxTokens: number, reserve: number): number {
   return Math.max(2048, Math.floor(0.25 * (reserve - maxTokens)))
 }
 
-/** injectionBudget = max(4096, floor(W × 0.005)). */
+/**
+ * injectionBudget = max(4096, floor(W × 0.005)).
+ * @param w - context window W (tokens).
+ * @returns injectionBudget (tokens).
+ */
 export function computeInjectionBudget(w: number): number {
   return Math.max(4096, Math.floor(w * 0.005))
 }
 
-/** deltaCap = max(8192, floor(W × 0.008)). */
+/**
+ * deltaCap = max(8192, floor(W × 0.008)).
+ * @param w - context window W (tokens).
+ * @returns deltaCap (tokens).
+ */
 export function computeDeltaCap(w: number): number {
   return Math.max(8192, Math.floor(w * 0.008))
 }
 
-/** r_min = 1 - (maxTokens + BATCH_CAP × toolCap) / W. */
+/**
+ * r_min = 1 - (maxTokens + BATCH_CAP × toolCap) / W.
+ * @param w - context window W (tokens).
+ * @param maxTokens - output budget (tokens).
+ * @param toolCap - per-tool cap (tokens).
+ * @param batchCap - batch multiplier (defaults to BATCH_CAP).
+ * @returns rMin as a ratio.
+ */
 export function computeRMin(w: number, maxTokens: number, toolCap: number, batchCap: number = BATCH_CAP): number {
   return 1 - (maxTokens + batchCap * toolCap) / w
 }
 
-/** SLO = min(0.90, r_min + 2pp). */
+/**
+ * SLO = min(0.90, r_min + 2pp).
+ * @param rMin - minimum retention ratio.
+ * @returns slo as a ratio.
+ */
 export function computeSlo(rMin: number): number {
   return Math.min(0.90, rMin + 0.02)
 }
@@ -198,9 +264,9 @@ export function computeBudget(w: number, cap: number, batchCap: number = BATCH_C
  * Validate a model profile against the budget rules (§1.1).
  *
  * Rules:
- *  1. W ≥ 32768 and C ≥ 1024 (W < 32768 → reject).
- *  2. maxTokens = min(C, floor(W × 0.10)) — 10% hard constraint.
- *  3. R_pess < W (otherwise reject the model combination).
+ * 1. W ≥ 32768 and C ≥ 1024 (W < 32768 → reject).
+ * 2. maxTokens = min(C, floor(W × 0.10)) — 10% hard constraint.
+ * 3. R_pess < W (otherwise reject the model combination).
  *
  * @param profile - the profile to validate.
  * @returns validation outcome with resolved window/cap and optional message.

@@ -687,7 +687,7 @@ export type ThemePreference = typeof THEME_PREFERENCES[number]
 ## `@deepseek-ai/dsh-compaction-basic`
 
 - `inject`: `llm` · `tokenMeter` · `sessions`
-- `source`: [`packages/compaction/compaction-basic/src/types.ts:40`](../packages/compaction/compaction-basic/src/types.ts)
+- `source`: [`packages/compaction/compaction-basic/src/types.ts:52`](../packages/compaction/compaction-basic/src/types.ts)
 
 ```ts config-catalog
 /** Basic compaction configuration with an optional exact-target policy table. */
@@ -704,6 +704,18 @@ export interface CompactionPolicyConfig {
   thresholdRatio?: number
   /** Additional pressure headroom beyond the routed output reservation. Non-negative integer; defaults to `65536`. */
   headroomTokens?: number
+  /**
+   * Use the proactive L4 trigger line `W − R_pess` instead of
+   * `thresholdRatio × W` (CONTEXT-CACHE-MANAGEMENT.md §1.2/§2 L4). Defaults to
+   * `false` so the legacy ratio mode stays the fallback; when enabled it is the
+   * recommended trigger. Below the legal domain (`W < 32768`) it falls back to
+   * `thresholdRatio` mode with a warning.
+   */
+  proactiveTrigger?: boolean
+  /** Parallel tool-result batch cap (BATCH_CAP) for the proactive trigger. Defaults to `2`. */
+  batchCap?: number
+  /** Max output hard cap (C) of the model, used by the proactive trigger. Defaults to `32768`. */
+  outputCap?: number
   /** Recent context retained as a fraction of context window minus reserved output tokens. Defaults to `0.16`. */
   retainRatio?: number
   /** Absolute recent-context budget; mutually exclusive with `retainRatio`. */
@@ -2271,7 +2283,7 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-model-slots`
 
-- `source`: [`packages/llm/model-slots/src/index.ts:98`](../packages/llm/model-slots/src/index.ts)
+- `source`: [`packages/llm/model-slots/src/index.ts:127`](../packages/llm/model-slots/src/index.ts)
 
 ```ts config-catalog
 /** Deployment-level slot policy supplied as plugin configuration or direct construction. */
@@ -2446,7 +2458,7 @@ export interface Config {
   /**
    * Persistence root for the registry snapshot, approvals ledger, presets,
    * and npm-installed plugin trees; defaults to the governance package's own
-   * root (`~/.dsh-zdsh`, overridden by `DSH_BRANCH_HOME`, or derived as
+   * root (`~/.dsh-zdsh-go`, overridden by `DSH_BRANCH_HOME`, or derived as
    * `<DSH_HOME>/zdsh` when only `DSH_HOME` is set — see resolveBranchStorageRoot).
    */
   storageRoot?: string
@@ -3378,7 +3390,7 @@ export type JournalMode = 'wal' | 'delete' | 'truncate' | 'persist'
 
 - `inject`: `workingDirectory`
 - `refs`: `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/subagent/subagent/src/index.ts:184`](../packages/subagent/subagent/src/index.ts)
+- `source`: [`packages/subagent/subagent/src/index.ts:190`](../packages/subagent/subagent/src/index.ts)
 
 ```ts config-catalog
 /** Host configuration for continuable subagent capacity. */
@@ -3561,7 +3573,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-subagent-fork-in-process`
 
 - `inject`: `subagents`
-- `source`: [`packages/subagent/subagent-fork-in-process/src/index.ts:29`](../packages/subagent/subagent-fork-in-process/src/index.ts)
+- `source`: [`packages/subagent/subagent-fork-in-process/src/index.ts:36`](../packages/subagent/subagent-fork-in-process/src/index.ts)
 
 ```ts config-catalog
 /** Config: the registry name to register the provider under. */
@@ -4094,7 +4106,7 @@ export interface Config {
 
 - `inject`: `tools` · `subagents` · `systemPrompt` · `sessionProjections`
 - `refs`: [`AgentOptions`](subsystems/core.zh.md)
-- `source`: [`packages/subagent/tool-subagent/src/index.ts:48`](../packages/subagent/tool-subagent/src/index.ts)
+- `source`: [`packages/subagent/tool-subagent/src/index.ts:50`](../packages/subagent/tool-subagent/src/index.ts)
 
 ```ts config-catalog
 /** Config: which registered provider this tool delegates to, plus child defaults. */
@@ -4142,6 +4154,18 @@ export interface Config {
    * the current Host subagent depth setting (default `1`) at each delegation.
    */
   maxDepth?: number | 'provider-managed'
+  /**
+   * Token cap for the subagent result returned into the parent's context
+   * (bounded return, §1.2 / L6 of CONTEXT-CACHE-MANAGEMENT.md v2.3). When
+   * omitted, the default is computed from the calling parent agent's
+   * `maxTokens` via the budget formula
+   * `max(2048, floor(0.25 × (reserve − maxTokens)))` (reserve =
+   * `ceil(maxTokens × 1.25) + 4096`); when the parent's `maxTokens` is
+   * unavailable, the formula floor {@link MIN_SUBAGENT_RETURN_CAP} applies.
+   * Outputs over the cap are structurally truncated (conclusion + changed
+   * files + unfinished items kept, middle work transcript dropped).
+   */
+  maxReturnTokens?: number
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-tool-subagent -->

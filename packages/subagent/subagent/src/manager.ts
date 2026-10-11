@@ -402,6 +402,9 @@ export class SubagentManager {
       ...agentReasoningEffort !== undefined ? { agentReasoningEffort } : {},
       ...request.persona !== undefined ? { persona: request.persona } : {},
       ...request.toolFilter !== undefined ? { toolFilter: request.toolFilter } : {},
+      // Go 上下文移植：returnCap 随 descriptor 持久化，冷恢复按同一上限重建
+      // （continuation.spec 的 descriptor 持久化与冷恢复用例钉死该透传）。
+      ...spec.returnCap !== undefined ? { returnCap: spec.returnCap } : {},
     })
     // Capture before the first await: a later parent switch belongs to the
     // parent's future, not to this child.

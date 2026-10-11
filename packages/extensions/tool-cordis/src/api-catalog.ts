@@ -7936,7 +7936,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SubagentActivationSpec',
-    declaration: 'export interface SubagentActivationSpec {\n    readonly provider: string;\n    readonly label: string;\n    readonly childId?: SessionId;\n    readonly request: Omit<SubagentStartRequest, \'label\' | \'signal\'>;\n    readonly signal: AbortSignal;\n    readonly delivery: \'parent\' | \'caller\';\n}',
+    declaration: 'export interface SubagentActivationSpec {\n    readonly provider: string;\n    readonly label: string;\n    readonly childId?: SessionId;\n    readonly request: Omit<SubagentStartRequest, \'label\' | \'signal\'>;\n    readonly signal: AbortSignal;\n    readonly delivery: \'parent\' | \'caller\';\n    readonly returnCap?: number;\n}',
   },
   {
     name: 'SubagentCapabilities',

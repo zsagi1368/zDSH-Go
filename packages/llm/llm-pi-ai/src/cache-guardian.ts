@@ -12,42 +12,42 @@
  * convertToolResult）的**规范化镜像**：guard 哈希变化 ⇔ pi 请求体字节变化，
  * 声明的等价类与未建模项除外。下列行号均指该文件。已镜像行为：
  * - tools **保序**（:1336 `tools.map`；Anthropic 缓存对 tools 顺序敏感）、
- *   name OAuth CC 大小写映射（:1354 等价类）、description 原样透传（:1355）、
- *   parameters 只留 {properties,required}（:1339-1351 legacyInputSchema）；
+ * name OAuth CC 大小写映射（:1354 等价类）、description 原样透传（:1355）、
+ * parameters 只留 {properties,required}（:1339-1351 legacyInputSchema）；
  * - systemPrompt 仅 surrogate 清理、**不 trim**（:1021/:1030）；
  * - user 字符串内容：raw trim 为空整条丢弃（:1171），否则清理后进哈希；
- *   统一规范成单文本块形式（cache_control 注入等价类，:1307-1315）；
+ * 统一规范成单文本块形式（cache_control 注入等价类，:1307-1315）；
  * - user 块数组：text 先清理再按清理值剔空（:1178-1201），image 只留类型标记；
  * - assistant text 空块剔除（:1212）；thinking `redacted` →
- *   redacted_thinking{data}（:1219-1225）；thinking 空文本且无签名剔除
- *   （:1228，raw 判断）；无签名 → allowEmptySignature=true 保留
- *   thinking{signature:''}、否则降级文本（:1232-1244，默认 false，见
- *   {@link NormalizeOptions}）；有签名 → thinking{signature}（:1246-1250）；
- *   toolCall 含 id、name、`arguments ?? {}`（:1252-1258）；
- *   **stopReason 不进哈希**（pi 请求体不含 stop_reason，:1262-1265）；
+ * redacted_thinking{data}（:1219-1225）；thinking 空文本且无签名剔除
+ * （:1228，raw 判断）；无签名 → allowEmptySignature=true 保留
+ * thinking{signature:''}、否则降级文本（:1232-1244，默认 false，见
+ * {@link NormalizeOptions}）；有签名 → thinking{signature}（:1246-1250）；
+ * toolCall 含 id、name、`arguments ?? {}`（:1252-1258）；
+ * **stopReason 不进哈希**（pi 请求体不含 stop_reason，:1262-1265）；
  * - toolResult 内容镜像 convertContentBlocks（:118-165）：纯文本 →
- *   `join('\n')` 成字符串、**不剔空块**（:131-135）；含 image → 块数组、
- *   空 text 块保留、无 text 时补 `(see attached image)` 占位块（:137-163）；
- *   tool_result 整条永不丢弃（:1137-1145）。
+ * `join('\n')` 成字符串、**不剔空块**（:131-135）；含 image → 块数组、
+ * 空 text 块保留、无 text 时补 `(see attached image)` 占位块（:137-163）；
+ * tool_result 整条永不丢弃（:1137-1145）。
  *
  * ## 已知未建模清单（显式声明的偏差，不算镜像缺口）
  * 1. **transformMessages 上游改写**（pi `api/transform-messages.ts`，在
- *    convertMessages 之前执行）：stopReason error/aborted 的 assistant 消息
- *    被整条剔除、孤儿 toolCall 合成 "No result provided" 结果、非 vision
- *    模型图片降级占位、跨模型 thinking/toolCallId 规范化。这些是
- *    「历史 + 模型」的确定函数，模型变化已由 modelChange 重置事件覆盖。
+ * convertMessages 之前执行）：stopReason error/aborted 的 assistant 消息
+ * 被整条剔除、孤儿 toolCall 合成 "No result provided" 结果、非 vision
+ * 模型图片降级占位、跨模型 thinking/toolCallId 规范化。这些是
+ * 「历史 + 模型」的确定函数，模型变化已由 modelChange 重置事件覆盖。
  * 2. **deferred tools / tool_reference / siblingContent**（pi :983-994、
- *    :1120-1152）：依赖 model.compat.supportsToolReferences 与
- *    splitDeferredTools 的整块重排逻辑，guard 不建模；工具集变化由
- *    toolsetChange 重置事件覆盖。
+ * :1120-1152）：依赖 model.compat.supportsToolReferences 与
+ * splitDeferredTools 的整块重排逻辑，guard 不建模；工具集变化由
+ * toolsetChange 重置事件覆盖。
  * 3. image 的 data/mimeType 不进哈希（性能取舍；append-only 历史中
- *    图片内容不原地变化，原地改写属重置事件域）。
+ * 图片内容不原地变化，原地改写属重置事件域）。
  * 4. toolName 进 toolResult 哈希（pi wire 不含；保留为原地改写纵深检测，
- *    误报方向，已声明）。
+ * 误报方向，已声明）。
  * 5. stableStringify 稳定键序为等价类声明：JSON 键插入顺序变化不算断裂。
  * 6. strict 工具 schema 的顶层附加键与 strict 标记被 {properties,required}
- *    过滤剔除（仅 compat.supportsStrictTools 生效时出现，模型变化由
- *    modelChange 事件覆盖）。
+ * 过滤剔除（仅 compat.supportsStrictTools 生效时出现，模型变化由
+ * modelChange 事件覆盖）。
  */
 
 import { createHash } from 'node:crypto'
@@ -146,7 +146,11 @@ function hasThinkingSignature(block: ThinkingContent): boolean {
   return !!signature && signature.trim().length > 0
 }
 
-/** 稳定键序的 JSON 序列化：保证同构对象产出同一字符串。 */
+/**
+ * 稳定键序的 JSON 序列化：保证同构对象产出同一字符串。
+ * @param value - 任意 JSON 可序列化值。
+ * @returns 稳定键序的 JSON 字符串。
+ */
 export function stableStringify(value: unknown): string {
   if (value === null || value === undefined) return 'null'
   if (typeof value !== 'object') return JSON.stringify(value)
@@ -166,6 +170,8 @@ export function stableStringify(value: unknown): string {
  * `sanitizeSurrogates(context.systemPrompt)` 原样入 body，
  * `anthropic-messages.ts` 1021/1030）。
  * 段内不含 cache_control（那是 adapter 注入的），无块结构可剔除。
+ * @param system - pi-ai Context 的 system 段（可为 undefined）。
+ * @returns 规范化后的 system 串（缺失即空串）。
  */
 export function normalizeSystem(system: string | undefined): string {
   if (system === undefined || system.length === 0) return ''
@@ -189,6 +195,8 @@ function filterToolParameters(parameters: unknown): { properties: unknown; requi
  * OAuth 工具名映射（等价类）、description 原样透传（pi :1355 不清理）、
  * parameters 只留 {properties,required}；序列化天然剔除
  * cache_control/ttl/eager_input_streaming 及任何 adapter 附加字段。
+ * @param tools - pi-ai Context 的 tools 段（可为 undefined）。
+ * @returns 规范化后的 tools 串。
  */
 export function normalizeTools(tools: readonly PiTool[] | undefined): string {
   if (tools === undefined || tools.length === 0) return '[]'
@@ -239,6 +247,9 @@ function normalizeToolResultContent(
  * 规则见文件头「pi 保真口径」。返回 null 表示 pi 会把整条消息从请求体中
  * 剔除（user 空内容 / user 块全空 / assistant 块全空）；toolResult 在 pi
  * 中永不剔除，故不返回 null。
+ * @param message - 单条 pi-ai 消息。
+ * @param options - 可选的规范化选项（如 allowEmptySignature）。
+ * @returns 规范化后的消息对象；null 表示 pi 会整条剔除。
  */
 export function normalizeMessage(message: PiMessage, options?: NormalizeOptions): unknown {
   const allowEmptySignature = options?.allowEmptySignature ?? false
@@ -334,6 +345,9 @@ export function normalizeMessage(message: PiMessage, options?: NormalizeOptions)
 
 /**
  * 规范化 messages 段：逐条规范化、剔除 pi 会整条丢弃的空消息，返回稳定序列化串。
+ * @param messages - pi-ai 消息列表。
+ * @param options - 可选的规范化选项（如 allowEmptySignature）。
+ * @returns 规范化后的 messages 串。
  */
 export function normalizeMessages(messages: readonly PiMessage[], options?: NormalizeOptions): string {
   if (messages.length === 0) return '[]'
@@ -354,6 +368,7 @@ function sha256(input: string): string {
  * @param context - 待计算的 pi-ai Context。
  * @param seq - 可选：状态对应的会话日志 seq（豁免窗口判断用）。
  * @param options - 可选：镜像 pi compat 分支的规范化选项（如 allowEmptySignature）。
+ * @returns 三段规范化哈希与逐条消息哈希链头。
  */
 export function computeGuardState(
   context: PiContext,
@@ -413,7 +428,7 @@ export interface MonotonicResult {
  *
  * - system/tools 段：上一轮哈希必须与本轮逐字节相等（冻结段）。
  * - messages 段：上一轮的逐条消息哈希链头必须是本轮链头的前缀
- *   （前缀逐条相等 + 本轮尾部新增），即只允许尾部追加。
+ * （前缀逐条相等 + 本轮尾部新增），即只允许尾部追加。
  *
  * @param prev - 上一轮（应更短/更早）的 GuardState。
  * @param next - 本轮（应更长/更晚）的 GuardState。
@@ -521,7 +536,10 @@ export interface ResetLedger {
   readonly generation: number
 }
 
-/** 创建空的台账。 */
+/**
+ * 创建空的台账。
+ * @returns 新的空台账。
+ */
 export function createResetLedger(): ResetLedger {
   return { events: [], generation: 0 }
 }

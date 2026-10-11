@@ -1,0 +1,28 @@
+# Bilingual-pair consistency record for 2026-10-11-context-cache-port.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/persistence-changes/2026-10-11-context-cache-port.md
+/:
+  en: 3d5a424ae7d7e46b
+  zh: c22a8e4a62d8cc1a
+/2026-10-11-context-cache-port:
+  en: faada41fd96c4d9e
+  zh: 7e529817e710f128
+/2026-10-11-context-cache-port/summary:
+  en: ea9a56a8c2253ea5
+  zh: 0dc5462eee969271
+/2026-10-11-context-cache-port/table-of-contents:
+  en: 6cf314a069ceb451
+  zh: 9adff678e9ecab3b
+/2026-10-11-context-cache-port/declaration:
+  en: 6907136f28e48c90
+  zh: 02f8298485f3d8e7
+/2026-10-11-context-cache-port/compatibility:
+  en: 27d485f4990a7a75
+  zh: 30a59afad62f1c15
+/2026-10-11-context-cache-port/verification:
+  en: fb7f60cb7236fa3d
+  zh: b7254f10bc7cf463
+/2026-10-11-context-cache-port/dev-note:
+  en: b75c8458928b72b9
+  zh: 003ba4e17b4b5269

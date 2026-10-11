@@ -9,7 +9,7 @@
  * for observability, per S1′: "重置频率与 warm-up 计数单独展示".
  *
  * Compression equivalence (S2′) is the design's own acceptance yardstick:
- *   压缩当量 = Σ 每次压缩的摘要输入 / 平均轮增量
+ * 压缩当量 = Σ 每次压缩的摘要输入 / 平均轮增量
  * and the acceptance rule is `压缩当量 ≤ 总轮数 × 20%`.
  *
  * @module @deepseek-ai/dsh-token-meter/cache-metrics
@@ -292,6 +292,8 @@ export function compressionEquivalenceWithinBudget(metrics: CacheMetricsProjecti
 /**
  * Effective steady-state hit rate `r` from a cache-metrics projection.
  * Returns 0 when no eligible request has been observed.
+ * @param metrics - cache-metrics 投影。
+ * @returns 平稳态命中率 r。
  */
 export function effectiveHitRate(metrics: CacheMetricsProjection): number {
   return metrics.hitRate

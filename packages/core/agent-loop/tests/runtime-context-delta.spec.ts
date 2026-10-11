@@ -4,7 +4,14 @@ import { ToolCallId, createAssistantMessage, createToolResultMessage, createUser
 import SessionStore, { SessionId, SessionSeq, type Session } from '@deepseek-ai/dsh-session'
 import { RuntimeContextProjection } from '../src/runtime-context.ts'
 
-const SOURCE = '@deepseek-ai/dsh-system-prompt'
+declare module '@deepseek-ai/dsh-llm' {
+  interface MessageSourceMap {
+    /** Spec-local foreign injection: another producer's content, which this projection must not own. */
+    'fixture-injection': { kind: 'fixture-injection' }
+  }
+}
+
+const SOURCE = 'runtime-context'
 const CLEARED_TEXT = 'Current runtime context: none. Earlier runtime-context snapshots no longer apply.'
 
 function userMessage(text: string): UserMessage {
@@ -110,10 +117,10 @@ describe('RuntimeContextProjection (L2 delta protocol)', () => {
     const assistantSeq = session.append('assistant/message', { stream: [], turn: 1, step: 1, message: assistant }, { surfaceOp: 'append' }).seq
     const resultSeq = appendToolResult(session, 'c1', 'ok')
 
-    // 工具上下文（plugin 源）不是真实 user 消息 → 折叠推迟，delta 不进视图。
+    // 工具上下文（外部 producer 注入源）不是真实 user 消息 → 折叠推迟，delta 不进视图。
     const pluginContext = createUserMessage({
       content: [{ type: 'text', text: 'tool context' }],
-      source: { kind: 'plugin', plugin: 'test-tool' },
+      source: { kind: 'fixture-injection' },
     })
     const deferred = projection.foldInto([pluginContext])
     expect(deferred[0]).toBe(pluginContext)
@@ -122,7 +129,7 @@ describe('RuntimeContextProjection (L2 delta protocol)', () => {
     // 压缩替换覆盖该区间 → delta 区间被清空（随边界从发送视图消失）。
     session.append('user/message', createUserMessage({
       content: [{ type: 'text', text: 'compacted summary' }],
-      source: { kind: 'plugin', plugin: 'test-compaction' },
+      source: { kind: 'fixture-injection' },
     }), {
       surfaceOp: { op: 'replace', startSeq: assistantSeq, endSeq: resultSeq },
       sourceEventSeqs: [assistantSeq, resultSeq],
@@ -269,10 +276,10 @@ describe('RuntimeContextProjection (L2 delta protocol)', () => {
 
   it('rebuilds the projection baseline from session events on restore and ignores other sessions', async () => {
     const { ctx, session } = await makeSession('delta-restore')
-    // 旧格式快照日志：owned plugin/snapshot 消息（回放重建基线）。
+    // 旧格式快照日志：owned runtime-context snapshot 消息（回放重建基线）。
     session.append('user/message', createUserMessage({
       content: [{ type: 'text', text: 'Old context' }],
-      source: { kind: 'plugin', plugin: SOURCE, form: 'snapshot', sections: [{ name: 'policy', text: 'Mode: read-only.' }] },
+      source: { kind: SOURCE, form: 'snapshot', sections: [{ name: 'policy', text: 'Mode: read-only.' }] },
     }), { surfaceOp: 'append' })
 
     const projection = new RuntimeContextProjection(ctx, session)
@@ -287,7 +294,7 @@ describe('RuntimeContextProjection (L2 delta protocol)', () => {
     const other = ctx.sessions.create(SessionId('delta-restore-other'))
     other.append('user/message', createUserMessage({
       content: [{ type: 'text', text: 'other context' }],
-      source: { kind: 'plugin', plugin: SOURCE },
+      source: { kind: SOURCE },
     }), { surfaceOp: 'append' })
     expect(projection.pendingDeltaText()).toBe('Mode: danger-full-access.')
   })
@@ -390,7 +397,7 @@ describe('RuntimeContextProjection (L2 delta protocol)', () => {
     const projection = new RuntimeContextProjection(ctx, session)
     projection.register('C1', [{ name: 'policy', text: 'Mode: read-only.' }])
 
-    // 工具批（assistant + toolResult）后跟 plugin 源 user 消息 → 折叠不被 plugin 阻断。
+    // 工具批（assistant + toolResult）后跟外部 producer 注入的 user 消息 → 折叠不被注入源阻断。
     const assistant = createAssistantMessage({
       content: [{ type: 'tool-call', id: ToolCallId('c1'), name: 't1', arguments: '{}' }],
       source: { provider: 'mock', model: 'mock' },
@@ -399,7 +406,7 @@ describe('RuntimeContextProjection (L2 delta protocol)', () => {
     appendToolResult(session, 'c1', 'r1')
     session.append('user/message', createUserMessage({
       content: [{ type: 'text', text: 'tool context' }],
-      source: { kind: 'plugin', plugin: 'test-tool' },
+      source: { kind: 'fixture-injection' },
     }), { surfaceOp: 'append' })
     const folded = projection.foldInto([userMessage('hello')])
     expect(textOfMessage(folded[0]!)).toBe('C1\n\nhello')
@@ -416,7 +423,7 @@ describe('RuntimeContextProjection (L2 delta protocol)', () => {
     }, { surfaceOp: 'append' })
     session2.append('user/message', createUserMessage({
       content: [{ type: 'text', text: 'tool context' }],
-      source: { kind: 'plugin', plugin: 'test-tool' },
+      source: { kind: 'fixture-injection' },
     }), { surfaceOp: 'append' })
     const folded2 = assistantCtx.foldInto([userMessage('hello')])
     expect(textOfMessage(folded2[0]!)).toBe('C1\n\nhello')
@@ -456,7 +463,7 @@ describe('RuntimeContextProjection (L2 delta protocol)', () => {
     // 压缩替换覆盖 [assistant..toolResult]（边界 end = resultSeq）：只回收边界前的 delta。
     session.append('user/message', createUserMessage({
       content: [{ type: 'text', text: 'compacted' }],
-      source: { kind: 'plugin', plugin: 'test-compaction' },
+      source: { kind: 'fixture-injection' },
     }), {
       surfaceOp: { op: 'replace', startSeq: assistantSeq, endSeq: resultSeq },
       sourceEventSeqs: [assistantSeq, resultSeq],

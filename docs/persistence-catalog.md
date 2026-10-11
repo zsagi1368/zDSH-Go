@@ -29,6 +29,7 @@ The [format references](persistence-changes/historical-formats/README.md) cover 
 | `event:approval/policy` | event | `26718e15e7e395bce9642dba5bbe09b3b1a4ce2213d20d566cd9207d7fc5fb78` | [`{ type: "approval/policy" }`](#persistence-type-sha256-26718e15e7e395bce9642dba5bbe09b3b1a4ce2213d20d566cd9207d7fc5fb78) |
 | `event:assistant/attempt` | event | `15d5dfdd822aa35e115afd74a8982825a493880457774e6850bc1520b50875e4` | [`{ type: "assistant/attempt" }`](#persistence-type-sha256-15d5dfdd822aa35e115afd74a8982825a493880457774e6850bc1520b50875e4) |
 | `event:assistant/message` | event | `1033093edd0db80ff410e00830b523405e00bb0c7684948e531ff65095799625` | [`{ type: "assistant/message" }`](#persistence-type-sha256-1033093edd0db80ff410e00830b523405e00bb0c7684948e531ff65095799625) |
+| `event:cache/ledger` | event | `bdf704a54eae27e454f933e6781a1f00ed3b2385c18cfd23e03bac54227a89b7` | [`{ type: "cache/ledger" }`](#persistence-type-sha256-bdf704a54eae27e454f933e6781a1f00ed3b2385c18cfd23e03bac54227a89b7) |
 | `event:command/done` | event | `15196447222782e773eb943c92b18316ce96b9af0f0cfddb6e57ba8274ecc5ff` | [`{ type: "command/done" }`](#persistence-type-sha256-15196447222782e773eb943c92b18316ce96b9af0f0cfddb6e57ba8274ecc5ff) |
 | `event:command/run` | event | `37184378c6439257d105c4e2022d80fc9c3a3f7c7f6ac661b00bc9f18d871006` | [`{ type: "command/run" }`](#persistence-type-sha256-37184378c6439257d105c4e2022d80fc9c3a3f7c7f6ac661b00bc9f18d871006) |
 | `event:compaction/end` | event | `b0127044ab31a702bddfd785d345f5abd7a70876746e895ce443afa3e60ddf2d` | [`{ type: "compaction/end" }`](#persistence-type-sha256-b0127044ab31a702bddfd785d345f5abd7a70876746e895ce443afa3e60ddf2d) |
@@ -61,7 +62,7 @@ The [format references](persistence-changes/historical-formats/README.md) cover 
 | `event:step/end` | event | `e0a787e6ec76c7c94fecbc501b489164ab0293db05bc947914077ad01e674f05` | [`{ type: "step/end" }`](#persistence-type-sha256-e0a787e6ec76c7c94fecbc501b489164ab0293db05bc947914077ad01e674f05) |
 | `event:step/start` | event | `4513e088d43e6c68425be30451b9f961cc264fe7318ca62681c41d4d78615986` | [`{ type: "step/start" }`](#persistence-type-sha256-4513e088d43e6c68425be30451b9f961cc264fe7318ca62681c41d4d78615986) |
 | `event:subagent/catalog` | event | `53750b9abf61efb7992b0aadc3e247ec927449c63266df28230fd1139f5590ac` | [`{ type: "subagent/catalog" }`](#persistence-type-sha256-53750b9abf61efb7992b0aadc3e247ec927449c63266df28230fd1139f5590ac) |
-| `event:subagent/descriptor` | event | `b79ada42962cad0190a9d465805260567621fa3a4abd757eb31e6016b52d5ab5` | [`{ type: "subagent/descriptor" }`](#persistence-type-sha256-b79ada42962cad0190a9d465805260567621fa3a4abd757eb31e6016b52d5ab5) |
+| `event:subagent/descriptor` | event | `3c9efaa7cd6b2a4137cd20c448aa63c49a4eb1a39047112360a2d1d09af5a7aa` | [`{ type: "subagent/descriptor" }`](#persistence-type-sha256-3c9efaa7cd6b2a4137cd20c448aa63c49a4eb1a39047112360a2d1d09af5a7aa) |
 | `event:subagent/model-selection-policy` | event | `a6567ccb2e530606b775371eb4fa31468d72084339968e8b0440a516a23b39dc` | [`{ type: "subagent/model-selection-policy" }`](#persistence-type-sha256-a6567ccb2e530606b775371eb4fa31468d72084339968e8b0440a516a23b39dc) |
 | `event:system/message` | event | `69081694be231d56fd9580ba14645fd5e35373202605d5c5c841a9435b5fa3b1` | [`{ type: "system/message" }`](#persistence-type-sha256-69081694be231d56fd9580ba14645fd5e35373202605d5c5c841a9435b5fa3b1) |
 | `event:team/member` | event | `4fb59762612c3e3ac3a3bd4f84c9c148d3c3893bd422ba2b201cc039fabd49bc` | [`{ type: "team/member" }`](#persistence-type-sha256-4fb59762612c3e3ac3a3bd4f84c9c148d3c3893bd422ba2b201cc039fabd49bc) |
@@ -317,6 +318,35 @@ Source: [`packages/core/session/src/types.ts:355`](../packages/core/session/src/
 Types: [TokenUsage](subsystems/llm-streaming.md)
 
 Source: [`packages/core/session/src/types.ts:341`](../packages/core/session/src/types.ts)
+
+### `cache/*`
+
+<a id="cacheledger--log-only"></a>
+
+#### `cache/ledger` — log-only
+
+```ts persistence-catalog
+/**
+ * L5 缓存重置台账快照（Phase 6 遗留收口）：`tailMerge`/`compaction`
+ * 重置登记后追加，序列化 cache-guardian `ResetLedger`（events +
+ * generation）与累计重置写入成本。log-only，辅助缓存豁免窗口与
+ * 记账重建，不参与消息历史重构。
+ */
+'cache/ledger': {
+  /** 序列化的重置台账 JSON（`serializeLedger` 输出，快照式，恢复取末条）。 */
+  ledger: string
+  /**
+   * 本次重置的增量写入成本（token 当量，`η×contextTokens`，即
+   * `accountResetCost` 单条结果）。非累计快照——投影侧 `cacheMetrics`
+   * 经 `foldResetWriteCost` 逐条累加成 `resetWriteTokens`，agent 侧
+   * `restoreCacheLedger` 对所有条求和还原 `totalResetWriteCost`，两者
+   * 恒等于同一 Σ，故报告指标与持久化账本不会分叉。
+   */
+  resetWriteCost: number
+}
+```
+
+Source: [`packages/core/agent-loop/src/agent.ts:67`](../packages/core/agent-loop/src/agent.ts)
 
 ### `command/*`
 
@@ -877,7 +907,7 @@ Source: [`packages/session/session-log-deepseek/src/types.ts:81`](../packages/se
 'slots/dispatch': ModelSlotDispatchEventData
 ```
 
-Source: [`packages/llm/model-slots/src/index.ts:60`](../packages/llm/model-slots/src/index.ts)
+Source: [`packages/llm/model-slots/src/index.ts:89`](../packages/llm/model-slots/src/index.ts)
 
 ### `step/*`
 
@@ -934,7 +964,7 @@ Source: [`packages/subagent/subagent/src/catalog.ts:44`](../packages/subagent/su
 'subagent/descriptor': SubagentDescriptorData
 ```
 
-Source: [`packages/subagent/subagent/src/descriptor.ts:38`](../packages/subagent/subagent/src/descriptor.ts)
+Source: [`packages/subagent/subagent/src/descriptor.ts:45`](../packages/subagent/subagent/src/descriptor.ts)
 
 <a id="subagentmodel-selection-policy--log-only"></a>
 
@@ -1501,6 +1531,14 @@ SHA-256: `cbca49bde16b656d5b8fbe4a8a507769f7b594c6287782b809c03814941bc5e3`
 SHA-256: `254dce209e735f9cb6f6b7aec0354712b1611759ec02af4d35a96f2081e666f6`
 
 `"blocked"`
+
+<a id="persistence-type-sha256-7c0aeb86a0016b93c4c52f233d94ff0e8f892120d5ea3b69f51ac13aa596211b"></a>
+
+### `"cache/ledger"`
+
+SHA-256: `7c0aeb86a0016b93c4c52f233d94ff0e8f892120d5ea3b69f51ac13aa596211b`
+
+`"cache/ledger"`
 
 <a id="persistence-type-sha256-d4e4d575abeb4b72d616dc65c17ac0eaa943cc135609395044c38d5afcb10e31"></a>
 
@@ -3069,7 +3107,7 @@ Sources: [`packages/context/agent-instructions/src/state.ts:40`](../packages/con
 
 SHA-256: `4a9bef9f27a942520cc2279ca7dd3082556e4bff543f66b5c0333e1bbed1cd86`
 
-Sources: [`packages/subagent/subagent/src/continuation-messages.ts:14`](../packages/subagent/subagent/src/continuation-messages.ts)
+Sources: [`packages/subagent/subagent/src/continuation-messages.ts:15`](../packages/subagent/subagent/src/continuation-messages.ts)
 
 | Property | Presence | Type |
 |---|---|---|
@@ -3270,7 +3308,7 @@ SHA-256: `c748fb42c80a120038a8c587af80ec39924803c401364db11c8974d5bf6d0262`
 
 Array of [`ContextSnapshotSection`](#persistence-type-sha256-86e1e384495ee09ac2d60c9db3610f1f1fddac2d248f6f1d6000e78054680219).
 
-<a id="persistence-type-sha256-6487b10ba7542f3c447b1e41a1c6a590b7bfafe0b9b66b49f34028da85bb970f"></a>
+<a id="persistence-type-sha256-bc5edc6e0527f719cddb5c5060c55fe9b2b1ed52ed55df7de1cdd1d24fd40de6"></a>
 
 <a id="persistence-type-continuablesubagentdescriptordata"></a>
 
@@ -3278,9 +3316,9 @@ Array of [`ContextSnapshotSection`](#persistence-type-sha256-86e1e384495ee09ac2d
 
 ### `ContinuableSubagentDescriptorData`
 
-SHA-256: `6487b10ba7542f3c447b1e41a1c6a590b7bfafe0b9b66b49f34028da85bb970f`
+SHA-256: `bc5edc6e0527f719cddb5c5060c55fe9b2b1ed52ed55df7de1cdd1d24fd40de6`
 
-Sources: [`packages/subagent/subagent/src/descriptor.ts:72`](../packages/subagent/subagent/src/descriptor.ts)
+Sources: [`packages/subagent/subagent/src/descriptor.ts:79`](../packages/subagent/subagent/src/descriptor.ts)
 
 | Property | Presence | Type |
 |---|---|---|
@@ -3291,6 +3329,7 @@ Sources: [`packages/subagent/subagent/src/descriptor.ts:72`](../packages/subagen
 | `mode` | required | `"continuable"` |
 | `persona` | optional | `string` |
 | `provider` | required | `string` |
+| `returnCap` | optional | `number` |
 | `toolFilter` | optional | [`ToolRestriction`](#persistence-type-sha256-3cfc3a56502da1f8c6153c2c56657bab4b749056968634dd0991d325ec1c919f) |
 | `version` | required | `number` |
 
@@ -4220,7 +4259,7 @@ Sources: [`packages/api/session-controller/src/types.ts:100`](../packages/api/se
 
 SHA-256: `b5179f11c20399c4cc20662a3c01195e2c971708ac7ecb3e6e7911c98289e014`
 
-Sources: [`packages/llm/model-slots/src/index.ts:46`](../packages/llm/model-slots/src/index.ts)
+Sources: [`packages/llm/model-slots/src/index.ts:75`](../packages/llm/model-slots/src/index.ts)
 
 | Property | Presence | Type |
 |---|---|---|
@@ -4239,7 +4278,7 @@ Sources: [`packages/llm/model-slots/src/index.ts:46`](../packages/llm/model-slot
 
 SHA-256: `0ea83f814076a21d409beac1e4759e6191e29e9694b576d52a66e0c653da441b`
 
-Sources: [`packages/llm/model-slots/src/index.ts:43`](../packages/llm/model-slots/src/index.ts)
+Sources: [`packages/llm/model-slots/src/index.ts:72`](../packages/llm/model-slots/src/index.ts)
 
 One of:
 
@@ -4275,7 +4314,7 @@ Sources: [`packages/schedule/schedule/src/types.ts:237`](../packages/schedule/sc
 
 SHA-256: `5f758f3de5f00c18968a7c6d347083aac5c9ae13f6a79c78f6611b23c4973564`
 
-Sources: [`packages/subagent/subagent/src/descriptor.ts:61`](../packages/subagent/subagent/src/descriptor.ts)
+Sources: [`packages/subagent/subagent/src/descriptor.ts:68`](../packages/subagent/subagent/src/descriptor.ts)
 
 | Property | Presence | Type |
 |---|---|---|
@@ -4725,7 +4764,7 @@ One of:
 - [`{ childCreatedAt, childId, label?, mode, … }`](#persistence-type-sha256-a0f25b5aeeebf2bf1542ce67726b095e3b139a39c71861d57e827f12dea1f499)
 - [`{ childCreatedAt, childId, label, mode, … }`](#persistence-type-sha256-0e10d7c096b47e61defe372a5fc8bd37d835199410eac44367f95c45082498bd)
 
-<a id="persistence-type-sha256-86d1d0e9cfebb240421187e3dc37fb71cc38a1501885cf32f8f9adef7b0a2bde"></a>
+<a id="persistence-type-sha256-e90f60f6b55d03b3488f24a1bc05db03d8b0971afc459f2bb0524b5186015758"></a>
 
 <a id="persistence-type-packagessubagentsubagentsrcdescriptortssubagentdescriptordata"></a>
 
@@ -4733,13 +4772,13 @@ One of:
 
 ### `SubagentDescriptorData`
 
-SHA-256: `86d1d0e9cfebb240421187e3dc37fb71cc38a1501885cf32f8f9adef7b0a2bde`
+SHA-256: `e90f60f6b55d03b3488f24a1bc05db03d8b0971afc459f2bb0524b5186015758`
 
-Sources: [`packages/subagent/subagent/src/descriptor.ts:89`](../packages/subagent/subagent/src/descriptor.ts)
+Sources: [`packages/subagent/subagent/src/descriptor.ts:104`](../packages/subagent/subagent/src/descriptor.ts)
 
 One of:
 
-- [`ContinuableSubagentDescriptorData`](#persistence-type-sha256-6487b10ba7542f3c447b1e41a1c6a590b7bfafe0b9b66b49f34028da85bb970f)
+- [`ContinuableSubagentDescriptorData`](#persistence-type-sha256-bc5edc6e0527f719cddb5c5060c55fe9b2b1ed52ed55df7de1cdd1d24fd40de6)
 - [`OneShotSubagentDescriptorData`](#persistence-type-sha256-5f758f3de5f00c18968a7c6d347083aac5c9ae13f6a79c78f6611b23c4973564)
 
 <a id="persistence-type-sha256-4e97c3d85c0fc817ee58873c38c25a2474abaaa0af4839311b50b68db3b8cf1a"></a>
@@ -4752,7 +4791,7 @@ One of:
 
 SHA-256: `4e97c3d85c0fc817ee58873c38c25a2474abaaa0af4839311b50b68db3b8cf1a`
 
-Sources: [`packages/subagent/subagent/src/continuation-messages.ts:29`](../packages/subagent/subagent/src/continuation-messages.ts)
+Sources: [`packages/subagent/subagent/src/continuation-messages.ts:30`](../packages/subagent/subagent/src/continuation-messages.ts)
 
 | Property | Presence | Type |
 |---|---|---|
@@ -7554,6 +7593,19 @@ Sources: [`packages/session/working-directory/src/index.ts:29`](../packages/sess
 |---|---|---|
 | `kind` | required | `"working-directory"` |
 
+<a id="persistence-type-sha256-6e3bd07c92c4e0d6445c80c9c9df001688fc1e7f2ca62f9645eb7ed282beaa4c"></a>
+
+### `{ ledger, resetWriteCost }`
+
+SHA-256: `6e3bd07c92c4e0d6445c80c9c9df001688fc1e7f2ca62f9645eb7ed282beaa4c`
+
+Sources: [`packages/llm/token-meter/src/cache-metrics.ts:32`](../packages/llm/token-meter/src/cache-metrics.ts)
+
+| Property | Presence | Type |
+|---|---|---|
+| `ledger` | required | `string` |
+| `resetWriteCost` | required | `number` |
+
 <a id="persistence-type-sha256-930a6567a10bb62ddd157bd8abdf4b182810c8c3b49d91309b3b009a5fed9731"></a>
 
 ### `{ max_tokens, messages, model, tools }`
@@ -7935,6 +7987,22 @@ Sources: [`packages/llm/llm/src/types.ts:453`](../packages/llm/llm/src/types.ts)
 | `blockType` | required | [`ContentBlockType`](#persistence-type-sha256-7d65acf0a3a43a8f445ce5d3320b42eca492739fc931b2a7516bfb8368dc2c68) |
 | `index` | required | `number` |
 | `type` | required | `"block-start"` |
+
+<a id="persistence-type-sha256-bdf704a54eae27e454f933e6781a1f00ed3b2385c18cfd23e03bac54227a89b7"></a>
+
+<a id="persistence-type-eventcacheledger"></a>
+
+### `{ type: "cache/ledger" }`
+
+SHA-256: `bdf704a54eae27e454f933e6781a1f00ed3b2385c18cfd23e03bac54227a89b7`
+
+| Property | Presence | Type |
+|---|---|---|
+| `data` | required | [`{ ledger, resetWriteCost }`](#persistence-type-sha256-6e3bd07c92c4e0d6445c80c9c9df001688fc1e7f2ca62f9645eb7ed282beaa4c) |
+| `ignorable` | optional | `true` |
+| `seq` | required | `number` |
+| `time` | required | `number` |
+| `type` | required | `"cache/ledger"` |
 
 <a id="persistence-type-sha256-487b65c37bfedb8b72088c4107a0a90a6249701f6b26745f6d98f9b8a22b07c7"></a>
 
@@ -8508,17 +8576,17 @@ SHA-256: `53750b9abf61efb7992b0aadc3e247ec927449c63266df28230fd1139f5590ac`
 | `time` | required | `number` |
 | `type` | required | `"subagent/catalog"` |
 
-<a id="persistence-type-sha256-b79ada42962cad0190a9d465805260567621fa3a4abd757eb31e6016b52d5ab5"></a>
+<a id="persistence-type-sha256-3c9efaa7cd6b2a4137cd20c448aa63c49a4eb1a39047112360a2d1d09af5a7aa"></a>
 
 <a id="persistence-type-eventsubagentdescriptor"></a>
 
 ### `{ type: "subagent/descriptor" }`
 
-SHA-256: `b79ada42962cad0190a9d465805260567621fa3a4abd757eb31e6016b52d5ab5`
+SHA-256: `3c9efaa7cd6b2a4137cd20c448aa63c49a4eb1a39047112360a2d1d09af5a7aa`
 
 | Property | Presence | Type |
 |---|---|---|
-| `data` | required | [`SubagentDescriptorData`](#persistence-type-sha256-86d1d0e9cfebb240421187e3dc37fb71cc38a1501885cf32f8f9adef7b0a2bde) |
+| `data` | required | [`SubagentDescriptorData`](#persistence-type-sha256-e90f60f6b55d03b3488f24a1bc05db03d8b0971afc459f2bb0524b5186015758) |
 | `ignorable` | optional | `true` |
 | `seq` | required | `number` |
 | `time` | required | `number` |
