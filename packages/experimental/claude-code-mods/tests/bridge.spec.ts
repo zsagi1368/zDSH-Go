@@ -133,6 +133,15 @@ function events(agent: Agent): readonly SessionEvent[] {
   return agent.session.snapshotEvents()
 }
 
+/**
+ * A″（D3）：运行时上下文快照折进下一条真实 user 消息的首个文本块前缀
+ * （`<快照>\n\n<原文>`）；本 harness 的快照只含工作目录一节。
+ */
+function foldRuntimeContext(workspace: string, text: string): string {
+  return 'Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\n\n'
+    + `Current working directory: ${JSON.stringify(workspace)}.\n\n${text}`
+}
+
 function toolResult(agent: Agent): { isError: boolean; text: string } | undefined {
   const event = events(agent).find(e => e.type === 'tool/result')
   if (event?.type !== 'tool/result') return undefined
@@ -252,7 +261,7 @@ describe('ticket-mod: a mod-registered tool, prompt context, and a turn.complete
     const prompts = events(agent).filter(e => e.type === 'user/message' && e.data.source.kind === 'user')
     expect(prompts.map(e => e.type === 'user/message' && e.data.source)).toEqual([{ kind: 'user' }])
     expect(prompts[0]?.type === 'user/message' && prompts[0].data.content).toEqual([
-      { type: 'text', text: 'open a PR for this change' },
+      { type: 'text', text: foldRuntimeContext(h.workspace, 'open a PR for this change') },
       { type: 'text', text: 'Current branch: feature/mods' },
     ])
     expect(toolResult(agent)).toBeUndefined()
@@ -296,7 +305,7 @@ describe('prompt.submit: rewrite and drop', () => {
     agent.inject(createUserMessage({ content: [{ type: 'text', text: 'injected only' }], source: { kind: 'user-question-reply', callId: ToolCallIdOf('q0'), outcome: 'answered' } }))
     await h.turn(agent, '  hello there  ')
     const entered = events(agent).find(e => e.type === 'user/message' && e.data.source.kind === 'user')
-    expect(entered?.type === 'user/message' && entered.data.content).toEqual([{ type: 'text', text: 'HELLO THERE' }])
+    expect(entered?.type === 'user/message' && entered.data.content).toEqual([{ type: 'text', text: foldRuntimeContext(h.workspace, 'HELLO THERE') }])
     expect(JSON.stringify(adapter.requests[0]?.messages)).toContain('HELLO THERE')
 
     await h.turn(agent, 'tell me the secret')
@@ -537,8 +546,7 @@ describe('the mods API over harness services', () => {
         version: MODS_API_VERSION,
         usage: { startedAt: agent.session.header.createdAt, context: { window: 0 }, rateLimits: [] },
         messages: [
-          { role: 'user', text: 'hello', toolUses: [] },
-          { role: 'user', text: `Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\n\nCurrent working directory: ${JSON.stringify(h.workspace)}.`, toolUses: [] },
+          { role: 'user', text: foldRuntimeContext(h.workspace, 'hello'), toolUses: [] },
           { role: 'assistant', text: 'ok', toolUses: [] },
         ],
       })
@@ -990,7 +998,7 @@ describe('post-execute interplay and prompt rewrites with images', () => {
     await agent.whenIdle()
     const entered = () => events(agent).filter(e => e.type === 'user/message').map(e => e.type === 'user/message' && e.data.content)
     expect(entered()).toContainEqual([{ type: 'text', text: 'injected by a plugin' }])
-    expect(entered()).toContainEqual([{ type: 'text', text: 'rewritten: firstsecond' }, image])
+    expect(entered()).toContainEqual([{ type: 'text', text: foldRuntimeContext(h.workspace, 'rewritten: firstsecond') }, image])
     expect(toolResult(agent)).toEqual({ isError: true, text: 'blocked downstream' })
 
     block = false

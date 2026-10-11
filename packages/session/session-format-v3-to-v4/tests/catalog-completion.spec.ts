@@ -117,9 +117,13 @@ describe('V3 parent catalog completion', () => {
   it('retains unknown children while validating available descriptor fields', () => {
     const artifact = { header: { ...header, origin: 'subagent' as const, parentSession: 'parent' }, inheritedEventCount: 0, events: [] }
     expect(() => historicalChildCatalogSource({ ...artifact, header })).toThrow('direct parent')
-    for (const data of [null, {}, { version: 4, mode: 'one-shot', provider: 'spawn' }]) {
+    for (const data of [null, {}, { version: 99, mode: 'one-shot', provider: 'spawn' }]) {
       expect(migrate([], [historicalChildCatalogSource({ ...artifact, events: [{ type: 'subagent/descriptor', seq: 0, time: 1, data }] })]).events).toMatchObject([{ data: { childId: 'parent', mode: 'unknown' } }])
     }
+    // D4 偏离：Go 上下文移植把描述符版本提到 4（已发布数据），v4 与 1/2/3 同为已知版本。
+    expect(migrate([], [historicalChildCatalogSource({ ...artifact, events: [
+      { type: 'subagent/descriptor', seq: 0, time: 1, data: { version: 4, mode: 'one-shot', provider: 'spawn' } },
+    ] })]).events).toMatchObject([{ data: { childId: 'parent', mode: 'one-shot' } }])
     for (const value of [null, { ...child, version: 2 }, { ...child, childId: null },
       { ...child, label: null }, { ...child, childCreatedAt: -1 }]) {
       expect(() => migrate([], [value])).toThrow()

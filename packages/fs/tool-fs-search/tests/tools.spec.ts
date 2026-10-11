@@ -1176,6 +1176,8 @@ describe('presentation', () => {
       files: [{ path: 'a.ts', matches: [{ lineNumber: 1, line: 'one' }] }],
       truncated: false,
       total: 1,
+      // L3 pruning declaration（B11 重挂）：结果可裁剪，bytes = 模型可见正文的字节数。
+      'l3.pruning': { bytes: 31, prunable: true },
     })
     expect(presentGrepResult({ pattern: 'o' }, result)).toEqual({
       card: 'search',

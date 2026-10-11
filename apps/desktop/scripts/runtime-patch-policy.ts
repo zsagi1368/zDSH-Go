@@ -15,6 +15,7 @@ export const DESKTOP_RUNTIME_PATCHES: Readonly<Record<string, DesktopRuntimePatc
   '@yao-pkg/pkg@6.21.0': { scope: 'workspace-only', reason: 'The executable packer executes on the build host.' },
   'exceljs@4.4.0': { scope: 'workspace-only', reason: 'The patched parser is embedded in the client bundle and worker.' },
   'node-pty@1.2.0-beta.15': { scope: 'shared', reason: 'Runtime terminals need helper resolution and Windows worker cleanup.' },
+  'vitest@4.1.11': { scope: 'workspace-only', reason: 'The test runner executes on the build host.' },
 }
 
 /** Reviewed Desktop dependency constraints, independent of patch selection. */
