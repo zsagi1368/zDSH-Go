@@ -84,25 +84,23 @@ it('continues the parent through default Messages after a reasoning-bearing cont
       { type: 'text', text: 'child answer' },
     ]
     expect(notice?.content).toEqual(closingContent)
-    const noticeWithContext = [
-      ...closingContent,
-      {
-        type: 'text',
-        text: 'Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\n\n'
-          + `Current working directory: ${JSON.stringify(process.cwd())}.`,
-      },
-    ]
-    expect(requests[1]?.body).toMatchObject({ messages: [{ role: 'user', content: noticeWithContext }] })
+    // A″（R1 §7.2）：L2 是运行时上下文的唯一载体——请求期快照不随 producer 注入的
+    // `subagent-settled` 消息投递（该消息源非 `user`，不是折叠目标），故此处只含
+    // 结算文案。快照仍在，但载体是后续真实 user 消息（见下方 continue 断言）。
+    const contextText = 'Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\n\n'
+      + `Current working directory: ${JSON.stringify(process.cwd())}.`
+    expect(requests[1]?.body).toMatchObject({ messages: [{ role: 'user', content: closingContent }] })
 
     parent.followup(createUserMessage({ source: { kind: 'user' }, content: [{ type: 'text', text: 'continue' }] }))
     await parent.whenIdle()
     expect(parent.session.snapshotEvents().filter(event => event.type === 'turn/end'))
       .toMatchObject([{ data: { reason: { kind: 'completed' } } }, { data: { reason: { kind: 'completed' } } }])
     expect(requests).toHaveLength(3)
+    // L2 载体：请求期快照折进下一条真实 user 消息的文本前缀（`<delta>\n\n<原文>`）。
     expect(requests[2]?.body).toMatchObject({ messages: [
-      { role: 'user', content: noticeWithContext },
+      { role: 'user', content: closingContent },
       { role: 'assistant', content: [{ type: 'text', text: 'parent answer' }] },
-      { role: 'user', content: [{ type: 'text', text: 'continue' }] },
+      { role: 'user', content: [{ type: 'text', text: `${contextText}\n\ncontinue` }] },
     ] })
   } finally {
     try {

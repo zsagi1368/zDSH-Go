@@ -130,7 +130,7 @@ describe('continuable policy inheritance', () => {
   it.each([
     { seedPreset: 'auto', preset: 'danger-full-access' },
     { seedPreset: 'danger-full-access', preset: 'auto' },
-  ] as const)('captures $preset before child creation and overrides the $seedPreset fork prefix', { timeout: 20_000 }, async ({ seedPreset, preset }) => {
+  ] as const)('captures $preset before child creation and never replays the $seedPreset fork prefix (L6)', { timeout: 20_000 }, async ({ seedPreset, preset }) => {
     const { ctx, parent } = await setup([textResponse('parent turn'), textResponse('forked child')])
     parent.session.append('permission/preset', { preset: seedPreset })
     setSandboxMode(parent.session, 'danger-full-access')
@@ -146,13 +146,19 @@ describe('continuable policy inheritance', () => {
     } as never)
 
     const starting = ctx.subagents.startActivation({ ...startSpec(parent, 'fork'), delivery: 'parent' })
+    // The parent switch right after the synchronous capture belongs to the parent's
+    // future: the child keeps the delegation-time `preset`, and the L6 fork seed
+    // (none) never replays the historical `seedPreset`.
     currentPreset = seedPreset
     parent.session.append('permission/preset', { preset: seedPreset })
     const started = await starting
     await waitNoActivation(ctx, started.childId)
     const loaded = await loadStoredSession(ctx.sessionPersistence, started.childId)
+    // L6 minimal contract: a fork child contributes no parent-history seed, so the
+    // single permission record is the delegation-time capture — neither the parent's
+    // historical `seedPreset` nor the after-capture switch is replayed.
+    expect(loaded.inheritedEventCount).toBe(0)
     expect(loaded.events.filter(event => event.type === 'permission/preset')).toMatchObject([
-      { data: { preset: seedPreset } },
       { data: { preset } },
     ])
   })
