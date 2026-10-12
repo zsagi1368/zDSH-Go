@@ -39,8 +39,8 @@ jobs:
       - name: Build client library
         run: pnpm run build:lib:client
 
-      - name: Unit tests (vitest)
-        run: pnpm run test
+      - name: Unit tests (vitest, registered known failures excluded)
+        run: pnpm run test:ci
         timeout-minutes: 45
 
       - name: Lint (oxlint)

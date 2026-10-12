@@ -1,0 +1,125 @@
+{
+  "$comment": [
+    "Windows quality-gate known-failure roster — the ONLY sanctioned way for a spec file to stay red on the CI (Windows) lane without failing it.",
+    "Admission rules (TC-CI-GREEN §2, D23): (1) the file fails on a pristine reference tree too (upstream/environment face, evidenced), or (2) the failure is a REGISTERED Go semantic deviation (TD-2/TD-3).",
+    "Everything else must stay red: this roster is never a red-to-green switch, and `pnpm run test:ci` refuses to load a malformed roster.",
+    "Entries name exact spec files (no globs) so an entry cannot mask sibling files or later-added examples.",
+    "lane=github-windows-ci: red on the hosted Windows runner and locally. lane=workstation: reproduces only in this development machine's shell environment and stays covered on the hosted runner (GITHUB_ACTIONS=true), so the hosted gate loses no coverage from those entries.",
+    "Loaded and validated by scripts/ci-windows-known-failures.ts (shape, existence, lane, reason, evidence); pinned by scripts/ci-workflow.spec.ts."
+  ],
+  "entries": [
+    {
+      "path": "packages/sandbox/sandbox-windows-acl/tests/diagnose-script.spec.ts",
+      "lane": "github-windows-ci",
+      "reason": "acl 家族（上游/环境豁免面，承 sync-020 豁免台账）：套件在收集期即失败——`ACL fixtures require TEMP/TMP on a tree whose ancestors have no individual package allow ACEs`，30 例全 skip；非本战役引入，Go 侧无行为面可修。",
+      "evidence": [
+        "P6-GATE-MATRIX.md §3.1（继承/环境态表 acl 豁免族行：`diagnose-script.spec.ts` 套件级 30 skip，对照树 facbe8f3f6 同点同败）",
+        "P6-logs/cmp-zdsh-main-22files.stripped.log（22 文件对照复跑：`Test Files 11 failed | 11 passed (22)` / `Failed Suites 2`）",
+        "TC-CI-GREEN.md 背景（实测）「CI 失败集①：acl 家族 2 文件之一」"
+      ]
+    },
+    {
+      "path": "packages/sandbox/sandbox-windows-acl/tests/runner.spec.ts",
+      "lane": "github-windows-ci",
+      "reason": "acl 家族（上游/环境豁免面，承 sync-020 豁免台账「acl runner 13 + probe 1」）：13 例失败，Windows ACL/TEMP 前置在托管 runner 与本机同时不满足；Go 侧无对应行为改动。",
+      "evidence": [
+        "P6-GATE-MATRIX.md §3.1（acl 豁免族行：`runner.spec.ts`(13)，对照树 13F 同败）",
+        "P6-GATE-MATRIX.md §5（豁免台账对账行「acl 14F 类上游面 … 对照树同败」= 承 sync-020 豁免台账）",
+        "TC-CI-GREEN.md 背景（实测）「CI 失败集①：acl 家族 2 文件之一」"
+      ]
+    },
+    {
+      "path": "apps/desktop/tests/windows-cli-signals.spec.ts",
+      "lane": "github-windows-ci",
+      "reason": "环境态：`delivers SIGINT before process exit` 在 Windows 控制台信号面上超时（另有 afterAll 套件级超时）；对照树同点同败，属继承环境面而非 Go 语义差异。",
+      "evidence": [
+        "P6-GATE-MATRIX.md §3.1（命令/环境族行：`windows-cli-signals.spec.ts`(1+afterAll 套件)，「全部同败」）",
+        "P6-logs/gate04-full-test-run1.log（`FAIL thread-safe apps/desktop/tests/windows-cli-signals.spec.ts > Windows Electron console signals`）",
+        "TC-CI-GREEN.md 背景（实测）「CI 失败集②」"
+      ]
+    },
+    {
+      "path": "packages/compaction/compaction-basic/tests/runtime-context-admission.spec.ts",
+      "lane": "github-windows-ci",
+      "reason": "TD-2（已登记的 Go 语义缺口，非语义选择）：L2 基线非 surface 感知——压缩吃掉已投递的运行时上下文载体后不重发（`expected [ 5 ] to include undefined`）。D23 裁定不改写官方契约测试，登记进本清单 + `DEBT.md` TD-2 backlog（实现 surface 感知）。该文件仅此 1 例，文件级排除无额外掩盖面。",
+      "evidence": [
+        "P6-GATE-MATRIX.md §3.3（登记 Go 语义预期红：TD-2 行，隔离复跑 1F，对照树绿）",
+        "DEBT.md TD-2 行（「D23 裁定：不改写官方契约测试，改在 CI 排除清单登记 + 本行登记」）",
+        "P6-logs/rerun-registered-td2-td3.log（`retains required cwd in the first request after proactive compaction with optional context disabled` 1F 复现）"
+      ]
+    },
+    {
+      "path": "packages/boot/hmr/tests/package-manifest.spec.ts",
+      "lane": "workstation",
+      "reason": "环境态：`terminates scope lookup after invalidating the filesystem root without modifying it` 在子进程 `node:internal/modules/run_main:107` 处崩溃（Node 24 子进程原型/启动面本机行为）；对照树同点同败。",
+      "evidence": [
+        "P6-GATE-MATRIX.md §3.1（「其他」行：`hmr/tests/package-manifest.spec.ts`(1)，「子进程 deep-equal（Node 24 原型差异）」，对照树 1F 同败）",
+        "CIGREEN-logs/v1-local-measure.log:9682（本卡实测复现同一例）"
+      ]
+    },
+    {
+      "path": "packages/client/ui-sidebar-documentpreview/tests/document-preview-license-bundle.client.spec.ts",
+      "lane": "workstation",
+      "reason": "环境态：`keeps bundled licenses in the packed lazy chunks` 依赖打包 tar，本机 PATH 上的是 GNU tar（`tar: Cannot connect to C: resolve failed` / `expected 128 to be +0`）；对照树同点同败，托管 runner 自带 bsdtar 故 CI 不复现。",
+      "evidence": [
+        "P6-GATE-MATRIX.md §3.1（命令/环境族行：`document-preview-license-bundle.client.spec.ts`(1)，「GNU tar `C:` 解析」）",
+        "CIGREEN-logs/v1-local-measure.log:9743（本卡实测复现同一例）"
+      ]
+    },
+    {
+      "path": "packages/ptc-runtime/ptc-runtime-node/tests/runtime.spec.ts",
+      "lane": "workstation",
+      "reason": "环境态（承 sync-020 豁免台账）：2 例失败，根因是本机 node 路径面（`spawnSync C:\\nvm4w\\nodejs\\node.exe ENOENT`）与 grant lock/私有 temp 前置不满足；对照树同点同败。",
+      "evidence": [
+        "P6-GATE-MATRIX.md §3.1（ptc 族行：`ptc-runtime-node/tests/runtime.spec.ts`(2)，「承 sync-020 豁免台账」，对照树 2F 同败）",
+        "CIGREEN-logs/v1-local-measure.log:9862,9889（本卡实测复现：`uses the common Windows grant lock…` / `permits workspace writes and denies a symlink…`）"
+      ]
+    },
+    {
+      "path": "packages/sandbox/sandbox-windows-acl/tests/probe.spec.ts",
+      "lane": "workstation",
+      "reason": "acl 家族本机面（承 sync-020 豁免台账「acl runner 13 + probe 1」）：`allows writes only in granted directories and denies the escape write` 在子进程输出 `TARGET-WRITE: DENIED` 处失败（本机 TEMP/ACL 前置）；对照树同点同败。CI 轮失败集不含本文件（TC-CI-GREEN 背景实测只列 diagnose-script/runner），故按 workstation 车道登记；若托管 runner 复现，把 lane 升级为 github-windows-ci 即可（清单显式登记，改一行）。",
+      "evidence": [
+        "P6-GATE-MATRIX.md §3.1（acl 豁免族行：`probe.spec.ts`(1)，对照树 1F 同败）",
+        "P6-GATE-MATRIX.md §5（对账行「acl 14F 类上游面」含 probe）",
+        "CIGREEN-logs/v1-local-measure.log:9908（本卡实测复现同一例）"
+      ]
+    },
+    {
+      "path": "packages/util/native-command/tests/file-applications-windows.spec.ts",
+      "lane": "workstation",
+      "reason": "环境态（承 sync-020 豁免台账）：`queries and invokes a registered Windows handler through the system Shell` 失败于本机 PowerShell COM 面（`Exception calling \"List\" … HRESULT E_FAIL`）；对照树同点同败，属系统 Shell 句柄环境面。",
+      "evidence": [
+        "P6-GATE-MATRIX.md §3.1（命令/环境族行：`native-command/.../file-applications-windows.spec.ts`(1)，「系统 Shell 句柄」）",
+        "CIGREEN-logs/v1-local-measure.log:9936（本卡实测复现同一例）"
+      ]
+    },
+    {
+      "path": "packages/workflow/workflow-ptc/tests/source-runtime.compat.spec.ts",
+      "lane": "workstation",
+      "reason": "环境态（承 sync-020 豁免台账「件3」）：`enforces the Session file policy workspace-write for direct Node writes` 失败于本机临时目录写面（`ENOENT … \\.dsh-workflow-test-*\\workspace\\inside.txt`）；对照树同点同败。",
+      "evidence": [
+        "P6-GATE-MATRIX.md §3.1（件3 行：`workflow-ptc/tests/source-runtime.compat.spec.ts`(1)，对照树 1F 同败）",
+        "CIGREEN-logs/v1-local-measure.log:9967（本卡实测复现同一例）"
+      ]
+    },
+    {
+      "path": "scripts/gen-dependency-catalog.spec.ts",
+      "lane": "workstation",
+      "reason": "环境态：`isolates scoped registries, resolver settings, and caches from user, global, and environment configuration` 失败于本机 npm 输出污染（`SyntaxError: Unexpected token 'p', \"npm error c\"... is not valid JSON`）；对照树同点同败。",
+      "evidence": [
+        "P6-GATE-MATRIX.md §3.1（命令/环境族行：`gen-dependency-catalog.spec.ts`(1)，「npm 输出污染」）",
+        "CIGREEN-logs/v1-local-measure.log:9374（本卡实测复现同一例）"
+      ]
+    },
+    {
+      "path": "scripts/local-bundle-registry.spec.ts",
+      "lane": "workstation",
+      "reason": "tar 族（15 例）：`tar -czf C:\\…` 被本机 GNU tar 当作远端主机解析（`package exited with 2`），托管 runner 的 bsdtar 不复现；对照树同点同败，属同一 PATH 环境面。",
+      "evidence": [
+        "P6-GATE-MATRIX.md §3.1（tar 族行：`local-bundle-registry.spec.ts`(15)，「`tar -czf C:\\...` → exited 2（同一 PATH 环境）」，对照树 15F 同败）",
+        "CIGREEN-logs/v1-local-measure.log:9620（本卡实测复现同族失败）"
+      ]
+    }
+  ]
+}

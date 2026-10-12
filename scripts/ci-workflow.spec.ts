@@ -1,7 +1,9 @@
-import { existsSync, readFileSync, readdirSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
 import * as yaml from 'js-yaml'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
+import { KNOWN_FAILURE_LANES, KNOWN_FAILURES_PATH, KnownFailuresRosterError, loadKnownFailures } from './ci-windows-known-failures.ts'
 
 const root = resolve(import.meta.dirname, '..')
 
@@ -80,9 +82,18 @@ function packageManagerVersion(): string {
 }
 
 function packageScriptNames(): string[] {
+  return Object.keys(packageScripts())
+}
+
+/** The declared package scripts by name (bodies only; non-string entries are dropped). */
+function packageScripts(): Record<string, string> {
   const manifest: unknown = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'))
   if (!isRecord(manifest) || !isRecord(manifest.scripts)) throw new TypeError('package.json must define scripts')
-  return Object.keys(manifest.scripts)
+  const scripts: Record<string, string> = {}
+  for (const [name, body] of Object.entries(manifest.scripts)) {
+    if (typeof body === 'string') scripts[name] = body
+  }
+  return scripts
 }
 
 function ciWorkflow(): Record<string, unknown> {
@@ -118,7 +129,10 @@ describe('CI workflow (zDSH-Go standalone quality gate)', () => {
     // The gate builds both shipped libraries before running the suites.
     expect(runCommands).toContain('pnpm run build:lib:host')
     expect(runCommands).toContain('pnpm run build:lib:client')
-    expect(runCommands).toContain('pnpm run test')
+    // The unit lane is the roster-filtered one: a spec file red on this runner
+    // must be registered in the known-failure roster, never silently skipped.
+    expect(runCommands).toContain('pnpm run test:ci')
+    expect(runCommands).not.toContain('pnpm run test')
     expect(runCommands).toContain('pnpm run lint:contracts-ready')
     expect(runCommands).toContain('pnpm run test:docs')
   })
@@ -152,6 +166,94 @@ describe('CI workflow (zDSH-Go standalone quality gate)', () => {
 
     expect(config).not.toContain("pool: process.platform === 'win32' ? 'threads' : 'forks'")
     expect(config.match(/pool: 'forks'/g)).toHaveLength(2)
+  })
+})
+
+/**
+ * The Windows lane's known-failure roster: the registered register that lets an
+ * admitted file stay red without failing the gate. These tests pin the two
+ * halves of the anti-masking contract — every entry carries its admission
+ * evidence, and the CI lane's excludes come from the roster (plus the
+ * inherited repository config) and from nowhere else.
+ */
+describe('CI known-failure roster (Windows quality gate)', () => {
+  it('registers only existing, exact spec files with a reason and evidence', () => {
+    const entries = loadKnownFailures(root)
+
+    expect(entries.length).toBeGreaterThan(0)
+    for (const entry of entries) {
+      // Exact paths only: a glob would widen one registration into a mask.
+      expect(entry.path, entry.path).not.toMatch(/[*?[\]{}!]/)
+      expect(entry.path, entry.path).toMatch(/\.spec\.tsx?$/)
+      expect(existsSync(resolve(root, entry.path)), entry.path).toBe(true)
+      expect(KNOWN_FAILURE_LANES).toContain(entry.lane)
+      expect(entry.reason.trim().length, entry.path).toBeGreaterThan(0)
+      expect(entry.evidence.length, entry.path).toBeGreaterThan(0)
+      for (const reference of entry.evidence) expect(reference.trim().length, entry.path).toBeGreaterThan(0)
+    }
+  })
+
+  it('feeds the roster-filtered lane through the inherited config and its own package script', () => {
+    const scripts = packageScripts()
+    expect(scripts['test:ci']).toContain('vitest run --config vitest.ci.config.ts')
+
+    // The lane adds excludes; it must not re-implement the platform inventory
+    // or fork any other part of the repository's Vitest definition.
+    const config = readFileSync(resolve(root, 'vitest.ci.config.ts'), 'utf8')
+    expect(config).toContain("from './vitest.config.ts'")
+    expect(config).toContain('activeKnownFailurePaths')
+    expect(config).toContain('scripts/ci-windows-known-failures.ts')
+    expect(config).not.toContain('platformUnsupportedTests')
+    expect(config).not.toContain('pool:')
+
+    // The roster path the lane reads is the registered one.
+    expect(existsSync(resolve(root, KNOWN_FAILURES_PATH))).toBe(true)
+  })
+})
+
+/**
+ * The guards fail closed: a roster that could widen an entry into a mask (glob
+ * path), state no reason, cite no evidence, tag an unknown lane, or name a file
+ * that is gone must refuse to load — the lane then cannot run at all.
+ */
+describe('known-failure roster guards', () => {
+  const fixtureRoots: string[] = []
+
+  afterEach(() => {
+    for (const fixture of fixtureRoots.splice(0)) rmSync(fixture, { recursive: true, force: true })
+  })
+
+  /** A throwaway repository root holding one real spec file and `entries`. */
+  function fixtureRepository(entries: unknown): string {
+    const fixture = mkdtempSync(join(tmpdir(), 'dsh-known-failures-'))
+    fixtureRoots.push(fixture)
+    mkdirSync(join(fixture, 'packages/probe/target/tests'), { recursive: true })
+    writeFileSync(join(fixture, 'packages/probe/target/tests/probe.spec.ts'), '')
+    mkdirSync(join(fixture, 'scripts'), { recursive: true })
+    writeFileSync(join(fixture, KNOWN_FAILURES_PATH), JSON.stringify({ entries }))
+    return fixture
+  }
+
+  const ACCEPTED = {
+    path: 'packages/probe/target/tests/probe.spec.ts',
+    lane: 'workstation',
+    reason: 'registered for the guard test',
+    evidence: ['scripts/ci-workflow.spec.ts'],
+  }
+
+  it('accepts an exact, evidenced entry', () => {
+    expect(loadKnownFailures(fixtureRepository([ACCEPTED]))).toEqual([ACCEPTED])
+  })
+
+  it.each([
+    ['a glob path', { ...ACCEPTED, path: 'packages/probe/target/tests/*.spec.ts' }],
+    ['no evidence', { ...ACCEPTED, evidence: [] }],
+    ['an empty reason', { ...ACCEPTED, reason: '   ' }],
+    ['an unknown lane', { ...ACCEPTED, lane: 'somewhere-else' }],
+    ['an unknown key', { ...ACCEPTED, note: 'unregistered' }],
+    ['a missing file', { ...ACCEPTED, path: 'packages/probe/target/tests/gone.spec.ts' }],
+  ])('refuses %s', (_label, entry) => {
+    expect(() => loadKnownFailures(fixtureRepository([entry]))).toThrow(KnownFailuresRosterError)
   })
 })
 
