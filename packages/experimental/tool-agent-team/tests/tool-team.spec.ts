@@ -303,14 +303,21 @@ describe('dsh-tool-team', () => {
     expect(childRequest.system).not.toContain('Your Team role')
     // L6（Go 意图，对上游的行为偏离已登记）：fork 子会话不 seed 父历史，两种 mode
     // 都从零开始——官方"子请求保留继承前缀"的断言迁移为"父历史任一内容都不重放"。
-    // D25④ 补强：逐块断言覆盖非文本块（tool-call 的 id/name/arguments），并加整条
-    // 消息级断言——父历史消息的序列化形态不得原样出现在子请求 wire 上。
+    // D25④ 补强 → TC-G3-1 修正：`childRequest.messages` 是 `serialize` 产出的 wire
+    // （`packages/llm/llm-deepseek/src/serialize.ts:35` 把 harness 的
+    // `tool-call`/`arguments` 映射为 wire 的 `tool_use`/`input`），故父历史的 harness
+    // 内部块形**不可能**出现在 wire 上——按内部形做 substring 断言恒真（D25④ 原断言）。
+    // 改为按 wire 可辨识标识断言：文本块按文本判定，工具调用块按其 wire 标识
+    // （`tool_use` 块形 + call id；id 子串同时覆盖 `tool_use.id` 与 `tool_result.tool_use_id`）。
     const childWire = JSON.stringify(childRequest.messages)
-    for (const message of parentHistory) {
-      expect(childWire).not.toContain(JSON.stringify(message))
-      for (const block of message.content) {
-        expect(childWire).not.toContain(block.type === 'text' ? block.text : JSON.stringify(block))
-      }
+    const replayedToolCallIds = parentHistory.flatMap(message => message.content)
+      .flatMap(block => block.type === 'tool-call' ? [block.id] : [])
+    // 非空判据（防"守卫只守自己"退化）：父 turn 的工具批确实留下 wire 可辨识的 id。
+    expect(replayedToolCallIds).toEqual(['parent-list'])
+    expect(childWire).not.toContain('tool_use')
+    for (const id of replayedToolCallIds) expect(childWire).not.toContain(id)
+    for (const block of parentHistory.flatMap(message => message.content)) {
+      if (block.type === 'text') expect(childWire).not.toContain(block.text)
     }
     // A″（D3/L2）：carrier 首块 = 折叠后的快照 + 身份 reminder，wire 前缀断言随折叠迁移。
     expect(childRequest.messages.at(-1)?.content.slice(0, 2)).toEqual([
