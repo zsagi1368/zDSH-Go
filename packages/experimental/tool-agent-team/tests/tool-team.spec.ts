@@ -12,6 +12,7 @@ import { SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
 import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import SessionQueryEngine from '@deepseek-ai/dsh-session-query'
 import SubagentService from '@deepseek-ai/dsh-subagent'
+import { SUBAGENT_DELEGATION_CONTEXT } from '@deepseek-ai/dsh-subagent/src/child-agent.ts'
 import * as SubagentFork from '@deepseek-ai/dsh-subagent-fork-in-process'
 import * as SubagentSpawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
 import { renderPrompt, renderContextSnapshot } from '@deepseek-ai/dsh-system-prompt'
@@ -28,6 +29,17 @@ import * as toolTeam from '../src/index.ts'
 function serializeRequest(request: GenerateOptions) {
   const connection = resolveAdapterOptions({ models: [{ id: request.model, systemPromptUpdate: 'in-history' }] })
   return serialize(request, connection, request.messages, new Map(), () => undefined)
+}
+
+/**
+ * A″（D3/L2）：运行时上下文快照折进下一条真实 user 消息的首个文本块前缀
+ * （`<快照>\n\n<原文>`，生产实现见 agent-loop `runtime-context.ts` 的
+ * `foldDeltaPrefix`，快照本体见 system-prompt `joinContextSections`）。
+ * 本 harness 的子会话快照只含 subagent 委派范围一节，故与生产同构地拼出
+ * 折叠后的块文本；委派节文本直接引生产字面量，避免双写漂移。
+ */
+function foldRuntimeContext(text: string): string {
+  return `Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\n\n${SUBAGENT_DELEGATION_CONTEXT}\n\n${text}`
 }
 
 const SIGNAL = new AbortController().signal
@@ -244,15 +256,12 @@ describe('dsh-tool-team', () => {
       block.type === 'text' && block.text.endsWith('<system-reminder>\nYou are teammate "tool-worker".\nYour Team Lead is named "lead".\nUse list_agents({}) to find your teammates and their names.\nTo message your Team Lead, use send_message({ target: "lead", message: "..." }).\nTo message another teammate, use send_message({ target: "<teammate name>", message: "..." }).\n</system-reminder>\n\n')))).toBe(true)
     const initialPrompt = child.session.snapshotEvents().find(event => event.type === 'user/message'
       && event.data.source.kind === 'user')
-    // The runtime-context snapshot block is prepended to the initial prompt text.
-    expect(initialPrompt?.type === 'user/message'
-      ? initialPrompt.data.content.flatMap(block => block.type === 'text' ? [block.text] : [])
     // L2（A″）：运行时上下文折进子会话首条真实 user 消息的文本前缀（首块），
     // 官方 0.2.x 的 reminder 是首块，故 carrier 首块 = 快照头 + 节文本 + reminder。
+    expect(initialPrompt?.type === 'user/message'
+      ? initialPrompt.data.content.flatMap(block => block.type === 'text' ? [block.text] : [])
       : []).toEqual([
-      expect.stringMatching(
-        /Current runtime context\. This snapshot supersedes earlier runtime-context snapshots\.[\s\S]*<\/system-reminder>\n\n$/,
-      ),
+      foldRuntimeContext('<system-reminder>\nYou are teammate "tool-worker".\nYour Team Lead is named "lead".\nUse list_agents({}) to find your teammates and their names.\nTo message your Team Lead, use send_message({ target: "lead", message: "..." }).\nTo message another teammate, use send_message({ target: "<teammate name>", message: "..." }).\n</system-reminder>\n\n'),
       'stay available',
     ])
 
@@ -283,21 +292,24 @@ describe('dsh-tool-team', () => {
     expect(childRequest.tools).toEqual(parentRequest.tools)
     expect(childRequest.system).toEqual(parentRequest.system)
     expect(childRequest.system).not.toContain('Your Team role')
-    if (mode === 'fork') {
-      expect(childRequest.messages.slice(0, parentRequest.messages.length)).toEqual(parentRequest.messages)
-      expect(adapter.requests[1]!.messages.slice(0, parentHistory.length)).toEqual(parentHistory)
-    } else {
-      expect(JSON.stringify(childRequest.messages)).not.toContain('Parent task')
+    // L6（Go 意图，对上游的行为偏离已登记）：fork 子会话不 seed 父历史，两种 mode
+    // 都从零开始——官方"子请求保留继承前缀"的断言迁移为"父历史任一文本都不重放"。
+    const childWire = JSON.stringify(childRequest.messages)
+    for (const message of parentHistory) {
+      for (const block of message.content) {
+        if (block.type === 'text') expect(childWire).not.toContain(block.text)
+      }
     }
+    // A″（D3/L2）：carrier 首块 = 折叠后的快照 + 身份 reminder，wire 前缀断言随折叠迁移。
     expect(childRequest.messages.at(-1)?.content.slice(0, 2)).toEqual([
-      { type: 'text', text: '<system-reminder>\nYou are teammate "reviewer".\nYour Team Lead is named "lead".\nUse list_agents({}) to find your teammates and their names.\nTo message your Team Lead, use send_message({ target: "lead", message: "..." }).\nTo message another teammate, use send_message({ target: "<teammate name>", message: "..." }).\n</system-reminder>\n\n' },
+      { type: 'text', text: foldRuntimeContext('<system-reminder>\nYou are teammate "reviewer".\nYour Team Lead is named "lead".\nUse list_agents({}) to find your teammates and their names.\nTo message your Team Lead, use send_message({ target: "lead", message: "..." }).\nTo message another teammate, use send_message({ target: "<teammate name>", message: "..." }).\n</system-reminder>\n\n') },
       { type: 'text', text: 'Review the work' },
     ])
     await using persisted = await ctx.sessionPersistence.open(childId, 'read')
     const { events } = await persisted.read()
     const initial = events.findLast(event => event.type === 'user/message' && event.data.source.kind === 'user')
     expect(initial?.type === 'user/message' ? initial.data.content : []).toEqual([
-      { type: 'text', text: '<system-reminder>\nYou are teammate "reviewer".\nYour Team Lead is named "lead".\nUse list_agents({}) to find your teammates and their names.\nTo message your Team Lead, use send_message({ target: "lead", message: "..." }).\nTo message another teammate, use send_message({ target: "<teammate name>", message: "..." }).\n</system-reminder>\n\n' },
+      { type: 'text', text: foldRuntimeContext('<system-reminder>\nYou are teammate "reviewer".\nYour Team Lead is named "lead".\nUse list_agents({}) to find your teammates and their names.\nTo message your Team Lead, use send_message({ target: "lead", message: "..." }).\nTo message another teammate, use send_message({ target: "<teammate name>", message: "..." }).\n</system-reminder>\n\n') },
       { type: 'text', text: 'Review the work' },
     ])
   })
@@ -389,10 +401,12 @@ describe('dsh-tool-team', () => {
     const childId = spawnedChildId(ctx, lead, spawned)
     await waitNoAgent(ctx, childId)
     const reminder = '<system-reminder>\nYou are teammate "reviewer".\nYour Team Lead is named "lead".\nUse list_agents({}) to find your teammates and their names.\nTo message your Team Lead, use send_message({ target: "lead", message: "..." }).\nTo message another teammate, use send_message({ target: "<teammate name>", message: "..." }).\n</system-reminder>\n\n'
+    // A″（D3/L2）：reminder 在 wire 上以折叠后的 carrier 首块出现。
+    const foldedReminder = foldRuntimeContext(reminder)
     const first = serializeRequest(adapter.requests[0]!).messages
-    expect(first.at(-1)?.content.slice(0, 2)).toEqual([{ type: 'text', text: reminder }, { type: 'text', text: 'Review the work' }])
+    expect(first.at(-1)?.content.slice(0, 2)).toEqual([{ type: 'text', text: foldedReminder }, { type: 'text', text: 'Review the work' }])
     expect(adapter.requests[1]!.messages.filter(message => message.content.some(block =>
-      block.type === 'text' && block.text === reminder))).toHaveLength(1)
+      block.type === 'text' && block.text === foldedReminder))).toHaveLength(1)
     expect(JSON.stringify(serializeRequest(adapter.requests[2]!).messages)).not.toContain('You are teammate')
     await using persisted = await ctx.sessionPersistence.open(childId, 'read')
     const { events } = await persisted.read()
