@@ -41,10 +41,11 @@
     {
       "path": "packages/compaction/compaction-basic/tests/runtime-context-admission.spec.ts",
       "lane": "github-windows-ci",
-      "reason": "TD-2（已登记的 Go 语义缺口，非语义选择）：L2 基线非 surface 感知——压缩吃掉已投递的运行时上下文载体后不重发（`expected [ 5 ] to include undefined`）。D23 裁定不改写官方契约测试，登记进本清单 + `DEBT.md` TD-2 backlog（实现 surface 感知）。该文件仅此 1 例，文件级排除无额外掩盖面。",
+      "reason": "TD-2（A″ 架构性排除（永久），DL-8 裁定——**不是待修缺口**）：A″ single-carrier architecture——官方 `runtime-context-admission.spec.ts` 要求 `source.kind==='runtime-context'` 的消息（快照计数 2 + 两请求各带一条），而 A″（L2 单载体：运行时上下文 fold 进真实 user 消息）结构上不产生该 kind（实测 `SNAPSHOT FILTER count=0`）；Go 树自证 spec（`packages/session/working-directory/tests/admission.spec.ts:59`）反向断言请求内无该 kind 消息 ⇒ 两条 spec 不可能同时绿，属架构属性而非可修实现缺陷。D23 裁定不改写官方契约测试 ⇒ 维持本清单排除（条目永久保留、fail-closed，非 red-to-green 开关）；若未来改取官方载体，则随 R1 §7.3 B 案一并处理。该文件仅此 1 例，文件级排除无额外掩盖面。",
       "evidence": [
         "P6-GATE-MATRIX.md §3.3（登记 Go 语义预期红：TD-2 行，隔离复跑 1F，对照树绿）",
-        "DEBT.md TD-2 行（「D23 裁定：不改写官方契约测试，改在 CI 排除清单登记 + 本行登记」）",
+        "P6 战役 `2026-10-11-zdshgo-sync-v021/DEBT.md` TD-2 行（该战役记为「backlog：实现 surface 感知」；本战役 `DL-8` 已将其改述为架构性排除）",
+        "本战役卡 §3 `DL-8`（TD-2 = A″ 架构性不兼容（永久排除）；若改取官方载体则随 R1 §7.3 B 案一并处理）",
         "P6-logs/rerun-registered-td2-td3.log（`retains required cwd in the first request after proactive compaction with optional context disabled` 1F 复现）"
       ]
     },
