@@ -749,7 +749,9 @@ describe('agent loop', () => {
 
   // 退役登记（R1 §6 / §9 登记项 3，TD-2）：官方 D2「surface 替换吃掉已入账快照后
   // 即使上下文未变也重发」在 L2 无等价物——L2 基线只是文本、不携带 surface 身份，
-  // 运行期无「载体被替换 → 重发」路径（仅回收 pending delta）。TD-2 落地后回收为改写。
+  // 运行期无「载体被替换 → 重发」路径（仅回收 pending delta）。TD-2 = A″ 单载体架构下
+  // 官方 `runtime-context` 消息 kind 恒不存在（DL-8）⇒ 该契约测试永久不适用于本线，
+  // **不预期回收**；若未来改取官方载体则随 R1 §7.3 B 案一并处理。
 
   it.each(['before', 'after'] as const)('folds runtime context refreshed %s the pre-step fallback', async (timing) => {
     const adapter = new MockAdapter([textResponse('one'), textResponse('two')])
@@ -831,7 +833,9 @@ describe('agent loop', () => {
 
   // 退役登记（R1 §6 / §9 登记项 2，TD-2）：官方 N5「重试期上下文重发」在 L2 无等价
   // 面——折叠槽位只在首 attempt 存在（A″ 注记②），重试期变更成为 pending delta 随
-  // 下次折叠投递。TD-2 的 surface 感知扩展落地后可回收为改写。
+  // 下次折叠投递。TD-2 = A″ 单载体架构下官方 `runtime-context` 消息 kind 恒不存在
+  // （DL-8）⇒ 该契约测试永久不适用于本线，**不预期回收**；若未来改取官方载体则随
+  // R1 §7.3 B 案一并处理。
 
   it.each(['reject', 'empty'] as const)('does not commit required runtime context after a pre-step %s decision', async (decision) => {
     const adapter = new MockAdapter([])
