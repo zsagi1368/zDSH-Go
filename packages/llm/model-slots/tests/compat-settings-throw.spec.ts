@@ -5,6 +5,10 @@
  * module registry that never resolved the real module through the guard's
  * dynamic-import path (vite caches that resolution, so an in-file mock placed
  * after other guard calls does not intercept).
+ *
+ * L2 rotation (2026-10-12): the probed settings face is the entry-derived
+ * `SettingsForms` surface (`settings:forms`), which replaced the retired
+ * `SettingsProvider.register` registration surface.
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -49,13 +53,13 @@ describe('guardModelSlots settings catch branch (DEBT §7)', () => {
     expect(enabled).toBe(false)
     expect(warnings).toHaveLength(1)
     expect(warnings[0]).toContain('[compat] dsh-model-slots disabled')
-    expect(warnings[0]).toContain('settings:register')
+    expect(warnings[0]).toContain('settings:forms')
 
     const entry = getCompatRoster().get('dsh-model-slots')
     expect(entry).toMatchObject({ enabled: false })
-    // The catch reason is the raw probe signal only — the long DEBT
-    // attribution wording belongs to the 'register not a function' branch
-    // locked in compat.spec.ts, and the two must stay distinguishable.
-    expect(entry?.reason.startsWith('cannot import SettingsProvider')).toBe(true)
+    // The catch reason is the raw probe signal only — the long attribution
+    // wording belongs to the 'forms describe/update/mutate not functions'
+    // branch locked in compat.spec.ts, and the two must stay distinguishable.
+    expect(entry?.reason.startsWith('cannot import the settings forms surface')).toBe(true)
   })
 })

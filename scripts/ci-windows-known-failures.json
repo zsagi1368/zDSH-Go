@@ -13,7 +13,7 @@
       "lane": "github-windows-ci",
       "reason": "acl 家族（上游/环境豁免面，承 sync-020 豁免台账）：套件在收集期即失败——`ACL fixtures require TEMP/TMP on a tree whose ancestors have no individual package allow ACEs`，30 例全 skip；非本战役引入，Go 侧无行为面可修。",
       "evidence": [
-        "P6-GATE-MATRIX.md §3.1（继承/环境态表 acl 豁免族行：`diagnose-script.spec.ts` 套件级 30 skip，对照树 facbe8f3f6 同点同败）",
+        "P6-GATE-MATRIX.md §3.1（继承/环境态表 acl 豁免族行：`diagnose-script.spec.ts` 套件级 30 skip，对照树（zDSH 主线 tag v0.2.1-alpha.2-zDSH20261011d）同点同败）",
         "P6-logs/cmp-zdsh-main-22files.stripped.log（22 文件对照复跑：`Test Files 11 failed | 11 passed (22)` / `Failed Suites 2`）",
         "TC-CI-GREEN.md 背景（实测）「CI 失败集①：acl 家族 2 文件之一」"
       ]

@@ -10,6 +10,7 @@ import { join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { flattenDiagnosticMessageText, parseConfigFileTextToJson } from 'typescript'
 import { describe, expect, it } from 'vitest'
+import { withRepositoryCorpusLock } from './repository-corpus-lock.ts'
 
 const repositoryRoot = fileURLToPath(new URL('..', import.meta.url))
 const oxlintCli = fileURLToPath(new URL('../node_modules/oxlint/bin/oxlint', import.meta.url))
@@ -70,45 +71,50 @@ describe('Oxlint executable contract', () => {
 probePromise()
 `
 
-    try {
-      const paths: Array<readonly [label: string, path: string, tsconfig: string]> = []
-      for (const [label, parent, tsconfig, extension = '.ts'] of probes) {
-        const path = join(repositoryRoot, parent, `oxlint-contract-${suffix}${extension}`)
-        await writeFile(path, source)
-        paths.push([label, relative(repositoryRoot, path), tsconfig])
-      }
-      const clientScript = 'scripts/client-bundle-purity.spec.ts'
+    // Probes for the package-source classes land under packages/*/*/src, the
+    // corpus the repository-wide walk enumerates; the corpus lock keeps their
+    // lifetime disjoint from a running walk (scripts/repository-corpus-lock.ts).
+    await withRepositoryCorpusLock(repositoryRoot, async () => {
+      try {
+        const paths: Array<readonly [label: string, path: string, tsconfig: string]> = []
+        for (const [label, parent, tsconfig, extension = '.ts'] of probes) {
+          const path = join(repositoryRoot, parent, `oxlint-contract-${suffix}${extension}`)
+          await writeFile(path, source)
+          paths.push([label, relative(repositoryRoot, path), tsconfig])
+        }
+        const clientScript = 'scripts/client-bundle-purity.spec.ts'
 
-      const result = runOxlint([
-        '--config',
-        relative(repositoryRoot, configPath),
-        '--format',
-        'unix',
-        ...paths.map(([, path]) => path),
-        clientScript,
-      ], { OXC_LOG: 'debug' })
-      const output = normalizedOutput(result)
+        const result = runOxlint([
+          '--config',
+          relative(repositoryRoot, configPath),
+          '--format',
+          'unix',
+          ...paths.map(([, path]) => path),
+          clientScript,
+        ], { OXC_LOG: 'debug' })
+        const output = normalizedOutput(result)
 
-      expect(result.error).toBeUndefined()
-      expect(result.status, output).toBe(1)
-      for (const [label, path, tsconfig] of paths) {
-        expect(output, label).toContain(`${path.replaceAll('\\', '/')}:5:1: Promises must be awaited`)
-        expect(output, `${label} project`).toContain(
-          `Got tsconfig for file ${join(repositoryRoot, path).replaceAll('\\', '/')}: ${join(repositoryRoot, tsconfig).replaceAll('\\', '/')}`,
+        expect(result.error).toBeUndefined()
+        expect(result.status, output).toBe(1)
+        for (const [label, path, tsconfig] of paths) {
+          expect(output, label).toContain(`${path.replaceAll('\\', '/')}:5:1: Promises must be awaited`)
+          expect(output, `${label} project`).toContain(
+            `Got tsconfig for file ${join(repositoryRoot, path).replaceAll('\\', '/')}: ${join(repositoryRoot, tsconfig).replaceAll('\\', '/')}`,
+          )
+        }
+        expect(output.match(/typescript\(no-floating-promises\)/g)).toHaveLength(probes.length)
+        expect(output, 'client aggregate script project').toContain(
+          `Got tsconfig for file ${join(repositoryRoot, clientScript).replaceAll('\\', '/')}: ${join(repositoryRoot, 'tsconfig.client.json').replaceAll('\\', '/')}`,
         )
+        expect(output).not.toContain('Unmatched file:')
+      } finally {
+        await Promise.all([
+          ...probes.map(([, parent, , extension = '.ts']) =>
+            rm(join(repositoryRoot, parent, `oxlint-contract-${suffix}${extension}`), { force: true })),
+          rm(configPath, { force: true }),
+        ])
       }
-      expect(output.match(/typescript\(no-floating-promises\)/g)).toHaveLength(probes.length)
-      expect(output, 'client aggregate script project').toContain(
-        `Got tsconfig for file ${join(repositoryRoot, clientScript).replaceAll('\\', '/')}: ${join(repositoryRoot, 'tsconfig.client.json').replaceAll('\\', '/')}`,
-      )
-      expect(output).not.toContain('Unmatched file:')
-    } finally {
-      await Promise.all([
-        ...probes.map(([, parent, , extension = '.ts']) =>
-          rm(join(repositoryRoot, parent, `oxlint-contract-${suffix}${extension}`), { force: true })),
-        rm(configPath, { force: true }),
-      ])
-    }
+    })
   }, 90_000)
 
   it('runs JavaScript compatibility and nursery rules', async () => {
@@ -302,53 +308,58 @@ export function unrelatedRead(): void {
 }
 `
 
-    try {
-      await mkdir(join(repositoryRoot, exampleRoot, 'tests'), { recursive: true })
-      await writeFile(join(repositoryRoot, exampleRoot, 'tsconfig.json'), JSON.stringify({
-        extends: '../../tsconfig.base.json',
-        include: ['tests/**/*.ts'],
-      }))
-      await Promise.all([
-        ...testPaths.map(path => writeFile(join(repositoryRoot, path), reads)),
-        ...productionPaths.map(path => writeFile(join(repositoryRoot, path), existing)),
-      ])
-      const args = ['--config', relative(repositoryRoot, configPath), '--format', 'unix', ...paths]
-      const allowed = runRepositoryOxlint(args)
-      expect(allowed.error).toBeUndefined()
-      expect(allowed.signal).toBeNull()
-      expect(allowed.status, normalizedOutput(allowed)).toBe(0)
+    // The production-path probe lands under packages/*/*/src, the corpus the
+    // repository-wide walk enumerates; the corpus lock keeps the probe
+    // lifetime disjoint from a running walk (scripts/repository-corpus-lock.ts).
+    await withRepositoryCorpusLock(repositoryRoot, async () => {
+      try {
+        await mkdir(join(repositoryRoot, exampleRoot, 'tests'), { recursive: true })
+        await writeFile(join(repositoryRoot, exampleRoot, 'tsconfig.json'), JSON.stringify({
+          extends: '../../tsconfig.base.json',
+          include: ['tests/**/*.ts'],
+        }))
+        await Promise.all([
+          ...testPaths.map(path => writeFile(join(repositoryRoot, path), reads)),
+          ...productionPaths.map(path => writeFile(join(repositoryRoot, path), existing)),
+        ])
+        const args = ['--config', relative(repositoryRoot, configPath), '--format', 'unix', ...paths]
+        const allowed = runRepositoryOxlint(args)
+        expect(allowed.error).toBeUndefined()
+        expect(allowed.signal).toBeNull()
+        expect(allowed.status, normalizedOutput(allowed)).toBe(0)
 
-      await Promise.all([
-        ...testPaths.map(path => writeFile(join(repositoryRoot, path), reads + unrelated)),
-        ...productionPaths.map(path => writeFile(join(repositoryRoot, path), reads)),
-      ])
-      const rejected = runRepositoryOxlint(args)
-      const output = normalizedOutput(rejected)
-      expect(rejected.error).toBeUndefined()
-      expect(rejected.signal).toBeNull()
-      expect(rejected.status, output).toBe(1)
-      const diagnostics = output.split('\n').filter(line => /:\d+:\d+: `\w+` is deprecated\./.test(line))
-      for (const path of testPaths) {
-        const reported = diagnostics.filter(line => line.startsWith(`${path}:`))
-        expect(reported, output).toHaveLength(1)
-        expect(reported[0]).toContain('`oldApi` is deprecated')
+        await Promise.all([
+          ...testPaths.map(path => writeFile(join(repositoryRoot, path), reads + unrelated)),
+          ...productionPaths.map(path => writeFile(join(repositoryRoot, path), reads)),
+        ])
+        const rejected = runRepositoryOxlint(args)
+        const output = normalizedOutput(rejected)
+        expect(rejected.error).toBeUndefined()
+        expect(rejected.signal).toBeNull()
+        expect(rejected.status, output).toBe(1)
+        const diagnostics = output.split('\n').filter(line => /:\d+:\d+: `\w+` is deprecated\./.test(line))
+        for (const path of testPaths) {
+          const reported = diagnostics.filter(line => line.startsWith(`${path}:`))
+          expect(reported, output).toHaveLength(1)
+          expect(reported[0]).toContain('`oldApi` is deprecated')
+        }
+        for (const path of productionPaths) {
+          expect(diagnostics.filter(line => line.startsWith(`${path}:`)), output).toHaveLength(3)
+        }
+        for (const method of ['snapshotEvents', 'eventAt', 'ownEvents', 'oldApi']) {
+          expect(output).toContain(`\`${method}\` is deprecated`)
+        }
+        expect(output).toContain(
+          'See the [Agent Note](../../../../.agents/notes/implemented/architecture/2026-09-09-deprecate-synchronous-session-event-reads.md).',
+        )
+      } finally {
+        await Promise.all([
+          ...paths.filter(path => path !== examplePath).map(path => rm(join(repositoryRoot, path), { force: true })),
+          rm(join(repositoryRoot, exampleRoot), { recursive: true, force: true }),
+          rm(configPath, { force: true }),
+        ])
       }
-      for (const path of productionPaths) {
-        expect(diagnostics.filter(line => line.startsWith(`${path}:`)), output).toHaveLength(3)
-      }
-      for (const method of ['snapshotEvents', 'eventAt', 'ownEvents', 'oldApi']) {
-        expect(output).toContain(`\`${method}\` is deprecated`)
-      }
-      expect(output).toContain(
-        'See the [Agent Note](../../../../.agents/notes/implemented/architecture/2026-09-09-deprecate-synchronous-session-event-reads.md).',
-      )
-    } finally {
-      await Promise.all([
-        ...paths.filter(path => path !== examplePath).map(path => rm(join(repositoryRoot, path), { force: true })),
-        rm(join(repositoryRoot, exampleRoot), { recursive: true, force: true }),
-        rm(configPath, { force: true }),
-      ])
-    }
+    })
   }, 90_000)
 
   it('accepts an ignored-only staged selection', () => {

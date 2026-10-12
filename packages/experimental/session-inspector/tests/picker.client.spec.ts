@@ -252,7 +252,11 @@ it.each(['cancel', 'dispose'] as const)('ignores saved pointer and observer call
 it.each([
   { deltaX: 0, deltaY: 2, mode: 1, lineHeight: '20px', fontSize: '10px', top: 10, left: 10, expected: { top: 40, left: 0 } },
   { deltaX: 0, deltaY: -2, mode: 1, lineHeight: 'normal', fontSize: '10px', top: 10, left: 10, expected: { top: -20, left: 0 } },
-  { deltaX: 0, deltaY: 1, mode: 1, lineHeight: '', fontSize: '', top: 10, left: 10, expected: { top: 1, left: 0 } },
+  // The metric-free line-mode row states the `|| 1` fallback with metrics jsdom
+  // resolves to values that parse to nothing or zero: since jsdom 30 the
+  // computed line-height of a cleared inline style resolves from the default
+  // font (16px), so an empty pair no longer reaches that fallback.
+  { deltaX: 0, deltaY: 1, mode: 1, lineHeight: 'normal', fontSize: '0px', top: 10, left: 10, expected: { top: 1, left: 0 } },
   { deltaX: 0, deltaY: 1, mode: 2, lineHeight: '', fontSize: '', top: 10, left: 10, expected: { top: 300, left: 0 } },
   { deltaX: -10, deltaY: 0, mode: 0, lineHeight: '', fontSize: '', top: 10, left: 10, expected: { top: 0, left: -10 } },
   { deltaX: 10, deltaY: 0, mode: 0, lineHeight: '', fontSize: '', top: 10, left: 0, expected: { top: 0, left: 10 } },

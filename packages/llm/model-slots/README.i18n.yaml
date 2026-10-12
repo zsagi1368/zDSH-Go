@@ -15,8 +15,8 @@
   en: 8def674493275975
   zh: bcb6f531c7965323
 /deepseek-ai-dsh-model-slots/version-adaptation-compat-guard:
-  en: 27958d973b3527c0
-  zh: 31ef71af82525fc7
+  en: 7372f1fed9519784
+  zh: c87aa834caa3c408
 /deepseek-ai-dsh-model-slots/model-experience:
   en: 5ca52444aba29d08
   zh: d4ba3e6704f895fd
@@ -24,11 +24,11 @@
   en: 15ab30c37c7eb28e
   zh: 03fab35ad34fcb50
 /deepseek-ai-dsh-model-slots/known-limitations-and-deferred-work:
-  en: 811da9d6117331b2
-  zh: 9c3fdef909f1f3e4
+  en: c3714097c9586815
+  zh: 9b8e0335b645773d
 /deepseek-ai-dsh-model-slots/known-limitations-and-deferred-work/dev-note:
   en: 7de02cd33a767bd6
   zh: b9e74c4e48779770
-/deepseek-ai-dsh-model-slots/known-limitations-and-deferred-work/dev-note/future-a-settings-mirror-resolution-tier:
-  en: 383cc1b8e3c07123
-  zh: c778d7ea0b078748
+/deepseek-ai-dsh-model-slots/known-limitations-and-deferred-work/dev-note/future-finer-user-layer-policy-semantics:
+  en: c7464bd8e6ae8216
+  zh: 5838ae6f27bde229

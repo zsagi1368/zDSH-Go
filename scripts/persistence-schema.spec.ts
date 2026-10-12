@@ -6,6 +6,7 @@ import { collectLogEvents } from './gen-persistence-catalog.ts'
 import { extractPersistenceSchema } from './persistence-schema.ts'
 import { classifyPersistenceChange, parsePersistenceSnapshot } from './persistence-changes.ts'
 import { canonicalizeSchema, isArbitraryJsonSchema, schemaDigest, type PersistenceSchemaInventory } from './persistence-schema-model.ts'
+import { withRepositoryCorpusLock } from './repository-corpus-lock.ts'
 
 const roots: string[] = []
 afterEach(() => {
@@ -317,20 +318,26 @@ interface SessionEventMap {
   })
 
   // Repository-wide TypeScript extraction and reachable-node hashing use the Windows coverage test budget.
-  it('includes every real repository event and fingerprints every reachable node', { timeout: 90_000 }, () => {
+  // The corpus lock keeps this walk's enumerate-to-read window disjoint from the
+  // transient `oxlint-contract-<uuid>.ts` probes scripts/oxlint-contract.spec.ts
+  // writes into packages/*/*/src; without it a probe the walk enumerated and the
+  // program then cannot read reports TS6053 (scripts/repository-corpus-lock.ts).
+  it('includes every real repository event and fingerprints every reachable node', { timeout: 90_000 }, async () => {
     const root = resolve(import.meta.dirname, '..')
-    const model = extractPersistenceSchema(root)
-    expect(model.roots.filter(root => root.kind === 'event').map(root => root.event).sort())
-      .toEqual(collectLogEvents(root).map(event => event.name).sort())
-    expect(model.roots.some(root => root.kind === 'header')).toBe(true)
-    expect(model.roots.some(root => root.kind === 'envelope')).toBe(true)
-    const digests = new Set(model.types.map(type => type.digest))
-    for (const root of model.roots) {
-      expect(schemaDigest(root.schema)).toBe(root.digest)
-      for (let node = 0; node < root.schema.nodes.length; node++) {
-        expect(digests.has(schemaDigest(canonicalizeSchema(root.schema.nodes, node)))).toBe(true)
+    await withRepositoryCorpusLock(root, async () => {
+      const model = extractPersistenceSchema(root)
+      expect(model.roots.filter(root => root.kind === 'event').map(root => root.event).sort())
+        .toEqual(collectLogEvents(root).map(event => event.name).sort())
+      expect(model.roots.some(root => root.kind === 'header')).toBe(true)
+      expect(model.roots.some(root => root.kind === 'envelope')).toBe(true)
+      const digests = new Set(model.types.map(type => type.digest))
+      for (const root of model.roots) {
+        expect(schemaDigest(root.schema)).toBe(root.digest)
+        for (let node = 0; node < root.schema.nodes.length; node++) {
+          expect(digests.has(schemaDigest(canonicalizeSchema(root.schema.nodes, node)))).toBe(true)
+        }
       }
-    }
+    })
   })
 })
 

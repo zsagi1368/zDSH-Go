@@ -8,13 +8,15 @@
 
 import { spawn, ChildProcess, execFile } from 'child_process'
 import { PluginSandboxConfig, ExecResult, ExecOptions, SandboxContext } from '../spec/index.js'
+import { splitCommandArgs } from './command-tokens.js'
 import { checkPathAllowed } from './path-guard.js'
 import { deriveSandboxEnvironment } from './env.js'
 
 /**
  * Strictly extract the base command (executable) from a command string.
- * Handles quoted arguments and shell metacharacters safely.
- * Returns undefined if the command contains dangerous characters.
+ * Rejects shell metacharacters anywhere in the string, then takes the first
+ * token from the shared quote-aware splitter, so the allow-listed token is the
+ * same token {@link splitCommandArgs} hands to `execFile` as the executable.
  * @param command - the raw command string to parse.
  * @returns the extracted executable token, or `undefined` when the command
  * carries dangerous shell operators or no token survives parsing.
@@ -25,33 +27,8 @@ export function extractCommandBase(command: string): string | undefined {
     return undefined
   }
 
-  // Use a simple tokenizer that respects quotes
-  let i = 0
-  let token = ''
-  let inSingleQuote = false
-  let inDoubleQuote = false
-
-  while (i < command.length) {
-    const ch = command.charAt(i)
-    if (inSingleQuote) {
-      if (ch === "'") inSingleQuote = false
-      else token += ch
-    } else if (inDoubleQuote) {
-      if (ch === '"') inDoubleQuote = false
-      else token += ch
-    } else if (ch === "'") {
-      inSingleQuote = true
-    } else if (ch === '"') {
-      inDoubleQuote = true
-    } else if (/\s/.test(ch)) {
-      if (token.length > 0) break
-    } else {
-      token += ch
-    }
-    i++
-  }
-
-  return token.length > 0 ? token : undefined
+  const [token] = splitCommandArgs(command)
+  return token !== undefined && token.length > 0 ? token : undefined
 }
 
 interface ProcessHandle {
@@ -195,8 +172,9 @@ export class ProcessSandbox implements SandboxContext {
       const timeout = options?.timeout || this.config.resources.timeoutMs
       const start = Date.now()
 
-      // 安全修复：使用 execFile 替代 exec，避免 shell 注入
-      const cmdParts = command.trim().split(/\s+/)
+      // 安全修复：使用 execFile 替代 exec，避免 shell 注入；
+      // argv 用共享的引号感知分词（见 command-tokens.ts），引号内的空白不拆成新参数。
+      const cmdParts = splitCommandArgs(command)
       const cmd = cmdParts[0] || ''
       const args = cmdParts.slice(1)
 
@@ -231,8 +209,9 @@ export class ProcessSandbox implements SandboxContext {
     const timeout = options?.timeout || this.config.resources.timeoutMs
     const start = Date.now()
 
-    // 安全修复：使用 execFile 替代 spawn 带 shell: true
-    const cmdParts = command.trim().split(/\s+/)
+    // 安全修复：使用 execFile 替代 spawn 带 shell: true；
+    // argv 与白名单基准取自同一分词器，避免"校验 token 与执行 token 不一致"。
+    const cmdParts = splitCommandArgs(command)
     const args = cmdParts.slice(1)
 
     return new Promise((resolve, reject) => {

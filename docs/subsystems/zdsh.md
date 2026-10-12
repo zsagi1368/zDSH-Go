@@ -18,7 +18,7 @@ Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnp
 
 ### `ctx.modelSlots` — `ModelSlotRegistry`
 
-Registry of deployment-level auxiliary-model routes keyed by slot identity. Consumers consult it right before each auxiliary dispatch; every successful resolution with a session sink appends the durable `slots/dispatch` audit record naming the exact route and the tier that produced it. The registry also registers the `llm-model-slots` settings namespace so the settings-mirror tier (user layer) can override the composition base.
+Registry of deployment-level auxiliary-model routes keyed by slot identity. Consumers consult it right before each auxiliary dispatch; every successful resolution with a session sink appends the durable `slots/dispatch` audit record naming the exact route and the tier that produced it. Both policy fields of the Config schema are volatile, which is the surface the 0.1.7 entry-derived settings face can write (it replaced the retired `SettingsProvider.register` namespace registration): the user layer lands in the entry's own Config, the Loader commits such a change in place, and this registry re-reads those live references on every consult, so a user-layer override re-points later auxiliary calls without a remount.
 
 ```ts cordis-catalog
 /**

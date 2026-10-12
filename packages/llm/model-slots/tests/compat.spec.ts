@@ -1,20 +1,21 @@
 /**
- * Discriminating lock for the model-slots compat guard (SYNC-P4-MODEL-SLOTS,
- * P3-design §4 plan B / P4-settings-adaptation §4.3).
+ * Discriminating lock for the model-slots compat guard (L2, 2026-10-12 —
+ * clears DEBT-MODEL-SLOTS).
  *
  * Positive face — against the real official 0.1.7 settings surface (the
- * `SettingsProvider` registration API is retired): the guard must fail-soft
- * to a disabled verdict whose roster reason is *attributable* (raw probe
- * signal kept as prefix, then who removed the surface, what degraded, and
- * the DEBT-MODEL-SLOTS pointer), while the registry service itself keeps
- * serving the raw deployment config — the degradation is by design, not a
- * crash.
+ * `SettingsProvider` registration API is retired): the guard must enable,
+ * because the user-layer override now rides on the entry-derived settings
+ * face — `SettingsForms` describe/update/mutate plus this package's own
+ * volatile Config fields.
  *
- * Negative control — against a mocked 0.1.5-shaped probe surface (a
- * `SettingsProvider` class carrying `prototype.register`): the same guard
- * must enable. This pair proves the positive face is locked by the probe
- * surface shape, not by an always-false guard (the reason wording could not
- * silently drift into meaninglessness either).
+ * Negative control — against a mocked retired shape (a `SettingsProvider`
+ * class carrying `prototype.register` and no SettingsForms default export):
+ * the same guard must fail soft with an *attributable* roster reason — the raw
+ * probe signal as prefix, then the retired surface, the replacement face, the
+ * degraded capability (user-layer slot overrides not settings-writable) and
+ * the fact that the composition-config core keeps serving. This pair proves
+ * the positive face is locked by the probe surface shape, not by an
+ * always-true guard.
  *
  * Ordering note: the negative control runs first so `vi.doMock` is
  * registered before this file ever imports the real `@deepseek-ai/dsh-settings`;
@@ -43,10 +44,44 @@ afterEach(() => {
   vi.resetModules()
 })
 
-describe('guardModelSlots with the 0.1.5-shaped register surface present (negative control)', () => {
-  it('enables the feature and records an ok roster verdict', async () => {
+describe('guardModelSlots without the entry-derived settings forms surface (negative control)', () => {
+  it('fail-soft disables with the attributed shape reason when the writable forms face is missing', async () => {
     vi.doMock(SETTINGS_MODULE, () => ({
-      // Shape the probe accepts: a constructor whose prototype carries register.
+      // A partial/older forms face: `describe` alone, without the update and
+      // mutate members the slot editor's write path goes through.
+      default: class SettingsForms {
+        describe(): unknown {
+          return undefined
+        }
+      },
+    }))
+
+    const warnings: string[] = []
+    const enabled = await guardModelSlots(recordingLogger(warnings))
+
+    expect(enabled).toBe(false)
+    // Framework warn face: the failing check is named (guard.ts contract).
+    expect(warnings).toHaveLength(1)
+    expect(warnings[0]).toContain('[compat] dsh-model-slots disabled')
+    expect(warnings[0]).toContain('settings:forms')
+
+    const entry = getCompatRoster().get('dsh-model-slots')
+    expect(entry).toMatchObject({ enabled: false })
+    // Attribution contract: the raw probe signal stays as the prefix, followed
+    // by the retired surface, the replacement face, the degraded capability
+    // and the composition-config core that keeps serving.
+    expect(entry?.reason.startsWith('forms describe/update/mutate not functions')).toBe(true)
+    expect(entry?.reason).toContain('0.1.7')
+    expect(entry?.reason).toContain('SettingsProvider')
+    expect(entry?.reason).toContain('SettingsForms')
+    expect(entry?.reason).toContain('user-layer')
+    expect(entry?.reason).toContain('composition configuration')
+  })
+
+  it('fail-soft disables when the host still exposes only the retired registration face', async () => {
+    vi.doMock(SETTINGS_MODULE, () => ({
+      // The retired 0.1.5-shaped module: a registration class, and no forms
+      // default export at all — the user layer cannot be reached through it.
       SettingsProvider: class {
         register(): unknown {
           return undefined
@@ -57,37 +92,27 @@ describe('guardModelSlots with the 0.1.5-shaped register surface present (negati
     const warnings: string[] = []
     const enabled = await guardModelSlots(recordingLogger(warnings))
 
-    expect(enabled).toBe(true)
-    expect(warnings).toEqual([])
-    expect(getCompatRoster().get('dsh-model-slots')).toMatchObject({ enabled: true, reason: 'ok' })
+    expect(enabled).toBe(false)
+    expect(warnings).toHaveLength(1)
+    expect(warnings[0]).toContain('settings:forms')
+
+    const entry = getCompatRoster().get('dsh-model-slots')
+    expect(entry).toMatchObject({ enabled: false })
+    expect(entry?.reason.startsWith('cannot import the settings forms surface')).toBe(true)
   })
 })
 
 describe('guardModelSlots against the real official 0.1.7 settings surface', () => {
-  it('fail-soft disables with an attributable roster reason', async () => {
+  it('enables the feature and records an ok roster verdict', async () => {
     const warnings: string[] = []
     const enabled = await guardModelSlots(recordingLogger(warnings))
 
-    expect(enabled).toBe(false)
-    // Framework warn face: the failing check is named (guard.ts contract).
-    expect(warnings).toHaveLength(1)
-    expect(warnings[0]).toContain('[compat] dsh-model-slots disabled')
-    expect(warnings[0]).toContain('settings:register')
-
-    const entry = getCompatRoster().get('dsh-model-slots')
-    expect(entry).toMatchObject({ enabled: false })
-    // Attribution contract (SYNC-P4 plan B): the raw probe signal stays as
-    // the prefix (roster-audit continuity with the P2/P3 evidence), followed
-    // by the removable-surface attribution, the degraded capability, the
-    // by-design qualification, and the debt-ledger pointer.
-    expect(entry?.reason.startsWith('register not a function')).toBe(true)
-    expect(entry?.reason).toContain('0.1.7')
-    expect(entry?.reason).toContain('SettingsProvider')
-    expect(entry?.reason).toContain('fail-soft')
-    expect(entry?.reason).toContain('DEBT-MODEL-SLOTS')
+    expect(enabled).toBe(true)
+    expect(warnings).toEqual([])
+    expect(getCompatRoster().get('dsh-model-slots')).toMatchObject({ enabled: true, reason: 'ok' })
   })
 
-  it('keeps the registry core serving the raw config (no crash, no fiber failure)', async () => {
+  it('keeps the registry core serving the live config (no crash, no fiber failure)', async () => {
     const ctx = new Context()
     const fiber = ctx.plugin(ModelSlotRegistry, {
       slots: { [MODEL_SLOT_TITLE]: { provider: 'aux-provider', model: 'aux-model' } },
@@ -114,4 +139,5 @@ describe('guardModelSlots against the real official 0.1.7 settings surface', () 
 // throwing mocks need a module registry that never resolved the real module
 // through the guard's dynamic-import path (vite caches that resolution, so an
 // in-file mock placed after other guard calls does not intercept). The
-// 'register not a function' face stays locked by the describes above.
+// 'forms describe/update/mutate not functions' face stays locked by the
+// describes above.

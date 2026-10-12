@@ -65,19 +65,53 @@ const WITHHELD_RESPONSE_HEADERS = [
 const PLUGIN_BUNDLE_PATH = /^\/plugins\//u
 
 /**
+ * Host route prefixes the application renderer consumes through the forwarding
+ * door: `/api` (`packages/client/connection/src/api-path.ts`), `/plugins`
+ * (`packages/client/modules` serves the bundles and the HMR event stream), and
+ * `/open-in-app` (the panel's relative `open-in-app/*` reads). Every other path
+ * belongs to the locally served document or to no renderer consumer at all;
+ * copying an unfiltered path onto the Host URL would turn this cookie-bearing
+ * door into a generic proxy for the Host's whole route table.
+ */
+const FORWARDABLE_PATH_PREFIXES = ['/api', '/plugins', '/open-in-app']
+
+/**
+ * Whether one request path belongs to the routes the renderer may reach.
+ * @param pathname - Inbound request path.
+ * @returns `true` for one of {@link FORWARDABLE_PATH_PREFIXES} or a path under it.
+ */
+function isForwardablePath(pathname: string): boolean {
+  return FORWARDABLE_PATH_PREFIXES.some(prefix => pathname === prefix || pathname.startsWith(`${prefix}/`))
+}
+
+/**
  * Forward local application requests to its authenticated Host, preserving streaming and cancellation.
  * Plugin bundle responses lose their `cache-control` for `no-store`: the Host marks them immutable
  * under a revision that changes every launch, so Chromium's disk cache would only accumulate bundles
  * no later launch can reuse.
+ *
+ * The door fails closed. An `Origin` header, when present, must be the application origin; a request
+ * without one must carry Chromium's `Sec-Fetch-Site: same-origin` stamp, which covers the same-origin
+ * GETs a renderer legitimately sends without `Origin`. Both signals are browser-controlled and cannot
+ * be set from page script, so a request that carries neither is not renderer-sourced — native code, a
+ * preload, or a foreign document — and is refused instead of being handed the Host's cookie. The path
+ * must also belong to {@link FORWARDABLE_PATH_PREFIXES}, and may not carry a `\`: a backslash is a
+ * literal character in the `dsh-app:` source pathname but a separator in the `http:` target, where
+ * the copied path would normalize onto a different Host route than the one checked here.
  * @param request - Request from the application origin.
  * @param host - Owned Host URL.
  * @param cookie - Host-issued authentication cookie.
- * @returns Host response without connection-level headers.
+ * @returns Host response without connection-level headers, or a refusal.
  */
 export async function forwardWebRequest(request: Request, host: string, cookie: string): Promise<Response> {
   const source = new URL(request.url)
   const origin = request.headers.get('origin')
-  if (origin !== null && origin !== 'dsh-app://app') return new Response(null, { status: 403 })
+  if (origin === null) {
+    if (request.headers.get('sec-fetch-site') !== 'same-origin') return new Response(null, { status: 403 })
+  } else if (origin !== 'dsh-app://app') {
+    return new Response(null, { status: 403 })
+  }
+  if (source.pathname.includes('\\') || !isForwardablePath(source.pathname)) return new Response(null, { status: 403 })
   const target = new URL(host)
   target.pathname = source.pathname
   target.search = source.search

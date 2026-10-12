@@ -23,12 +23,12 @@ Cordis 服务（`ctx.modelSlots`），为所有辅助侧任务模型调用提供
 <a id="version-adaptation-compat-guard"></a>
 ## 版本适配（compat 守卫）
 
-本功能通过 `@deepseek-ai/dsh-compat` 的 `guardFeature` 对自己的注册做闸门控制（`src/compat.ts` 中的 `guardModelSlots`），在注册前探测它所依赖的对等符号：
+本功能通过 `@deepseek-ai/dsh-compat` 的 `guardFeature` 探测其对等表面（`src/compat.ts` 中的 `guardModelSlots`），并把判定写入进程级审计名册：
 
 - `cordis:Service` —— `@deepseek-ai/cordis` 必须导出可调用的 `Service`。
-- `settings:SettingsProvider` —— `@deepseek-ai/dsh-settings` 必须导出 `SettingsProvider` 且其原型提供 `register`（alpha.4 起 `installSettingsSection` 已移除，设置小节经 `ctx.inject(['settings'])` 的 `settings.register()` 注册）。
+- `settings:forms` —— `@deepseek-ai/dsh-settings` 必须导出条目派生的 `SettingsForms` 面（其原型提供 `describe`/`update`/`mutate`）。它取代了已退役的 `SettingsProvider` 注册面，是用户层槽位覆写写入时所经的面。
 
-任一探测失败时，守卫记录一条警告并返回 `false`，本功能随之跳过注册而不是抛错。它永不抛错、永不破坏宿主树：部分加载或上游漂移的宿主只是不带本功能完成启动。
+探测失败时守卫记录一条警告并返回 `false`，名册给出可归因的 reason；注册本体在所有宿主上照常进行并继续服务组合层配置，因此缺少该面的宿主只失去「可由设置写入的用户层」。守卫永不抛错、永不破坏宿主树。
 
 <a id="model-experience"></a>
 ## Model Experience
@@ -43,7 +43,7 @@ Cordis 服务（`ctx.modelSlots`），为所有辅助侧任务模型调用提供
 ## 已知限制与遗留工作
 
 - **槽位 id 是封闭的内置集合** —— 词汇只随经过评审的消费方增长，部署方暂不能命名自定义槽位；`vision`、`plan` 等槽位推迟到各自的路由集成落地后加入。
-- **尚无 settings 镜像层** —— 槽位路由存放在组合层（cordis patch 行）；优先级高于组合层的用户设置界面推迟到 S-45 UI 里程碑，项目级覆盖在安全评审前仍不在范围内。
+- **用户层即条目自身的 Config** —— 槽位路由来自 `llm-model-slots` 这一 profile 行；经设置面编辑时，用户层写入同一 entry：两个策略字段均为 volatile，写入会就地提交到运行中的 entry，后续辅助调用随之改道而无需重挂载。Models 页的槽位区块与 settings 镜像只寻址该 entry id；以其他 id 挂载的部署行仍服务其组合层配置，但不带可由设置写入的用户层。项目级覆盖在安全评审前仍不在范围内。
 
 <a id="dev-note"></a>
 ### 开发备注
@@ -53,8 +53,8 @@ Cordis 服务（`ctx.modelSlots`），为所有辅助侧任务模型调用提供
 
 本开发备注是维护者的工作上下文：未决的设计问题与方向。它明确非权威——已交付的行为、限制与既定理由见上文各节、包代码及关联 Agent Note。
 
-#### 未来：settings 镜像解析层
+#### 未来：更细的用户层策略语义
 
-槽位路由目前只在组合层。用户设置层（S-45）未来会插在槽位声明与部署默认之间；落地时必须在同一次变更中同时扩展 `resolve()` 的既定优先级与封闭的 `slots/dispatch` 载荷，保持会话可回放。
+`slots` 与 `fallback` 是整体 volatile 字段：按路径寻址的设置编辑合并进运行中的 entry，整体节替换则重写整份策略；被拒绝的策略只警告一次并保留先前路由。是否在组合层之上再设更细的按槽位合并层、以及项目级覆盖如何与之组合，仍未决定。
 
 </details>

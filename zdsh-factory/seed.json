@@ -95,7 +95,7 @@
       "id": "core/workbench",
       "package": "zdsh-workbench",
       "version": "0.1.0-beta.1",
-      "pin": "5eaf62faa19de6f5ce58d5adb8a3170db9d14a19",
+      "pin": "36004cdf13da273bb97fc83bdb01ffc2520a64fe",
       "source": "local:packages/zdsh/factory-bundle/node_modules/zdsh-workbench",
       "integrity": null,
       "enabledAtBoot": true,

@@ -18,6 +18,7 @@ import {
   type PluginSandboxConfig,
 } from '../src/index.ts'
 import { extractCommandBase } from '../src/sandbox/process-sandbox.ts'
+import { splitCommandArgs } from '../src/sandbox/command-tokens.ts'
 
 const workRoot = mkdtempSync(join(tmpdir(), 'dsh-plugin-governance-'))
 const workerEntry = fileURLToPath(new URL('./fixture/echo-worker.mjs', import.meta.url))
@@ -80,9 +81,35 @@ describe('extractCommandBase tokenizer', () => {
   })
 })
 
+describe('splitCommandArgs quote-aware tokenizer', () => {
+  it('keeps one quoted region as exactly one argv entry', () => {
+    // A quoted payload must not be spliced into extra tokens: pre-fix the naive
+    // split turned the quotes into part of two arguments, so option-shaped data
+    // inside the quotes became real argv entries the binary could parse.
+    expect(splitCommandArgs('git push origin "main --upload-pack=evil"'))
+      .toEqual(['git', 'push', 'origin', 'main --upload-pack=evil'])
+    expect(splitCommandArgs("tar -x 'my file.tar'")).toEqual(['tar', '-x', 'my file.tar'])
+    expect(splitCommandArgs('node -e "console.log(1)"')).toEqual(['node', '-e', 'console.log(1)'])
+  })
+
+  it('strips quotes, keeps empty quoted arguments, and leaves backslashes alone', () => {
+    expect(splitCommandArgs('echo "" x')).toEqual(['echo', '', 'x'])
+    // Windows paths must survive verbatim: a backslash is never an escape here.
+    expect(splitCommandArgs('dir C:\\temp\\file.txt')).toEqual(['dir', 'C:\\temp\\file.txt'])
+    expect(splitCommandArgs('   ')).toEqual([])
+    expect(splitCommandArgs('')).toEqual([])
+    expect(splitCommandArgs('cmd "unterminated')).toEqual(['cmd', 'unterminated'])
+  })
+
+  it('shares the tokenizer with the allow-list base extraction', () => {
+    expect(extractCommandBase('"node" -v')).toBe(splitCommandArgs('"node" -v')[0])
+    expect(extractCommandBase('git status')).toBe('git')
+  })
+})
+
 describe('ProcessSandbox.exec whitelist mode', () => {
-  // NOTE: the sandbox splits commands on whitespace, so probe scripts must be
-  // single-token JavaScript (no spaces inside the -e argument).
+  // NOTE: argv comes from the shared quote-aware splitter, so a probe script may
+  // contain spaces as long as the `-e` payload is quoted.
   it('runs an allow-listed command', async () => {
     const sandbox = new ProcessSandbox('p-ok', baseConfig(), 'entry.js')
     const result = await sandbox.exec('node -e console.log(40+2)')
@@ -109,6 +136,27 @@ describe('ProcessSandbox.exec whitelist mode', () => {
     await expect(sandbox.exec('node -e process.exit(3)')).rejects.toThrow()
   })
 
+  it('honors a quoted payload and never splices it into extra arguments', async () => {
+    const sandbox = new ProcessSandbox('p-quoted', baseConfig(), 'entry.js')
+    // Pre-fix the naive split handed node the literal `"console.log(40+2)"`
+    // (quotes kept), which evaluates to a string literal and prints nothing.
+    expect((await sandbox.exec('node -e "console.log(40+2)"')).stdout).toContain('42')
+    // The quoted option-shaped payload reaches the child as ONE argument: the
+    // binary sees a single opaque value instead of a real `--upload-pack=...`.
+    const argv = await sandbox.exec('node -e "console.log(JSON.stringify(process.argv.slice(1)))" "a --upload-pack=evil"')
+    expect(argv.stdout).toContain('["a --upload-pack=evil"]')
+  })
+
+  it('executes the same token the allow list checked', async () => {
+    const sandbox = new ProcessSandbox('p-base-consistency', baseConfig(), 'entry.js')
+    // The quoted executable clears the allow list as the bare `node` the sandbox
+    // executes. Pre-fix the base extraction already stripped quotes (the allow check
+    // has always used `extractCommandBase`), but the naive argv split kept the payload
+    // quotes, so node evaluated the string literal `"console.log(40+2)"` and printed
+    // nothing.
+    expect((await sandbox.exec('"node" -e "console.log(40+2)"')).stdout).toContain('42')
+  })
+
   it('bypasses the allow list only when fullyAuthorized AND host grant are both set', async () => {
     const config = baseConfig({
       process: { spawn: true, exec: true, allowedCommands: [], fullyAuthorized: true },
@@ -116,6 +164,8 @@ describe('ProcessSandbox.exec whitelist mode', () => {
     const sandbox = new ProcessSandbox('p-auth', config, 'entry.js', true)
     const result = await sandbox.exec('node -e console.log(7*6)')
     expect(result.stdout).toContain('42')
+    // The fully-authorized path tokenizes through the same splitter.
+    expect((await sandbox.exec('node -e "console.log(7*7)"')).stdout).toContain('49')
     await expect(sandbox.exec('   ')).rejects.toThrow()
     await expect(sandbox.exec('node -e process.exit(2)')).rejects.toThrow()
   })
@@ -443,6 +493,14 @@ describe('InlineSandbox', () => {
     await expect(sandbox.exec('definitely-not-allowlisted')).rejects.toThrow(/not in the allowed list/)
     // A blank command tokenizes to an empty executable.
     await expect(sandbox.exec('   ')).rejects.toThrow()
+  })
+
+  it('tokenizes quoted arguments through the shared splitter', async () => {
+    const sandbox = new InlineSandbox('i-quoted', baseConfig())
+    // Pre-fix the naive split kept the quotes: the `-e` payload printed nothing
+    // and a quoted executable token missed the allow list.
+    expect((await sandbox.exec('node -e "console.log(40+2)"')).stdout).toContain('42')
+    expect((await sandbox.exec('"node" -v')).stdout).toMatch(/^v\d+/u)
   })
 
   it('supports fullyAuthorized mode only when host grant is also set', async () => {

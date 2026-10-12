@@ -6,6 +6,7 @@
  */
 
 import { PluginSandboxConfig, ExecResult, ExecOptions, SandboxContext } from '../spec/index.js'
+import { splitCommandArgs } from './command-tokens.js'
 import { checkPathAllowed } from './path-guard.js'
 import { deriveSandboxEnvironment } from './env.js'
 
@@ -48,8 +49,8 @@ export class InlineSandbox implements SandboxContext {
       const timeout = options?.timeout || this.config.resources.timeoutMs
       const start = Date.now()
 
-      // 安全解析命令：拆分为可执行文件和参数
-      const cmdParts = command.trim().split(/\s+/)
+      // 安全解析命令：引号感知分词（见 command-tokens.ts），引号内的空白不拆成新参数
+      const cmdParts = splitCommandArgs(command)
       const cmd = cmdParts[0] || ''
       const args = cmdParts.slice(1)
 
@@ -79,8 +80,9 @@ export class InlineSandbox implements SandboxContext {
       throw new Error(`exec() is not allowed for plugin ${this.pluginId}`)
     }
 
-    // 安全解析命令
-    const cmdParts = command.trim().split(/\s+/)
+    // 安全解析命令：引号感知分词（见 command-tokens.ts），引号内的空白不拆成新参数，
+    // 且白名单校验的 token 与 execFile 执行的 token 同源
+    const cmdParts = splitCommandArgs(command)
     const cmdBase = cmdParts[0] || ''
     const args = cmdParts.slice(1)
 

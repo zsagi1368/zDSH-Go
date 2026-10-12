@@ -15,6 +15,6 @@
     "dsh-plugin-center": "git+https://github.com/zsagi1368/zdsh-plugin-center.git#8f581223f8a50b4923b359dbf0248b6d6f357434",
     "dsh-autopilot": "git+https://github.com/zsagi1368/zdsh-autopilot.git#43f98906d151409582a26ece78150f6bd6f2bfc4",
     "dsh-webstack": "git+https://github.com/zsagi1368/dsh-webstack.git#2815c25d2bcd093558c15a59059aa1f782854a27",
-    "zdsh-workbench": "git+https://github.com/zsagi1368/zdsh-workbench.git#5eaf62faa19de6f5ce58d5adb8a3170db9d14a19"
+    "zdsh-workbench": "git+https://github.com/zsagi1368/zdsh-workbench.git#36004cdf13da273bb97fc83bdb01ffc2520a64fe"
   }
 }

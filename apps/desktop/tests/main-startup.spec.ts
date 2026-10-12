@@ -2,8 +2,8 @@ import type { AccountView } from '@deepseek-ai/dsh-deepseek-account/types'
 import { WINDOWS_TITLEBAR_HEIGHT } from '../src/windows-layout.ts'
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { IpcMainInvokeEvent } from 'electron'
-import { join } from 'node:path'
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { basename, join } from 'node:path'
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import type { MenuItemConstructorOptions, MessageBoxOptions } from 'electron'
 import { DESKTOP_IPC, type DesktopUpdateState } from '../src/ipc.ts'
@@ -516,6 +516,41 @@ describe('desktop main startup', () => {
     }
     expect(forwardWebRequest).not.toHaveBeenCalled()
     expect((await handler(new Request('dsh-app://unknown/update-dialog.html'))).status).toBe(404)
+  })
+
+  it('serves every asset the web index links locally and never through the Host forwarding door', async () => {
+    const project = mkdtempSync(join(tmpdir(), 'dsh-desktop-dsh-'))
+    onTestFinished(() => { rmSync(project, { recursive: true, force: true }) })
+    const web = join(import.meta.dirname, '..', '..', 'web')
+    const index = readFileSync(join(web, 'index.html'), 'utf8')
+    const linked = [...index.matchAll(/<link\b[^>]*\bhref="([^"]+)"/gu)].map(match => match[1]!)
+    // The local document list must cover every asset the built index links. The
+    // regression this locks is `favicon-dark.svg`: the list missed it, so the request
+    // fell out of the document branch and the forwarding door 403ed it.
+    expect(linked).toEqual(['/manifest.webmanifest', '/favicon-dark.svg', '/favicon.svg'])
+    const dist = join(project, 'node_modules', '@deepseek-ai', 'dsh-web-frontend', 'dist')
+    mkdirSync(dist, { recursive: true })
+    writeFileSync(join(dist, 'index.html'), index)
+    for (const href of linked) copyFileSync(join(web, 'public', basename(href)), join(dist, basename(href)))
+    vi.stubEnv('DSH_DESKTOP_DSH_DIR', project)
+    harness.app.isPackaged = false
+    const webDocument = await import('../src/web-document.ts')
+    const actual = await vi.importActual<typeof import('../src/web-document.ts')>('../src/web-document.ts')
+    vi.mocked(webDocument.serveWebDocument).mockImplementation(actual.serveWebDocument)
+    try {
+      await readyForUpdate()
+      const handler = harness.protocolHandle.mock.calls[0]![1]
+      for (const href of linked) {
+        const response = await handler(new Request(`dsh-app://app${href}`))
+        expect(webDocument.forwardWebRequest, href).not.toHaveBeenCalled()
+        expect(response.status, href).toBe(200)
+        expect(await response.text(), href).toBe(readFileSync(join(dist, basename(href)), 'utf8'))
+      }
+      expect((await handler(new Request('dsh-app://app/'))).status).toBe(200)
+      expect(webDocument.forwardWebRequest).not.toHaveBeenCalled()
+    } finally {
+      vi.mocked(webDocument.serveWebDocument).mockReset()
+    }
   })
 
   it('installs hidden native DevTools shortcuts in the macOS application menu', async () => {

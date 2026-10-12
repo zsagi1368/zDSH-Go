@@ -23,12 +23,12 @@ Cordis service (`ctx.modelSlots`) that gives every auxiliary side-task model cal
 <a id="version-adaptation-compat-guard"></a>
 ## Version adaptation (compat guard)
 
-The feature gates its own registration through `@deepseek-ai/dsh-compat`'s `guardFeature` (`guardModelSlots` in `src/compat.ts`), probing the peer symbols it depends on before registering:
+The feature probes its peer surfaces through `@deepseek-ai/dsh-compat`'s `guardFeature` (`guardModelSlots` in `src/compat.ts`) and books the verdict in the process-level audit roster:
 
 - `cordis:Service` — `@deepseek-ai/cordis` must export a callable `Service`.
-- `settings:SettingsProvider` — `@deepseek-ai/dsh-settings` must export `SettingsProvider` whose prototype provides `register` (as of alpha.4 `installSettingsSection` is removed; settings sections register through `settings.register()` via `ctx.inject(['settings'])`).
+- `settings:forms` — `@deepseek-ai/dsh-settings` must export the entry-derived `SettingsForms` face (`describe`/`update`/`mutate` on its prototype). It replaced the retired `SettingsProvider` registration surface and is the face a user-layer slot override is written through.
 
-When any probe fails, the guard logs a warning and returns `false`, so the feature skips registration instead of throwing. It never throws and never breaks the host tree: a partially-loaded or upstream-drifted host simply boots without the feature.
+A failed probe logs a warning and returns `false` with an attributed roster reason; the registry itself registers on every host and keeps serving the composition configuration, so a host without that face loses only the settings-writable user layer. The guard never throws and never breaks the host tree.
 
 <a id="model-experience"></a>
 ## Model Experience
@@ -44,7 +44,7 @@ The resolution itself sends no request and changes no context. The selected rout
 <a id="known-limitations-and-deferred-work"></a>
 
 - **Slot ids are a closed built-in set** — deployments cannot name custom slots yet because the vocabulary grows only with reviewed consumers; adding `vision` or `plan` slots is deferred until their routing integration lands.
-- **No settings-mirror tier** — slot routes live in composition (cordis patch rows); a user-facing settings layer with higher priority than composition is deferred pending the S-45 UI milestone, and project-level overrides remain out of scope pending security review.
+- **The user layer is the entry's own Config** — slot routes come from the `llm-model-slots` profile row, and an edit through the settings face writes the user layer into that same entry: both policy fields are volatile, so the write commits into the running entry and later auxiliary calls re-point without a remount. The Models page's slot block and the settings mirror address that entry id only; a deployment row mounted under another id still serves its composition config but carries no settings-writable user layer. Project-level overrides remain out of scope pending security review.
 
 <a id="dev-note"></a>
 ### Dev Note
@@ -54,8 +54,8 @@ The resolution itself sends no request and changes no context. The selected rout
 
 This Dev Note is working context for maintainers: open design questions and directions that are not decided. It is explicitly non-authoritative — shipped behavior, limits, and accepted rationale live in the sections above, the package code, and the linked Agent Note.
 
-#### Future: a settings-mirror resolution tier
+#### Future: finer user-layer policy semantics
 
-Slot routes live in composition only. A user-facing settings tier (S-45) would insert between the slot statement and the deployment default; whenever it lands, `resolve()`'s documented precedence and the closed `slots/dispatch` payload must both be extended in the same change so sessions stay replayable.
+`slots` and `fallback` are wholesale volatile fields: a path-addressed settings edit merges into the running entry, a wholesale section replace rewrites the whole policy, and a rejected policy warns once and keeps the previous routes. Whether a finer per-slot merge tier belongs above the composition base, and how project-level overrides would compose with it, remain undecided.
 
 </details>

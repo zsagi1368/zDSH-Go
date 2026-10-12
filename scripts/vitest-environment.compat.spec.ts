@@ -29,4 +29,16 @@ describe('Vitest jsdom compatibility', () => {
     expect(localStorage.getItem('dsh-vitest-storage-probe')).toBe('available')
     localStorage.removeItem('dsh-vitest-storage-probe')
   })
+
+  it('turns a jsdom Blob into a blob URL, which bounds the jsdom upgrade', () => {
+    // Vitest's jsdom compat URL reaches into jsdom's private Blob implementation
+    // (`makeCompatBlob` reads the impl's `_buffer` off the instance's own
+    // symbol). jsdom 30.1.x no longer exposes that symbol, so every
+    // `URL.createObjectURL(new Blob(...))` inside the environment throws
+    // `Cannot read properties of undefined (reading '_buffer')` — the failure
+    // that pins the repo to 30.0.x; a later jsdom must satisfy this case first.
+    const url = URL.createObjectURL(new Blob([new Uint8Array([1, 2])]))
+    expect(url.startsWith('blob:')).toBe(true)
+    URL.revokeObjectURL(url)
+  })
 })

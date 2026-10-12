@@ -907,7 +907,7 @@ Source: [`packages/session/session-log-deepseek/src/types.ts:81`](../packages/se
 'slots/dispatch': ModelSlotDispatchEventData
 ```
 
-Source: [`packages/llm/model-slots/src/index.ts:89`](../packages/llm/model-slots/src/index.ts)
+Source: [`packages/llm/model-slots/src/index.ts:86`](../packages/llm/model-slots/src/index.ts)
 
 ### `step/*`
 
@@ -4259,7 +4259,7 @@ Sources: [`packages/api/session-controller/src/types.ts:100`](../packages/api/se
 
 SHA-256: `b5179f11c20399c4cc20662a3c01195e2c971708ac7ecb3e6e7911c98289e014`
 
-Sources: [`packages/llm/model-slots/src/index.ts:75`](../packages/llm/model-slots/src/index.ts)
+Sources: [`packages/llm/model-slots/src/index.ts:72`](../packages/llm/model-slots/src/index.ts)
 
 | Property | Presence | Type |
 |---|---|---|
@@ -4278,7 +4278,7 @@ Sources: [`packages/llm/model-slots/src/index.ts:75`](../packages/llm/model-slot
 
 SHA-256: `0ea83f814076a21d409beac1e4759e6191e29e9694b576d52a66e0c653da441b`
 
-Sources: [`packages/llm/model-slots/src/index.ts:72`](../packages/llm/model-slots/src/index.ts)
+Sources: [`packages/llm/model-slots/src/index.ts:69`](../packages/llm/model-slots/src/index.ts)
 
 One of:
 
