@@ -1,4 +1,5 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -12,11 +13,26 @@ import {
   type RegistryIndex,
 } from './benchmark-npm-resolution.ts'
 
+// GH Windows runners pay a cold-cache npm/registry setup before the local
+// registry answers, which outlasted the child's former fixed 10s budget on run
+// 38192353722. On CI both the npm child budget and the matching vitest timeout
+// are widened; local runs keep the 10s budget as the regression guard, and no
+// functional assertion depends on the budget.
+const childBudgetMs = process.env.CI === 'true' ? 60_000 : 10_000
+const benchmarkTimeoutMs = process.env.CI === 'true' ? 120_000 : 90_000
+
 const roots: string[] = []
 
-afterEach(() => {
-  for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
-})
+// CI runners expose the temp dir through an 8.3 short name (RUNNER~1); the npm
+// cache inside can still hold handles when rm walks the tree. Only the async
+// fs.rm path honors maxRetries/retryDelay for that lock (rmSync accepts the same
+// options but throws the EPERM immediately on Windows). The hook budget covers
+// two roots each burning the full retry backoff.
+afterEach(async () => {
+  for (const root of roots.splice(0)) {
+    await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
+  }
+}, 30_000)
 
 function writeJson(root: string, path: string, value: unknown): void {
   const absolute = join(root, path)
@@ -89,16 +105,16 @@ describe('npm resolution benchmark', () => {
     })
   })
 
-  it('runs npm against the local registry without requesting an archive', { timeout: 90_000 }, async () => {
+  it('runs npm against the local registry without requesting an archive', { timeout: benchmarkTimeoutMs }, async () => {
     const index: RegistryIndex = new Map([[
       '@deepseek-ai/dsh',
       new Map([['0.1.0', { name: '@deepseek-ai/dsh', version: '0.1.0' }]]),
     ]])
-    // The 90s test timeout matches the npm child's own 10s process budget
-    // with headroom for slow CI machines: on GH Windows runners the first
-    // npm invocation pays cold-cache registry setup that blew the 5s vitest
-    // default while the child itself still respected its own budget.
-    const result = await benchmarkNpmResolution(index, '0.1.0', 10_000)
+    // benchmarkTimeoutMs tracks the npm child's own CI-aware budget
+    // (childBudgetMs) plus headroom for slow machines: on GH Windows runners
+    // the first npm invocation pays cold-cache registry setup, which blew the
+    // 5s vitest default and (run 38192353722) the child's former 10s budget.
+    const result = await benchmarkNpmResolution(index, '0.1.0', childBudgetMs)
 
     expect(result.durationMs).toBeGreaterThan(0)
     expect(result.registryRequests).toBeGreaterThan(0)
