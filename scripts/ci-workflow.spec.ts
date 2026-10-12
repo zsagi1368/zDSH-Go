@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import * as yaml from 'js-yaml'
 import { afterEach, describe, expect, it } from 'vitest'
-import { KNOWN_FAILURE_LANES, KNOWN_FAILURES_PATH, KnownFailuresRosterError, loadKnownFailures } from './ci-windows-known-failures.ts'
+import { KNOWN_FAILURE_LANES, KNOWN_FAILURES_PATH, KnownFailuresRosterError, activeKnownFailurePaths, loadKnownFailures } from './ci-windows-known-failures.ts'
 
 const root = resolve(import.meta.dirname, '..')
 
@@ -209,6 +209,32 @@ describe('CI known-failure roster (Windows quality gate)', () => {
     // The roster path the lane reads is the registered one.
     expect(existsSync(resolve(root, KNOWN_FAILURES_PATH))).toBe(true)
   })
+
+  it('drops exactly the workstation-only entries on the hosted runner (D25①)', () => {
+    const entries = loadKnownFailures(root)
+    const local = activeKnownFailurePaths({})
+    const hosted = activeKnownFailurePaths({ GITHUB_ACTIONS: 'true' })
+
+    // Explicit pins: both numbers move only with a reviewed roster edit (the
+    // campaign's reverse verification replayed the original failure set against
+    // a cleared roster at this size: 12 registered / 4 hosted).
+    expect(local).toHaveLength(12)
+    expect(hosted).toHaveLength(4)
+
+    // Lane semantics, stated independently of the counts: the local lane
+    // excludes every registered entry in file order, while `GITHUB_ACTIONS=true`
+    // drops exactly the workstation-only rows so the hosted runner keeps
+    // covering those files (no coverage is traded away by the roster).
+    expect([...local]).toEqual(entries.map(entry => entry.path))
+    expect([...hosted]).toEqual(entries.filter(entry => entry.lane === 'github-windows-ci').map(entry => entry.path))
+    const workstation = entries.filter(entry => entry.lane === 'workstation')
+    expect(workstation.length).toBeGreaterThan(0)
+    for (const entry of workstation) expect(hosted).not.toContain(entry.path)
+
+    // A duplicate path would split one file's evidence across two rows and
+    // change nothing on the wire; the loader refuses it outright.
+    expect(new Set(entries.map(entry => entry.path)).size).toBe(entries.length)
+  })
 })
 
 /**
@@ -254,6 +280,26 @@ describe('known-failure roster guards', () => {
     ['a missing file', { ...ACCEPTED, path: 'packages/probe/target/tests/gone.spec.ts' }],
   ])('refuses %s', (_label, entry) => {
     expect(() => loadKnownFailures(fixtureRepository([entry]))).toThrow(KnownFailuresRosterError)
+  })
+
+  it('refuses a `..` traversal segment before the existence check (D25⑤)', () => {
+    // Both shapes are rejected by the traversal guard itself: the first escapes
+    // the fixture root, the second resolves back inside — a segment is never
+    // legitimate in a repo-relative roster path, and checking it before
+    // `existsSync(resolve(root, path))` keeps the guard independent of whatever
+    // happens to exist outside the tree.
+    for (const path of [
+      'packages/../../probe.spec.ts',
+      'packages/../packages/probe/target/tests/probe.spec.ts',
+    ]) {
+      expect(() => loadKnownFailures(fixtureRepository([{ ...ACCEPTED, path }]))).toThrow(/must not carry a '\.\.' segment/)
+    }
+  })
+
+  it('refuses a duplicated path (D25⑤)', () => {
+    // The same file registered twice would split its evidence across two rows.
+    expect(() => loadKnownFailures(fixtureRepository([ACCEPTED, { ...ACCEPTED }])))
+      .toThrow(/lists packages\/probe\/target\/tests\/probe\.spec\.ts more than once/)
   })
 })
 

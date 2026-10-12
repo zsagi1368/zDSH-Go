@@ -18,7 +18,12 @@
  *    cannot mask sibling files or examples added later;
  *  - every entry carries a non-empty reason plus at least one evidence
  *    reference, and every listed file must exist;
- *  - unknown lanes, unknown keys, and non-spec paths are rejected.
+ *  - unknown lanes, unknown keys, and non-spec paths are rejected;
+ *  - a `..` segment is rejected before the existence check (a traversal path
+ *    can resolve outside the repository root, which would make the roster name
+ *    a file the repository does not own);
+ *  - duplicate paths are rejected: the second entry would be dead weight on a
+ *    single exclusion and would split one file's evidence across two rows.
  *
  * Lanes: `github-windows-ci` entries fail on the hosted Windows runner and on
  * workstations alike; `workstation` entries reproduce only in this development
@@ -86,7 +91,17 @@ export function loadKnownFailures(root: string = repositoryRoot()): readonly Kno
   }
   const { entries } = parsed
   if (!Array.isArray(entries)) throw new KnownFailuresRosterError(`${KNOWN_FAILURES_PATH} must define an entries array`)
-  return entries.map((entry, index) => validateEntry(entry, index, root))
+  const validated = entries.map((entry, index) => validateEntry(entry, index, root))
+  // One file, one entry: a duplicate would split one file's evidence across two
+  // rows and silently change nothing on the wire (the same path is excluded once).
+  const seen = new Set<string>()
+  for (const entry of validated) {
+    if (seen.has(entry.path)) {
+      throw new KnownFailuresRosterError(`${KNOWN_FAILURES_PATH} lists ${entry.path} more than once`)
+    }
+    seen.add(entry.path)
+  }
+  return validated
 }
 
 /**
@@ -116,6 +131,10 @@ function validateEntry(entry: unknown, index: number, root: string): KnownFailur
   // directories, which is exactly the masking this roster must prevent.
   if (/[*?[\]{}!]/.test(path)) throw new KnownFailuresRosterError(`${at}.path must be an exact path without glob magic, got ${JSON.stringify(path)}`)
   if (!/^packages\/|^apps\/|^scripts\/|^website\//.test(path)) throw new KnownFailuresRosterError(`${at}.path must be a repo-relative test path, got ${JSON.stringify(path)}`)
+  // Traversal is rejected BEFORE the existence check: `resolve(root, path)`
+  // follows `..`, so an escaping path would be validated against a file outside
+  // the repository the roster is supposed to speak for.
+  if (path.split('/').includes('..')) throw new KnownFailuresRosterError(`${at}.path must not carry a '..' segment, got ${JSON.stringify(path)}`)
   if (!/\.spec\.tsx?$/.test(path)) throw new KnownFailuresRosterError(`${at}.path must name a .spec.ts(x) file, got ${JSON.stringify(path)}`)
   if (!existsSync(resolve(root, path))) throw new KnownFailuresRosterError(`${at}.path does not exist: ${path}`)
   if (typeof lane !== 'string' || !(KNOWN_FAILURE_LANES as readonly string[]).includes(lane)) {

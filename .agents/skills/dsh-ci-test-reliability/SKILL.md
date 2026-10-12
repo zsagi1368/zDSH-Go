@@ -33,7 +33,7 @@ Do not serialize an entire suite merely because one fixture lacks isolation. Nar
 Use the resource owner's allocator instead of checking availability and claiming it later.
 
 - Network fixtures bind loopback with `listen(0)` and read the assigned address only after the server reports that it is listening. Never scan for a free port and bind it later.
-- Create private per-test temporary roots with `mkdtemp`; do not acquire predictable shared paths.
+- Create private per-test temporary roots with `mkdtemp`; do not acquire predictable shared paths. Keep a self-identifying prefix (`join(tmpdir(), '<area>-')`) on every root: the prefix is the ownership receipt the suite's teardown relies on, and it is the registered face of the workspace zero-risk protocol §5.1 — scratch a suite creates and removes is exempt from the backup rule that governs repository state, so teardown never points at a fixed repository path.
 - Give shared databases, sockets, sessions, and output locations unique per-test namespaces.
 - Use exclusive creation where a path must not already exist.
 - Keep stable recorded identifiers separate from ephemeral transport addresses. Translate inside the fixture instead of forcing the live resource to use the recorded value.

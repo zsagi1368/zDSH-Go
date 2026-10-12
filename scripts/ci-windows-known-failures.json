@@ -5,7 +5,7 @@
     "Everything else must stay red: this roster is never a red-to-green switch, and `pnpm run test:ci` refuses to load a malformed roster.",
     "Entries name exact spec files (no globs) so an entry cannot mask sibling files or later-added examples.",
     "lane=github-windows-ci: red on the hosted Windows runner and locally. lane=workstation: reproduces only in this development machine's shell environment and stays covered on the hosted runner (GITHUB_ACTIONS=true), so the hosted gate loses no coverage from those entries.",
-    "Loaded and validated by scripts/ci-windows-known-failures.ts (shape, existence, lane, reason, evidence); pinned by scripts/ci-workflow.spec.ts."
+    "Loaded and validated by scripts/ci-windows-known-failures.ts (shape, existence, lane, reason, evidence, no duplicate path, no `..` traversal); pinned by scripts/ci-workflow.spec.ts."
   ],
   "entries": [
     {

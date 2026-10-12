@@ -277,27 +277,39 @@ describe('dsh-tool-team', () => {
   it.each([
     ['fresh', undefined], ['fork', undefined], ['fork', 'in-history'],
   ] as const)('records %s teammate identity with update mode %s and keeps the wire prefix', async (mode, systemPromptUpdate) => {
-    const { ctx, lead, adapter } = await setup([textResponse('parent answer'), textResponse('child answer')])
+    // 父 turn 先走一次工具批（D25④）：父历史因此带非文本块（tool-call 块 + tool
+    // 结果消息），下方的 no-replay 断言才有非文本覆盖面可证。
+    const { ctx, lead, adapter } = await setup([
+      toolCallResponse('parent-list', 'list_agents', {}),
+      textResponse('parent answer'),
+      textResponse('child answer'),
+    ])
     if (systemPromptUpdate !== undefined) adapter.systemPromptUpdate = systemPromptUpdate
     await runTurn(lead, 'Parent task')
     const parentRequest = serializeRequest(adapter.requests[0]!)
     const parentHistory = structuredClone(lead.session.deriveMessages())
+    expect(parentHistory.some(message => message.content.some(block => block.type !== 'text'))).toBe(true)
     const spawned = await execute(ctx, lead, 'spawn_teammate', {
       name: 'reviewer', description: 'review', prompt: 'Review the work', context: mode,
     })
     expect(spawned.isError, text(spawned)).toBe(false)
     const childId = spawnedChildId(ctx, lead, spawned)
     await waitNoAgent(ctx, childId)
-    const childRequest = serializeRequest(adapter.requests[1]!)
+    // 父 turn 占两条请求（工具批 + 收尾）⇒ 按会话身份取子会话请求（父/Lead 的
+    // 后续请求也在这份记录里，顺序下标不再稳定）。
+    const childRequest = serializeRequest(adapter.requests.find(request => request.sessionId === childId)!)
     expect(childRequest.tools).toEqual(parentRequest.tools)
     expect(childRequest.system).toEqual(parentRequest.system)
     expect(childRequest.system).not.toContain('Your Team role')
     // L6（Go 意图，对上游的行为偏离已登记）：fork 子会话不 seed 父历史，两种 mode
-    // 都从零开始——官方"子请求保留继承前缀"的断言迁移为"父历史任一文本都不重放"。
+    // 都从零开始——官方"子请求保留继承前缀"的断言迁移为"父历史任一内容都不重放"。
+    // D25④ 补强：逐块断言覆盖非文本块（tool-call 的 id/name/arguments），并加整条
+    // 消息级断言——父历史消息的序列化形态不得原样出现在子请求 wire 上。
     const childWire = JSON.stringify(childRequest.messages)
     for (const message of parentHistory) {
+      expect(childWire).not.toContain(JSON.stringify(message))
       for (const block of message.content) {
-        if (block.type === 'text') expect(childWire).not.toContain(block.text)
+        expect(childWire).not.toContain(block.type === 'text' ? block.text : JSON.stringify(block))
       }
     }
     // A″（D3/L2）：carrier 首块 = 折叠后的快照 + 身份 reminder，wire 前缀断言随折叠迁移。
