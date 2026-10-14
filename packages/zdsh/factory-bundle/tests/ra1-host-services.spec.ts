@@ -272,20 +272,26 @@ const RA1_MOUNT_PROBES: Record<string, Ra1MountProbe> = {
   // `ctx.inject(['webServer'], …)` ran during `apply` without erroring the
   // mount, which the ACTIVE state already establishes).
   //
-  // ⚠ RA-1b finding (recorded in the receipt): PC's routes are registered into
-  // a cordis plugin REALM whose service-instance state does NOT marshal back to
-  // the bare-harness spec's root `fx.webServer` handle, so the route TABLE /
-  // in-process HIT are not observable from this unit harness. Full route
-  // EXECUTION (a real HTTP hit on /api2/…) is DESIGN §10.7's batch-4.2
-  // web-server smoke scope, not this card's. Asserting it here on the capture
-  // registrar would be an unverifiable green (the registrations never land on
-  // the object the reader checks), so we prove only what the harness can see.
+  // ⚠ RA-1b finding WITHDRAWN (2026-10-14): the receipt recorded PC's route
+  // table as "not observable from this harness". That was wrong — filehub and
+  // workbench assert theirs here, and PC's registrations do land on the capture
+  // registrar. The real reason nothing showed up was the plugin's effect idiom:
+  // it passed the cleanup as the effect BODY, so all twelve routes were
+  // registered and disposed inside the same tick while the fiber stayed ACTIVE
+  // (fixed in the plugin's 55bc8af4). The table is asserted below.
   'core/plugin-center': async ({ ctx, fx }) => {
     expect(entryState(ctx, 'factory/core/plugin-center'), 'RA-1: plugin-center entry not ACTIVE under the fixture').toBe(2)
     // The webServer host service is in place and the dynamic injection did not
     // throw the entry out of ACTIVE (state===2 above already proves apply ran to
     // completion); this asserts the handle the factory composed against exists.
     expect(fx.webServer, 'RA-1: fixture webServer missing (PC had no host webServer to inject)').toBeTruthy()
+    // Live route surface: two representatives of the twelve exact routes, so a
+    // registration that is torn down in the same tick fails here instead of
+    // shipping as a 404 market panel.
+    expect(fx.webServer!.find('exact', '/api2/zdsh-plugin-center/market'),
+      'RA-1: plugin-center market route absent after mount').toBeDefined()
+    expect(fx.webServer!.find('exact', '/api2/zdsh-plugin-center/guardian/status'),
+      'RA-1: plugin-center guardian route absent after mount').toBeDefined()
   },
 }
 
