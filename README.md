@@ -115,10 +115,19 @@ zDSH-Go is distributed as source. Clone the repository and run the installer for
 ```sh
 git clone https://github.com/zsagi1368/zDSH-Go.git
 cd zDSH-Go
+```
 
-# Windows (PowerShell 5.1+)
+> **Note:** Choose ONE of the following blocks for your platform. The `source` command is a bash builtin; on PowerShell, use dot-sourcing (`. .\env.ps1`) instead.
+
+**Windows (PowerShell 5.1+):**
+
+```powershell
 .\install.cmd
-# macOS / Linux / WSL / Git Bash
+```
+
+**macOS / Linux / WSL / Git Bash:**
+
+```bash
 ./scripts/install.sh
 ```
 
@@ -135,12 +144,17 @@ On the first boot, the governance preinstall hook installs the pinned factory pl
 
 Load the environment, then start the Web UI:
 
-```sh
-# PowerShell
-. .\env.ps1
-# bash
-source ./env.sh
+**Windows (PowerShell 5.1+):**
 
+```powershell
+. .\env.ps1
+dsh web
+```
+
+**macOS / Linux / WSL / Git Bash:**
+
+```bash
+source ./env.sh
 dsh web
 ```
 
