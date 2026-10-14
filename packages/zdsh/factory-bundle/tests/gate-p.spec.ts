@@ -317,7 +317,7 @@ const SHAPE_PROBES: Record<string, ShapeProbe> = {
   // 不启动 apply()（引擎构建与 provider 注册归 P5/ra1 装载面）。
   'core/webstack': (mod) => {
     expect(typeof mod.apply, 'Gate-P P4: webstack factory exit exports no cordis apply()').toBe('function')
-    expect(mod.name, 'Gate-P P4: webstack factory exit name is not the shipped literal').toBe('webstack')
+    expect(mod.name, 'Gate-P P4: webstack factory exit name is not the shipped literal').toBe('dsh-webstack')
     expect(mod.inject, 'Gate-P P4: webstack inject must declare exactly the web service').toEqual(['web'])
     expect('default' in mod, 'Gate-P P4: webstack exports a default (the pinned tree has none)').toBe(false)
     expect(typeof mod.buildEngineRegistry, 'Gate-P P4: webstack exit has no buildEngineRegistry assembly face').toBe('function')
