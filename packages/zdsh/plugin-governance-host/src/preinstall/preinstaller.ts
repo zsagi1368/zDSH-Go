@@ -335,6 +335,12 @@ export class SeedPreinstaller {
       try {
         await this.host.mount(id, url, true)
       } catch (cause) {
+        // The ledger reason stays a one-line message (the row's change
+        // detection compares the string, so a stack there would read as a
+        // changed row on every boot); the stack goes to the warn channel
+        // instead. A mount failure is fail-open, so without this the only
+        // trace of a non-reproducible failure is the message.
+        this.host.warn(`factory mount failed for ${JSON.stringify(id)} at ${url}: ${cause instanceof Error ? (cause.stack ?? cause.message) : String(cause)}`)
         return { status: 'failed', reason: `${url}: ${cause instanceof Error ? cause.message : String(cause)}` }
       }
     }

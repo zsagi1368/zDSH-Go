@@ -26,13 +26,13 @@ kind: "package-reference"
 
 #### What the model sees
 
-服务键 `pluginGovernance`：`list`/`get`/`health` 只读投影，`approve` 与 preset 操作，`install`/`uninstall` 准入管线（本地目录与 npm 来源）。
+服务键 `pluginGovernance`：`list`/`get`/`health` 只读投影，`approve` 与 preset 操作，`add`/`uninstall` 准入管线（本地目录与 npm 来源）。
 
 ##### Remote surface
 
 ```markdown
 pluginGovernance.list(): GovernanceRosterSnapshot
-pluginGovernance.install({ source }): GovernanceAcknowledgement
+pluginGovernance.add({ source }): GovernanceAcknowledgement
 ```
 
 #### Token effect

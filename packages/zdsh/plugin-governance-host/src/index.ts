@@ -597,8 +597,15 @@ export class PluginGovernanceGateway extends TypertRemoteService {
    * @returns a receipt, or `request-invalid` / `registry-unavailable` /
    * `persistence-failed`.
    */
-  @Remote('install')
-  async install(request: InstallPluginRequest): Promise<GovernanceResult<GovernanceAcknowledgement>> {
+  // The verb is `add`, not `install`: the client namespace service keeps
+  // `install`/`installDirect`/`installScoped` on its own prototype and refuses
+  // a Remote method of that name at mount (gateway client
+  // `RemoteNamespaceService.assertMethodAvailable`), which would fail the whole
+  // `dsh-api-remotes` apply and cascade into every `remote.*` consumer. Same
+  // rename upstream made for `plugins/install`, so the CLI verb and this one
+  // read alike.
+  @Remote('add')
+  async add(request: InstallPluginRequest): Promise<GovernanceResult<GovernanceAcknowledgement>> {
     if (request.source.startsWith('npm:')) return this.installFromNpm(request.source)
     return this.admitManifest(manifestFromLocalSource(request.source))
   }

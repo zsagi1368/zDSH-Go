@@ -209,7 +209,7 @@ describe('PluginGovernanceGateway', () => {
       description: 'installed from disk',
       dsh: { permissionLevel: PluginPermissionLevel.WORKSPACE, capabilities: [toolCapability('local_tool')] },
     })
-    expect((await gateway.install({ source })).ok).toBe(true)
+    expect((await gateway.add({ source })).ok).toBe(true)
     const row = gateway.list().plugins.find(p => p.pluginId === gid('fixtures/local-plugin'))
     expect(row).toMatchObject({
       displayName: 'Local Plugin',
@@ -239,7 +239,7 @@ describe('PluginGovernanceGateway', () => {
       version: '0.1.0',
       dsh: { capabilities: [toolCapability('gated_tool')] },
     })
-    expect((await gateway.install({ source })).ok).toBe(true)
+    expect((await gateway.add({ source })).ok).toBe(true)
     const row = gateway.list().plugins.find(p => p.pluginId === gid('fixtures/gated-plugin'))
     expect(row?.status).toBe('disabled')
     expect(row?.approvalRequired).toBe(true)
@@ -253,7 +253,7 @@ describe('PluginGovernanceGateway', () => {
   it('rejects install sources that are missing or carry no package.json', async () => {
     const gateway = gatewayWith(await seededRegistry())
     for (const source of [join(tmpdir(), 'gov-src-does-not-exist-xyz'), pluginSourceDir({})]) {
-      const rejected = await gateway.install({ source })
+      const rejected = await gateway.add({ source })
       expect(rejected.ok).toBe(false)
       if (!rejected.ok) expect(rejected.error.code).toBe('request-invalid')
     }
@@ -498,7 +498,7 @@ describe('FB3 install-channel trust-field clamp', () => {
       version: '9.9.9',
       dsh: { autoApprove: true, capabilities: [toolCapability('evil_tool')] },
     })
-    expect((await gateway.install({ source })).ok).toBe(true)
+    expect((await gateway.add({ source })).ok).toBe(true)
     const row = gateway.list().plugins.find(p => p.pluginId === gid('fixtures/self-approving'))
     // 判别锁（旧形复刻必红：钳制前该行免审直落 ACTIVE+approvalRequired=false）。
     expect(row?.status).toBe('disabled')
@@ -522,7 +522,7 @@ describe('FB3 install-channel trust-field clamp', () => {
       version: '1.0.0',
       dsh: { permissionLevel: PluginPermissionLevel.WORKSPACE, capabilities: [toolCapability('ws_tool')] },
     })
-    expect((await gateway.install({ source })).ok).toBe(true)
+    expect((await gateway.add({ source })).ok).toBe(true)
     const detail = gateway.get({ pluginId: gid('fixtures/self-workspace') })
     expect(detail.ok).toBe(true)
     if (detail.ok) {
@@ -543,7 +543,7 @@ describe('FB3 install-channel trust-field clamp', () => {
       version: '1.0.0',
       dsh: { capabilities: [toolCapability('op_tool')] },
     })
-    expect((await gateway.install({ source })).ok).toBe(true)
+    expect((await gateway.add({ source })).ok).toBe(true)
     expect(gateway.list().plugins.find(p => p.pluginId === gid('fixtures/operator-row'))?.approved).toBe(false)
   })
 })

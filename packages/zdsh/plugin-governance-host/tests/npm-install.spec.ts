@@ -251,7 +251,7 @@ describe('npm: installs through the gateway', () => {
       '/demo/plugin/-/plugin-1.0.0.tgz': { body: tarball, contentType: 'application/x-tar' },
     })
     const gateway = await gatewayOn(double)
-    const result = await gateway.install({ source: 'npm:@demo/plugin@1.0.0' })
+    const result = await gateway.add({ source: 'npm:@demo/plugin@1.0.0' })
     expect(result.ok).toBe(true)
     const detail = gateway.get({ pluginId: gid('@demo/plugin') })
     expect(detail.ok).toBe(true)
@@ -288,7 +288,7 @@ describe('npm: installs through the gateway', () => {
       '/demo/plugin/-/plugin-1.2.0.tgz': { body: newer, contentType: 'application/x-tar' },
     })
     const gateway = await gatewayOn(double)
-    const result = await gateway.install({ source: 'npm:@demo/plugin' })
+    const result = await gateway.add({ source: 'npm:@demo/plugin' })
     expect(result.ok).toBe(true)
     const detail = gateway.get({ pluginId: gid('@demo/plugin') })
     if (detail.ok) expect(detail.value.summary.version).toBe('1.2.0')
@@ -297,7 +297,7 @@ describe('npm: installs through the gateway', () => {
   it('reports unknown packages as request-invalid without registering anything', async () => {
     const double = registryDouble({})
     const gateway = await gatewayOn(double)
-    const result = await gateway.install({ source: 'npm:@demo/missing@1.0.0' })
+    const result = await gateway.add({ source: 'npm:@demo/missing@1.0.0' })
     expect(result.ok).toBe(false)
     if (!result.ok) expect(result.error.code).toBe('request-invalid')
     expect(gateway.list().plugins).toHaveLength(0)
@@ -306,7 +306,7 @@ describe('npm: installs through the gateway', () => {
   it('maps unreachable registries to registry-unavailable', async () => {
     const double = registryDouble({ '/demo/plugin': 'refused' })
     const gateway = await gatewayOn(double)
-    const result = await gateway.install({ source: 'npm:@demo/plugin@1.0.0' })
+    const result = await gateway.add({ source: 'npm:@demo/plugin@1.0.0' })
     expect(result.ok).toBe(false)
     if (!result.ok) expect(result.error.code).toBe('registry-unavailable')
   })
@@ -318,7 +318,7 @@ describe('npm: installs through the gateway', () => {
       '/demo/plugin/-/plugin-1.0.0.tgz': { body: evil, contentType: 'application/x-tar' },
     })
     const gateway = await gatewayOn(double)
-    const result = await gateway.install({ source: 'npm:@demo/plugin@1.0.0' })
+    const result = await gateway.add({ source: 'npm:@demo/plugin@1.0.0' })
     expect(result.ok).toBe(false)
     if (!result.ok) expect(result.error.code).toBe('request-invalid')
     expect(existsSync(join(String(storageRoots.at(-1)), 'installed'))).toBe(false)
@@ -334,7 +334,7 @@ describe('npm: installs through the gateway', () => {
       '/demo/plugin/-/plugin-1.0.0.tgz': { body: tampered, contentType: 'application/x-tar' },
     })
     const gateway = await gatewayOn(double)
-    const result = await gateway.install({ source: 'npm:@demo/plugin@1.0.0' })
+    const result = await gateway.add({ source: 'npm:@demo/plugin@1.0.0' })
     expect(result.ok).toBe(false)
     if (!result.ok) expect(result.error.code).toBe('registry-unavailable')
     expect(gateway.list().plugins).toHaveLength(0)
@@ -345,7 +345,7 @@ describe('npm: installs through the gateway', () => {
       '/demo/plugin': { status: 302, location: 'https://evil.example/demo/plugin' },
     })
     const gateway = await gatewayOn(double)
-    const result = await gateway.install({ source: 'npm:@demo/plugin@1.0.0' })
+    const result = await gateway.add({ source: 'npm:@demo/plugin@1.0.0' })
     expect(result.ok).toBe(false)
     if (!result.ok) expect(result.error.code).toBe('registry-unavailable')
   })
@@ -357,7 +357,7 @@ describe('npm: installs through the gateway', () => {
       '/demo/plugin/-/plugin-1.0.0.tgz': { body: tarball, contentType: 'application/x-tar' },
     })
     const gateway = await gatewayOn(double)
-    expect((await gateway.install({ source: 'npm:@demo/plugin@1.0.0' })).ok).toBe(true)
+    expect((await gateway.add({ source: 'npm:@demo/plugin@1.0.0' })).ok).toBe(true)
     expect(gateway.approve({ pluginId: gid('@demo/plugin') }).ok).toBe(true)
     expect((await gateway.enable({ pluginId: gid('@demo/plugin') })).ok).toBe(true)
     const installedDir = join(String(storageRoots.at(-1)), 'installed', 'demo', 'plugin')
@@ -367,7 +367,7 @@ describe('npm: installs through the gateway', () => {
     expect(existsSync(installedDir)).toBe(false)
 
     // Reinstall must NOT inherit the earlier approval: fail closed again.
-    expect((await gateway.install({ source: 'npm:@demo/plugin@1.0.0' })).ok).toBe(true)
+    expect((await gateway.add({ source: 'npm:@demo/plugin@1.0.0' })).ok).toBe(true)
     const detail = gateway.get({ pluginId: gid('@demo/plugin') })
     if (detail.ok) expect(detail.value.summary.status).toBe('disabled')
   })
@@ -385,7 +385,7 @@ describe('npm: installs through the gateway', () => {
       '/demo/plugin/-/plugin-1.0.0.tgz': { body: tarball, contentType: 'application/x-tar' },
     })
     const gateway = await gatewayOn(double)
-    expect((await gateway.install({ source: 'npm:@demo/plugin@1.0.0' })).ok).toBe(true)
+    expect((await gateway.add({ source: 'npm:@demo/plugin@1.0.0' })).ok).toBe(true)
     const installedDir = join(String(storageRoots.at(-1)), 'installed', 'demo', 'plugin')
     // Pin the precondition the narrowing keys on: origin row kind npm.
     const rows = [...(gateway as unknown as { installedSources: Map<string, Record<string, unknown>> }).installedSources.values()]

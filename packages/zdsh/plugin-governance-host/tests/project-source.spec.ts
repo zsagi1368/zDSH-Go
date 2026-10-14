@@ -125,7 +125,7 @@ describe('project source distinction (C-01)', () => {
       dsh: { permissionLevel: 'workspace', capabilities: [{ type: 'tool', tool: { name: 'host_tool', description: 'h', schema: { type: 'object' } } }] },
     }))
     const gateway = ctx.get('pluginGovernance') as PluginGovernanceGateway
-    const installed = await gateway.install({ source: installSource })
+    const installed = await gateway.add({ source: installSource })
     expect(installed.ok).toBe(true)
 
     // --- Roster: wait for the lazy sync to pick up the project entry ---

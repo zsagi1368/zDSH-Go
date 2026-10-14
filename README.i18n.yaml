@@ -3,74 +3,62 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write README.md
 /zdsh-go:
-  en: 84e15b63d1c612b8
-  zh: 33fb852382eb8115
-/zdsh-go/versions:
-  en: d3f0cf7dc1a7c641
-  zh: 39a58fc5fb39fa70
-/zdsh-go/the-zdsh-lineage:
-  en: 1b8fbee1709f3b3e
-  zh: 7b3d525a265da8e6
-/zdsh-go/what-the-context-adjustment-changes:
-  en: 4d9523a369066c54
-  zh: 8212a29a545a5455
-/zdsh-go/upgrade-notes:
-  en: 9ba5a6d9208466df
-  zh: 296f73572543ef4b
-/zdsh-go/upgrade-notes/upgrading-to-the-0-2-1-alpha-2-base:
-  en: b97d0853507688dd
-  zh: a1b283881599053b
-/zdsh-go/upgrade-notes/upgrading-to-the-0-1-7-rc-2-base:
-  en: 213eb6fa8b8f24bb
-  zh: 92655857f639ba6f
-/zdsh-go/developer-preview:
-  en: d392b1045ed2bb01
-  zh: a29d773bc71214ce
+  en: 5ed58244bd5d0b84
+  zh: 73e41200642c886a
 /zdsh-go/quick-start:
-  en: 1985dd2230f19f78
+  en: 9535b10be9abb7a8
   zh: 37665fe48339b410
-/zdsh-go/quick-start/prerequisites:
-  en: b222f88460218520
-  zh: f02be6dd1e7387ae
-/zdsh-go/quick-start/install:
-  en: 683bad0686a0c8d4
-  zh: 397d83e077e9da51
+/zdsh-go/quick-start/what-you-need:
+  en: 966e5d74ae702a49
+  zh: 7bc35c6f28e1951b
+/zdsh-go/quick-start/install-once:
+  en: 07ca411477f4f3a7
+  zh: 9da39997d998cc38
 /zdsh-go/quick-start/run:
-  en: 739d859b9dfb55ba
-  zh: 2d90d7da0abac7e0
-/zdsh-go/configuration:
-  en: 468cc980c96e552b
-  zh: d53095fa67660c19
-/zdsh-go/update-and-uninstall:
-  en: ca78f49b5f871fd0
-  zh: e0a766bbdaf2aaa2
-/zdsh-go/factory-plugin-roster:
-  en: c0478a858a48e721
-  zh: 44cbca4c9939d46a
-/zdsh-go/security:
-  en: 34dd62eefe6d4e97
-  zh: f2a53a58d5545ba0
+  en: 0887f77d4ca243d5
+  zh: 9c2f2a4a57e18458
+/zdsh-go/quick-start/upgrade:
+  en: cd5b8619cc11d0f2
+  zh: 6216c6bd3a40fb27
+/zdsh-go/quick-start/uninstall:
+  en: 01b77331aa5908b8
+  zh: 319c4dc360655b19
 /zdsh-go/faq:
-  en: 93df0e5b234ab106
-  zh: d5df65b77b102fc6
-/zdsh-go/zdsh-enhancements:
-  en: 178b1384abec4470
-  zh: 106f9220118ffacc
-/zdsh-go/contributing:
-  en: 330fc5b9e6a9f1dc
-  zh: 736dd30e6e2356de
-/zdsh-go/development:
-  en: 803ca2b11b497bed
-  zh: 8b4071eb0e7783ef
-/zdsh-go/citation:
-  en: 6704e9e5a8d49a91
-  zh: 85c9cdd8d56f8e9d
+  en: 4592a51c22b9d588
+  zh: e0bf6c917c4997fc
+/zdsh-go/technical-details-developer-reference:
+  en: b548b7afb8a9d9ec
+  zh: fc87ea4ac484ac60
+/zdsh-go/technical-details-developer-reference/version-information:
+  en: 7110e20e7288052a
+  zh: 15fc0c26d5d6794a
+/zdsh-go/technical-details-developer-reference/project-lineage:
+  en: 4d5aedaeafb8ab03
+  zh: f21984a9cb954481
+/zdsh-go/technical-details-developer-reference/context-cache-management:
+  en: c88ace30b2aacdfb
+  zh: 7e32f32453476dd5
+/zdsh-go/technical-details-developer-reference/factory-plugins:
+  en: f150a6fc7110aa32
+  zh: 68f7d27bc5afee5a
+/zdsh-go/technical-details-developer-reference/configuration:
+  en: a6471e6a5ab514d4
+  zh: cb1be7c13766adb5
+/zdsh-go/technical-details-developer-reference/security:
+  en: c60ee65f8d075253
+  zh: 4d6fbf53e232ed23
+/zdsh-go/technical-details-developer-reference/upgrade-guides:
+  en: 8081c4204d744e8c
+  zh: 8d435fa076881596
+/zdsh-go/technical-details-developer-reference/development-guides:
+  en: c1a4de1834efca55
+  zh: 556b998bae055c85
+/zdsh-go/acknowledgements:
+  en: 61c1d41aeb5ab69d
+  zh: 46608399cda147ab
 /zdsh-go/license:
   en: 22cc4b360fea2f62
   zh: c3c223b2593cd9de
-/zdsh-go/acknowledgements:
-  en: 653b68791f1a645f
-  zh: 87889c6a5cb87c96
-/zdsh-go/about-the-upstream-deepseek-harness-official:
-  en: 42347e032c2ff913
-  zh: fee3eb5e71a9783b
+/zdsh-go/about-the-official-deepseek-harness:
+  en: 87049c6d0eec6c3f
+  zh: 0bbff2c2a3b347cb

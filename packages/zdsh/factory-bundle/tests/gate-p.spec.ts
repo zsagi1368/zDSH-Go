@@ -492,7 +492,7 @@ describe('Gate-M M1 pilot lifecycle (verticals) — disable → restart → unin
     //    governance never deleted the node_modules closure (the artifact dir and
     //    its manifest survived every prior step).
     expect(pilotEntry.source.startsWith('local:')).toBe(true)
-    const reinstalled = await boot3.gateway.install({ source: PILOT_ABS_SOURCE })
+    const reinstalled = await boot3.gateway.add({ source: PILOT_ABS_SOURCE })
     expect(reinstalled.ok).toBe(true)
     expect(boot3.gateway.list().plugins.some(p => p.pluginId === gid(PILOT_ID))).toBe(true)
   })

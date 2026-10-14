@@ -177,10 +177,10 @@ zDSH-Go 首次启动时会自动安装 8 个出厂插件（6 个默认启用，2
 
 ### 升级指南
 
-从旧版本升级时，请查看对应版本的升级说明：
+从旧版本升级时，请查看对应版本的升级说明。升级到当前底座会跨越 `v0.2.0-rc.2` 与 `v0.2.1-alpha.1` 两组官方指南，例如：
 
-- [升级到 0.2.1-alpha.2](docs/upgrade-guide/v0.2.1-alpha.2/guide.zh.md)
-- [升级到 0.1.7-rc.2](docs/upgrade-guide/v0.1.7-rc.2/guide.zh.md)
+- [“自动化任务” bundle 已移除（v0.2.0-rc.2）](docs/upgrade-guide/v0.2.0-rc.2/schedule-bundle-retired/guide.zh.md)
+- [Web 监听与信任配置迁移到 `webStartup`（v0.2.1-alpha.1）](docs/upgrade-guide/v0.2.1-alpha.1/web-listener-trust-config/guide.zh.md)
 
 ### 开发指南
 

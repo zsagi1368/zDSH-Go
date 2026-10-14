@@ -441,7 +441,7 @@ describe('P2 regression — storage-only uninstall reachable after restart', () 
 
     // Boot 1: install via the npm channel (no seed involvement), then "power off".
     const boot1 = await boot({ storageRoot })
-    const installed = await boot1.gateway.install({ source: 'npm:@demo/plugin@1.0.0' })
+    const installed = await boot1.gateway.add({ source: 'npm:@demo/plugin@1.0.0' })
     expect(installed.ok).toBe(true)
     expect(existsSync(join(installDir, 'package.json'))).toBe(true)
 
