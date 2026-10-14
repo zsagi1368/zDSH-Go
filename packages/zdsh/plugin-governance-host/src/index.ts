@@ -368,6 +368,8 @@ export class PluginGovernanceGateway extends TypertRemoteService {
   private readonly persistedDecisions = new Map<PluginGovernanceId, 'active' | 'disabled'>()
   /** Canonical ids already mirrored from the Loader, so re-syncs stay idempotent. */
   private readonly mirrored = new Set<PluginGovernanceId>()
+  /** Ids whose health probe is running right now, so a probe that calls back into the report cannot recurse. */
+  private readonly healthProbes = new Set<PluginGovernanceId>()
   /** Project plugin sources: canonical id → project root + runtime tier. */
   private readonly projectSources = new Map<PluginGovernanceId, { projectRoot: string; runtimeTier: string }>()
   /** In-flight Loader sync; concurrent triggers reuse one pass. */
@@ -1453,10 +1455,29 @@ export class PluginGovernanceGateway extends TypertRemoteService {
       .find(row => row.id === plugin.manifest.id)?.errors ?? []
   }
 
-  /** Read one plugin's own health probe, `null` when it declares none. */
+  /**
+   * Read one plugin's own health probe, `null` when it declares none.
+   *
+   * Re-entrancy guard: the roster mirrors this gateway like any other active
+   * loader entry, and the mirror adapter's health face calls the service's own
+   * `health()` — so probing that row without a guard recursed until the stack
+   * blew (`RangeError`, surfaced to the client as `gateway/internal`, which is
+   * why the Governance tab showed "data temporarily unavailable" while `list`
+   * kept working). A probe that calls back in is reported as `null` instead:
+   * one best-effort probe must never blank the whole report.
+   */
   private probeVerdict(pluginId: PluginGovernanceId): boolean | null {
-    const verdict = this.registry.get(pluginId)?.getHealthStatus?.()
-    return verdict === undefined ? null : verdict.healthy
+    if (this.healthProbes.has(pluginId)) return null
+    this.healthProbes.add(pluginId)
+    try {
+      const verdict = this.registry.get(pluginId)?.getHealthStatus?.()
+      return verdict === undefined ? null : verdict.healthy
+    } catch (cause) {
+      this.warn(`health probe failed for ${String(pluginId)}: ${describe(cause)}`)
+      return null
+    } finally {
+      this.healthProbes.delete(pluginId)
+    }
   }
 
   /**

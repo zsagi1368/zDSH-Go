@@ -403,6 +403,33 @@ describe('PluginGovernanceGateway Loader mirroring', () => {
   })
 
   // ==========================================================================
+  //   SYNC-P2 族2 判别锁：名册里的「自镜像行」健康探针回调进报告本身。
+  //   生产形态（2026-10-14 抓包实证）：runSyncPass 把网关自己也镜像进名册，
+  //   而镜像适配器的 getHealthStatus() 直接调用 service.health() —— 于是
+  //   health() → probeVerdict(自己) → health() 无限递归，RangeError 被传输层
+  //   兜成 gateway/internal，客户端显示「治理数据暂时不可用」而 list 照常。
+  //   上面的 mirror 测试用 ctx.plugin() 直挂网关，**不产生自镜像行**，所以
+  //   这个形态逃逸了整条既有测试链——本锁补上该形态。
+  // ==========================================================================
+  it('survives a roster row whose health probe calls back into the report', async () => {
+    const registry = new DefaultPluginRegistry()
+    const gateway = gatewayWith(registry)
+    const result = await registry.register({
+      ...barePlugin('test/self-mirror', 'Self mirror'),
+      getHealthStatus: () => ({ healthy: gateway.health().errors === 0 }),
+    })
+    expect(result.success).toBe(true)
+
+    const report = gateway.health()
+    expect(report.total).toBe(1)
+    // The callback probe still reports a verdict (it reads the nested report);
+    // what must never happen is the unbounded recursion that used to throw.
+    const row = report.plugins.find(entry => entry.pluginId === gid('test/self-mirror'))
+    expect(row).toBeDefined()
+    expect(typeof row?.healthy === 'boolean' || row?.healthy === null).toBe(true)
+  })
+
+  // ==========================================================================
   //   SYNC-017 §12 族1 判别锁：mirror 装配诊断走宿主 ctx.logger 受控通道，
   //   console 零写入。产品面定性：headless/JSON 模式 stdout 是事件流契约面，
   //   mirrorPluginContext 旧形 console.log/warn/error 直写=产品缺陷（e2e

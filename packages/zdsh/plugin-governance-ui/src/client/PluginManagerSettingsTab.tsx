@@ -40,8 +40,13 @@ export type PluginManagerSettingsTabProps =
 
 type ViewState =
   | { readonly status: 'loading' }
-  | { readonly status: 'error' }
-  | { readonly status: 'ready'; readonly roster: GovernanceRosterSnapshot; readonly health: GovernanceHealthReport }
+  | { readonly status: 'error'; readonly detail: string }
+  | { readonly status: 'ready'; readonly roster: GovernanceRosterSnapshot; readonly health: GovernanceHealthReport | null }
+
+/** Render one rejected remote call's reason; its code is the only diagnostic an operator gets. */
+function describeFailure(reason: unknown): string {
+  return reason instanceof Error ? reason.message : String(reason)
+}
 
 type Notice =
   | { readonly tone: 'info'; readonly text: string; readonly unknown: number }
@@ -82,12 +87,30 @@ export function PluginManagerSettingsTab({
   useEffect(() => {
     let current = true
     setPending(null)
-    void Promise.all([Promise.resolve().then(() => list()), Promise.resolve().then(() => health())]).then(
-      ([roster, report]) => { if (current) setState({ status: 'ready', roster, health: report }) },
-      () => { if (current) setState({ status: 'error' }) },
-    )
+    // allSettled, not all: the health report is one degraded column, so a
+    // failing probe must not throw away the roster the list call already
+    // returned — and the reason has to reach the operator, because the client
+    // logger has no console sink and the transport code is the only trace.
+    void Promise.allSettled([
+      Promise.resolve().then(() => list()),
+      Promise.resolve().then(() => health()),
+    ]).then(([rosterResult, healthResult]) => {
+      if (!current) return
+      if (rosterResult.status === 'rejected') {
+        setState({ status: 'error', detail: describeFailure(rosterResult.reason) })
+        return
+      }
+      setState({
+        status: 'ready',
+        roster: rosterResult.value,
+        health: healthResult.status === 'fulfilled' ? healthResult.value : null,
+      })
+      if (healthResult.status === 'rejected') {
+        setNotice({ tone: 'error', text: `${t('actionFailed')}${describeFailure(healthResult.reason)}` })
+      }
+    })
     return () => { current = false }
-  }, [list, health, request])
+  }, [list, health, request, t])
 
   const refresh = useCallback((): void => { setRequest(value => value + 1) }, [])
 
@@ -148,6 +171,7 @@ export function PluginManagerSettingsTab({
       {state.status === 'error' ? (
         <div className={css.failure}>
           <p role="alert">{t('error')}</p>
+          <p className={css.noticeDetail} data-failure-detail>{state.detail}</p>
           <button type="button" onClick={retry}>{t('retry')}</button>
         </div>
       ) : null}
@@ -163,20 +187,24 @@ export function PluginManagerSettingsTab({
         <>
           <div className={css.healthStrip} data-health-report>
             <h3>{t('health')}</h3>
-            <ul className={css.healthChips}>
-              {([
-                ['total', t('healthTotal'), state.health.total],
-                ['active', t('healthActive'), state.health.active],
-                ['warnings', t('healthWarnings'), state.health.warnings],
-                ['errors', t('healthErrors'), state.health.errors],
-                ['disabled', t('healthDisabled'), state.health.disabled],
-              ] as const).map(([key, label, value]) => (
-                <li className={css.healthChip} data-health={key} key={key}>
-                  <span className={css.healthValue}>{value}</span>
-                  <span className={css.healthLabel}>{label}</span>
-                </li>
-              ))}
-            </ul>
+            {state.health === null ? (
+              <p className={css.noticeDetail} data-health-unavailable>{t('healthUnavailable')}</p>
+            ) : (
+              <ul className={css.healthChips}>
+                {([
+                  ['total', t('healthTotal'), state.health.total],
+                  ['active', t('healthActive'), state.health.active],
+                  ['warnings', t('healthWarnings'), state.health.warnings],
+                  ['errors', t('healthErrors'), state.health.errors],
+                  ['disabled', t('healthDisabled'), state.health.disabled],
+                ] as const).map(([key, label, value]) => (
+                  <li className={css.healthChip} data-health={key} key={key}>
+                    <span className={css.healthValue}>{value}</span>
+                    <span className={css.healthLabel}>{label}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
           <div className={css.rosterHeading}>
             <h3>{t('roster')}</h3>
