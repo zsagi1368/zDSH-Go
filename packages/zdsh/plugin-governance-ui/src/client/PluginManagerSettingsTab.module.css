@@ -60,16 +60,47 @@
   vertical-align: top;
 }
 
-.pluginCell,
 .versionCell,
 .statusBadge,
 .sourceBadge {
   white-space: nowrap;
 }
 
+/* The id is long and unbreakable, so an auto-layout table hands this column
+   whatever width it asks for — two thirds of the row — and starves the rest.
+   Capping it and stacking the id under the display name keeps every column
+   legible without a fixed table layout. */
+.pluginCell {
+  max-width: 320px;
+}
+
+.pluginCell strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pluginCell code {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--dsw-alias-label-secondary);
+  overflow-wrap: anywhere;
+}
+
 .actionsCell {
   display: flex;
   gap: 8px;
+}
+
+/* The controls had no rule of their own, so the flex item collapsed to ~35px
+   and wrapped to 172px tall. nowrap holds them on one line. */
+.actionRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
 }
 
 .actionsCell button {
@@ -97,6 +128,9 @@
   padding: 1px 8px;
   font-size: 11px;
   line-height: 16px;
+  /* In a narrow approval column the label wrapped to three lines and tripled
+     the row height; the pill is a single token and must stay one. */
+  white-space: nowrap;
 }
 
 .warningTag {

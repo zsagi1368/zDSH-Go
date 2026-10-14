@@ -232,6 +232,39 @@
   overflow-y: auto;
 }
 
+/* Transport-down notice: sits between the header and the scrolling options so
+   it stays visible while a section's own read errors scroll underneath it. */
+.connectionNotice {
+  flex: none;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 0 24px 12px;
+  padding: 10px 12px;
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-2);
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.connectionNoticeText {
+  flex: 1;
+  min-width: 0;
+}
+
+.connectionNoticeAction {
+  flex: none;
+  border: none;
+  border-radius: var(--dsw-radius-sm);
+  padding: 4px 10px;
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
 /* Visually-hidden text seat (close button accessible name from slot content). */
 .hiddenLabel {
   position: absolute;

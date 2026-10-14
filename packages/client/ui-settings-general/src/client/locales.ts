@@ -36,6 +36,10 @@ export const zh = {
   'connection.connected': '连接成功',
   'connection.reconnect': '连接异常，点击立即重连',
   'connection.restart': '连接中断，正在重试，点击立即重连',
+  'connection.noticeDisconnected': '无法连接后台服务，本页各处的数据都读不到。请确认运行 dsh web 的窗口仍然开着，然后点右侧按钮重连。',
+  'connection.noticeConnecting': '正在重新连接后台服务，本页各处的数据暂时都读不到。如果一直连不上，请确认运行 dsh web 的窗口仍然开着。',
+  'connection.noticeReconnect': '立即重连',
+  'connection.noticeRetry': '立即重试',
 } satisfies Record<string, string>
 
 /** The settings namespace key union. */
@@ -77,4 +81,8 @@ export const en = {
   'connection.connected': 'Connected',
   'connection.reconnect': 'Disconnected, reconnect now',
   'connection.restart': 'Reconnecting, reconnect now',
+  'connection.noticeDisconnected': 'Cannot reach the background service, so nothing on this page can load. Check that the window running dsh web is still open, then reconnect.',
+  'connection.noticeConnecting': 'Reconnecting to the background service, so nothing on this page can load yet. If it keeps failing, check that the window running dsh web is still open.',
+  'connection.noticeReconnect': 'Reconnect now',
+  'connection.noticeRetry': 'Retry now',
 } satisfies Record<SettingsKey, string>

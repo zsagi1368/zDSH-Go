@@ -273,6 +273,56 @@ describe('SettingsRoot trigger', () => {
   })
 })
 
+describe('SettingsPanel transport notice', () => {
+  const DISCONNECTED_COPY = en['connection.noticeDisconnected']
+  const CONNECTING_COPY = en['connection.noticeConnecting']
+
+  it('stays out of a healthy panel', () => {
+    mount({ connectionState: 'connected' })
+    openPanel()
+    expect(screen.queryByText(DISCONNECTED_COPY)).toBeNull()
+    expect(screen.queryByText(CONNECTING_COPY)).toBeNull()
+  })
+
+  // A dead host leaves the browser online, so the controller keeps retrying and
+  // reports `connecting` rather than `disconnected`; the actionable copy has to
+  // ride that state too, or the common outage reads as a bare spinner.
+  it('explains a reconnecting transport and offers an immediate retry', () => {
+    const mounted = mount({ connectionState: 'connecting' })
+    openPanel()
+    expect(screen.getByText(CONNECTING_COPY)).toBeTruthy()
+    const retry = screen.getByRole('button', { name: en['connection.noticeRetry'] })
+    fireEvent.click(retry)
+    expect(mounted.reconnect).toHaveBeenCalledOnce()
+  })
+
+  it('explains a browser-offline transport and offers a reconnect', () => {
+    const mounted = mount({ connectionState: 'disconnected' })
+    openPanel()
+    expect(screen.getByText(DISCONNECTED_COPY)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: en['connection.noticeReconnect'] }))
+    expect(mounted.reconnect).toHaveBeenCalledOnce()
+  })
+
+  it('clears the notice once the transport recovers', () => {
+    const mounted = mount({ connectionState: 'disconnected' })
+    openPanel()
+    expect(screen.getByText(DISCONNECTED_COPY)).toBeTruthy()
+    mounted.setConnectionState('connected')
+    expect(screen.queryByText(DISCONNECTED_COPY)).toBeNull()
+    expect(screen.queryByText(CONNECTING_COPY)).toBeNull()
+  })
+
+  // The pre-first-handshake value is `undefined`; painting the notice there would
+  // flash an outage on every cold open.
+  it('stays quiet before the first handshake resolves', () => {
+    mount({ connectionState: undefined })
+    openPanel()
+    expect(screen.queryByText(DISCONNECTED_COPY)).toBeNull()
+    expect(screen.queryByText(CONNECTING_COPY)).toBeNull()
+  })
+})
+
 describe('SettingsPanel chrome seats', () => {
   it('names the dialog via aria-labelledby pointing at the header seat node', () => {
     mount()

@@ -19,6 +19,7 @@ import {
   IconPersonalizationOutlineMedium, IconSettingsOutlineMedium, IconUserOutlineMedium,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ConnectionIndicatorState } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { ConnectionState } from '@deepseek-ai/dsh-client-connection/client'
 import type { SettingsRootComponentProps, SettingsSectionRow } from './shell-contract.ts'
 import css from './SettingsRoot.module.css'
 import { DesktopUpdateIndicator } from './DesktopUpdateIndicator.tsx'
@@ -44,6 +45,16 @@ type PanelProps = {
   activeId: string | undefined
   onSelect: (id: string) => void
   onClose: () => void
+  /**
+   * Transport state the shell already tracks. Every section's reads travel the
+   * same connection, so a non-connected value explains a panel full of failed
+   * calls that would otherwise read as the section's own fault.
+   */
+  connectionState: ConnectionState | undefined
+  /** The shell's reconnect entry point, so the notice and the indicator agree. */
+  onReconnect: () => void
+  /** Shell dictionary lookup; the notice copy lives with the other shell chrome. */
+  t: SettingsRootComponentProps['t']
 }
 
 /**
@@ -51,7 +62,7 @@ type PanelProps = {
  * header button, a mask click, and document-level Escape (mounted only while
  * open, so the listener lifetime is the panel's).
  */
-function SettingsPanel({ rows, renderSlot, activeId, onSelect, onClose }: PanelProps) {
+function SettingsPanel({ rows, renderSlot, activeId, onSelect, onClose, connectionState, onReconnect, t }: PanelProps) {
   // Entries can unmount underneath the requested id, so the render-time
   // projection falls back to the first row when the id is gone.
   const active = rows.find(r => r.id === activeId)?.id ?? rows[0]?.id
@@ -59,6 +70,12 @@ function SettingsPanel({ rows, renderSlot, activeId, onSelect, onClose }: PanelP
 
   const panel = useRef<HTMLDivElement>(null)
   useModalLayer(panel, true, onClose)
+
+  // Only a resolved non-connected value earns the notice: `undefined` is the
+  // pre-first-handshake state, and painting "disconnected" there would fire on
+  // every cold open. The panel reads the same connection the indicator does, so
+  // the two never disagree.
+  const transportDown = connectionState === 'disconnected' || connectionState === 'connecting'
 
   // Portalled beside #root like the Modal primitive: a covering surface mounted
   // inside the root would precede the columns' chrome in document order, so a
@@ -95,6 +112,16 @@ function SettingsPanel({ rows, renderSlot, activeId, onSelect, onClose }: PanelP
               <span className={css.hiddenLabel}>{renderSlot('settings.close', {})}</span>
             </button>
           </div>
+          {transportDown && (
+            <div className={css.connectionNotice} role="status">
+              <span className={css.connectionNoticeText}>
+                {t(connectionState === 'connecting' ? 'connection.noticeConnecting' : 'connection.noticeDisconnected')}
+              </span>
+              <button type="button" className={css.connectionNoticeAction} onClick={onReconnect}>
+                {t(connectionState === 'connecting' ? 'connection.noticeRetry' : 'connection.noticeReconnect')}
+              </button>
+            </div>
+          )}
           <div className={css.options}>
             {active !== undefined && renderSlot('settings.section', { close: onClose }, { only: active })}
           </div>
@@ -250,6 +277,9 @@ export function SettingsRoot(props: SettingsRootComponentProps) {
           activeId={activeId}
           onSelect={actions.select}
           onClose={close}
+          connectionState={connectionState}
+          onReconnect={reconnect}
+          t={t}
         />
       )}
       {/* Dialog chrome and `#root` inert ownership live inside each step's
