@@ -22,6 +22,30 @@ import { consoleCompatLogger, guardFeature } from '@deepseek-ai/dsh-compat'
  */
 
 /**
+ * Whether the failure is the browser's own specifier refusal.
+ *
+ * In a client bundle a native `import('@deepseek-ai/…')` is a URL fetch, so a
+ * bare specifier can never resolve there — the browser answers
+ * `Failed to resolve module specifier "…"` (the client module table, not the
+ * native resolver, is what resolves packages in that environment). That is an
+ * environment fact, never the host drift this guard exists for.
+ *
+ * @param error - whatever the dynamic import threw.
+ * @returns `true` when the environment simply cannot run this probe.
+ */
+function isBrowserSpecifierRefusal(error: unknown): boolean {
+  // Loaders and module runners routinely re-wrap an import failure, so the
+  // refusal can sit anywhere on the cause chain rather than on the outer error.
+  let current: unknown = error
+  for (let depth = 0; depth < 5 && current !== undefined && current !== null; depth += 1) {
+    const message = current instanceof Error ? current.message : String(current)
+    if (message.includes('Failed to resolve module specifier')) return true
+    current = current instanceof Error ? current.cause : undefined
+  }
+  return false
+}
+
+/**
  * Run the slot-UI compatibility preflight.
  *
  * @param logger - Optional logger (see {@link import('@deepseek-ai/dsh-compat').CompatLogger});
@@ -39,7 +63,12 @@ export async function guardSlotUI(
           try {
             const { Service } = await import('@deepseek-ai/cordis')
             return typeof Service === 'function' ? null : 'Service not a function'
-          } catch {
+          } catch (error) {
+            // Disabling on the browser's refusal is how the whole Models
+            // surface disappeared from every Web boot (2026-10-14: guard
+            // verdict false, `Failed to resolve module specifier
+            // "@deepseek-ai/cordis"`); real drift still disables below.
+            if (isBrowserSpecifierRefusal(error)) return null
             return 'cannot import cordis Service'
           }
         },
@@ -52,7 +81,8 @@ export async function guardSlotUI(
             return typeof createSnapshotStore === 'function'
               ? null
               : 'createSnapshotStore not a function'
-          } catch {
+          } catch (error) {
+            if (isBrowserSpecifierRefusal(error)) return null
             return 'cannot import the dsh-client-store engine'
           }
         },

@@ -87,4 +87,30 @@ describe('guardSlotUI catch branches (DEBT §7)', () => {
     expect(entry).toMatchObject({ enabled: false })
     expect(entry?.reason.startsWith('cannot import the dsh-client-store engine')).toBe(true)
   })
+
+  // The browser cannot run these probes at all: a native dynamic import of a
+  // bare specifier is a URL fetch there, refused with this exact message. That
+  // is not host drift, and treating it as drift disabled the whole Models
+  // surface on every Web boot (2026-10-14: guard verdict false, Models section
+  // absent from the settings nav).
+  it('stays enabled when the browser refuses the bare specifier (cordis probe)', async () => {
+    vi.doMock(CORDIS_MODULE, () => {
+      throw new TypeError('Failed to resolve module specifier "@deepseek-ai/cordis". Relative references must start with either "/", "./", or "../".')
+    })
+
+    const warnings: string[] = []
+    await expect(guardSlotUI(recordingLogger(warnings))).resolves.toBe(true)
+    expect(warnings).toHaveLength(0)
+  })
+
+  it('stays enabled when the browser refuses the bare specifier (store probe)', async () => {
+    vi.doMock(CORDIS_MODULE, () => passingCordisShape())
+    vi.doMock(STORE_MODULE, () => {
+      throw new TypeError('Failed to resolve module specifier "@deepseek-ai/dsh-client-store". Relative references must start with either "/", "./", or "../".')
+    })
+
+    const warnings: string[] = []
+    await expect(guardSlotUI(recordingLogger(warnings))).resolves.toBe(true)
+    expect(warnings).toHaveLength(0)
+  })
 })
