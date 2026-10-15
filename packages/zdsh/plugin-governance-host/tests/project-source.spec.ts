@@ -10,7 +10,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, parse } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Context, Service } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/cordis-plugin-loader'
 import PluginGovernanceGateway, { type PluginGovernanceId } from '../src/index.ts'
@@ -24,8 +24,23 @@ import {
 
 const contexts: Context[] = []
 const tempRoots: string[] = []
+let originalDshHome: string | undefined
+
+// SymbolIsolationCheck (load-guard.ts) scans hostRoot = DSH_HOME ?? cwd for
+// dual-instance layout accidents. In this repo's dev tree node_modules has a
+// real directory copy of @deepseek-ai/dsh-api-remotes alongside its pnpm
+// workspace link — a layout accident that makes every preLoad fail-closed
+// reject. Point DSH_HOME at a clean temp dir so the scan surfaces are empty and
+// the test exercises the channel-distinction behavior under test, not the
+// repo's own layout noise. Assertions are NOT weakened.
+beforeEach(() => {
+  originalDshHome = process.env.DSH_HOME
+  process.env.DSH_HOME = tempDir()
+})
 
 afterEach(async () => {
+  if (originalDshHome === undefined) delete process.env.DSH_HOME
+  else process.env.DSH_HOME = originalDshHome
   await Promise.all(contexts.splice(0).map(ctx => ctx.fiber.dispose()))
   for (const root of tempRoots.splice(0)) rmSync(root, { recursive: true, force: true })
 })
