@@ -230,14 +230,7 @@ export function AppFrame({
   const onRightbarDrag = useCallback((dx: number) => {
     actions.setRightbar(rightbarBase.current - dx)
   }, [actions])
-  // The fork names itself. A bare "DSH" title is indistinguishable from the
-  // official build, and an operator running both side by side has no way to
-  // tell which window is which. The version is the build's own record, read the
-  // same way the account and settings rows read it; the locale string stays as
-  // the fallback for a build that carries no version.
-  const brandVersion = process.env.DSH_CLIENT_VERSION
-  const productTitle = process.env.DSH_CLIENT_TITLE
-    ?? (brandVersion !== undefined && brandVersion !== '' ? `zDSH-Go ${brandVersion}` : t('brand.localBuild'))
+  const productTitle = process.env.DSH_CLIENT_TITLE ?? t('brand.localBuild')
   // The rendered template lets the grid solve the squeeze natively: the centre
   // declares its protected minimum and the right column bids up to the clamped
   // preference, so a window resize lands in the same layout pass as the frame
