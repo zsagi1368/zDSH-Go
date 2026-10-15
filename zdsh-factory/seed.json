@@ -29,7 +29,7 @@
       "id": "core/omnivision",
       "package": "dsh-omnivision",
       "version": "0.1.0-alpha",
-      "pin": "e247138bfb094121765106d254748410c6d928fd",
+      "pin": "994140d4b0ac82a2ef46289c5dcd2be15817957d",
       "source": "local:packages/zdsh/factory-bundle/node_modules/dsh-omnivision",
       "integrity": null,
       "enabledAtBoot": true,

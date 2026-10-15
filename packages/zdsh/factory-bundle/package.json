@@ -9,7 +9,7 @@
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/schemastery": "workspace:~",
     "dsh-webstack-verticals": "git+https://github.com/zsagi1368/dsh-webstack.git#ddbf56e3ef697d61ecb6e1beafc1bca98b8bfaa4",
-    "dsh-omnivision": "git+https://github.com/zsagi1368/dsh-omnivision.git#e247138bfb094121765106d254748410c6d928fd",
+    "dsh-omnivision": "git+https://github.com/zsagi1368/dsh-omnivision.git#994140d4b0ac82a2ef46289c5dcd2be15817957d",
     "dsh-webstack-bridge": "git+https://github.com/zsagi1368/dsh-webstack.git#ddbf56e3ef697d61ecb6e1beafc1bca98b8bfaa4",
     "dsh-filehub": "git+https://github.com/zsagi1368/zdsh-filehub.git#e241cf83261aecccfa20ddc8af36a3bae31d01ed",
     "dsh-plugin-center": "git+https://github.com/zsagi1368/zdsh-plugin-center.git#1912bb51f49084ab55256e36184c9ecb91e6dbac",
