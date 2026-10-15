@@ -44,7 +44,22 @@
   width: 100%;
   border-collapse: collapse;
   font-size: 13px;
+  /* An auto-layout table sizes columns from their content, so the unbreakable
+     plugin id claimed two thirds of the row and pushed the actions column out
+     of the panel — reachable only by scrolling the options area sideways.
+     Fixed layout plus the percentage widths below make the table exactly as
+     wide as its container, whatever the content is. */
+  table-layout: fixed;
 }
+
+/* Column budget, as percentages of the panel's content width. The plugin cell
+   gets the most; actions keeps enough for its buttons on one line. */
+.roster th:nth-child(1) { width: 30%; }
+.roster th:nth-child(2) { width: 9%; }
+.roster th:nth-child(3) { width: 15%; }
+.roster th:nth-child(4) { width: 10%; }
+.roster th:nth-child(5) { width: 16%; }
+.roster th:nth-child(6) { width: 20%; }
 
 .roster th {
   text-align: left;
@@ -56,6 +71,10 @@
 
 .roster td {
   padding: 6px 10px;
+  /* Fixed layout gives each column a hard width, so a nowrap badge wider than
+     its cell would otherwise paint over the next one. */
+  overflow: hidden;
+  text-overflow: ellipsis;
   border-bottom: 0.5px solid var(--dsw-alias-border-l1);
   vertical-align: top;
 }
@@ -73,7 +92,6 @@
 .pluginCell {
   max-width: 320px;
 }
-
 .pluginCell strong {
   display: block;
   overflow: hidden;
