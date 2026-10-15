@@ -188,6 +188,21 @@ describe('AppFrame', () => {
     expect(document.title).toBe('DSH Local Build')
   })
 
+  // A build that carries a version identifies the fork: a bare "DSH" title is
+  // indistinguishable from the official build in a side-by-side window list.
+  it('names the fork and its version when the build carries one', () => {
+    vi.stubEnv('DSH_CLIENT_VERSION', '0.2.1-alpha.2')
+    mountFrame()
+    expect(document.title).toBe('zDSH-Go 0.2.1-alpha.2')
+  })
+
+  it('still lets a configured build title win over the fork name', () => {
+    vi.stubEnv('DSH_CLIENT_VERSION', '0.2.1-alpha.2')
+    vi.stubEnv('DSH_CLIENT_TITLE', 'Product')
+    mountFrame()
+    expect(document.title).toBe('Product')
+  })
+
   it('follows the selected durable Session title', () => {
     vi.stubEnv('DSH_CLIENT_TITLE', 'Product')
     selectedSessionTitle = 'First'
