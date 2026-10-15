@@ -103,6 +103,13 @@ interface MountedEntry {
   readonly options: { group?: boolean | null; name: string; id: string }
   readonly disabled?: boolean | null
   readonly fiber?: Fiber
+  /**
+   * The cordis Entry's own toggle (vendor/loader src/config/entry.ts). It is
+   * async and decides by itself what a flip means: disabling disposes the
+   * fiber, re-enabling falls through to `init()`. Absent on the Loader doubles
+   * the tests use, so callers must treat it as optional.
+   */
+  update?: (options: { disabled?: boolean }) => Promise<void>
 }
 
 interface LoaderLike {
@@ -909,6 +916,7 @@ export class PluginGovernanceGateway extends TypertRemoteService {
       )
     }
     await this.registry.enable(pluginId)
+    await this.applyLiveToggle(pluginId, false)
     return this.persistRegistryChange(() => {
       void this.registry.disable(pluginId)
     })
@@ -927,9 +935,54 @@ export class PluginGovernanceGateway extends TypertRemoteService {
       return failed('plugin-not-found', noSuchPlugin(pluginId))
     }
     await this.registry.disable(pluginId, request.reason ?? undefined)
+    await this.applyLiveToggle(pluginId, true)
     return this.persistRegistryChange(() => {
       void this.registry.enable(pluginId)
     })
+  }
+
+  /**
+   * Push one plugin's enabled state into the live Loader tree.
+   *
+   * The registry is the durable record; the Loader is what is actually running.
+   * Writing only the registry left a disabled plugin running until the next
+   * boot — and the next boot re-applied the registry through the same
+   * registry-only path, so the decision never took effect at all.
+   *
+   * Only factory-mounted plugins have a `factory/<id>` row, and only the real
+   * cordis Entry exposes `update`. Both absences are normal — project and npm
+   * plugins, and the Loader doubles in tests — and mean "nothing live to
+   * toggle" rather than a failure; the registry write still happened, so the
+   * next boot applies it through the mount hook.
+   *
+   * Every outcome that leaves the running host out of step with the registry is
+   * logged, including "no live entry found": the operator asked for a change
+   * and has no other way to learn that it needs a restart. An earlier cut
+   * returned silently there, which made "toggled" and "nothing to toggle"
+   * indistinguishable from the outside.
+   */
+  private async applyLiveToggle(pluginId: string, disabled: boolean): Promise<void> {
+    const loader = this.resolveLoader()
+    if (loader === undefined) {
+      this.warn(`no Loader on this context; ${String(pluginId)} ${disabled ? 'disable' : 'enable'} needs a restart to apply`)
+      return
+    }
+    const entry = findLoaderEntry(loader, `factory/${pluginId}`)
+    if (entry === undefined) {
+      this.warn(`no live Loader entry for ${String(pluginId)}; ${disabled ? 'disable' : 'enable'} needs a restart to apply`)
+      return
+    }
+    if (entry.update === undefined) {
+      this.warn(`Loader entry for ${String(pluginId)} exposes no update channel; ${disabled ? 'disable' : 'enable'} needs a restart to apply`)
+      return
+    }
+    try {
+      await entry.update({ disabled })
+    } catch (cause) {
+      this.warn(
+        `live ${disabled ? 'disable' : 'enable'} of ${String(pluginId)} failed (${cause instanceof Error ? cause.message : String(cause)}); the registry holds the decision and a restart will apply it`,
+      )
+    }
   }
 
   /**

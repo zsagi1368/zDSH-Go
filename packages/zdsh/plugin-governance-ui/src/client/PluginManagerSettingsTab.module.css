@@ -168,6 +168,16 @@
   gap: 6px;
 }
 
+/* One count chip. The rule was missing while `healthValue`/`healthLabel` had
+   theirs, so the `<li>` fell back to the browser's list defaults and its two
+   spans sat flush against each other. */
+.healthChip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  list-style: none;
+}
+
 .healthLabel {
   color: var(--dsw-alias-label-secondary);
 }
