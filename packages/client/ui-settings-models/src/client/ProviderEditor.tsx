@@ -394,6 +394,14 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
             onChange={(event) => { setKeyDraft(event.target.value) }}
           />
           {shownKeyFailure === undefined ? null : <p className={styles['error']}>{t(shownKeyFailure)}</p>}
+          {/* A locked field with no reason reads as a broken control. The ref is
+              the environment variable's name, which is what the operator has to
+              unset, so naming it is the whole instruction. */}
+          {keyLocked ? (
+            <p className={styles['advancedHint']}>
+              {t('keyEnvLockedHint')} <code>{keyRef}</code>
+            </p>
+          ) : null}
         </div>
         {props.credentialOnly === true ? null : <details className={styles['customized']}>
           <summary className={styles['customizedSummary']}>{t('customized')}</summary>
