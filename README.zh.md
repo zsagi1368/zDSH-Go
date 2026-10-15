@@ -64,16 +64,39 @@ dsh web
 
 ### 升级
 
-当有新版本时，只需两步：
+用升级脚本。它会拉取最新版本、核对每个插件所钉的版本确实存在且两处记录一致、重新安装，然后启动一次宿主确认还能正常起来：
+
+**Windows（PowerShell）：**
+
+```powershell
+.\upgrade.cmd
+```
+
+**macOS / Linux（终端）：**
+
+```bash
+./scripts/upgrade.sh
+```
+
+加上 `--check`（Windows 上是 `-Check`）可以只做校验、不改动任何东西 —— 适合在真正升级前先看一眼。
+
+如果你想手动来，`git pull` 加安装器是等价的：
+
+**Windows（PowerShell）：**
+
+```powershell
+git pull
+.\install.cmd
+```
+
+**macOS / Linux（终端）：**
 
 ```bash
 git pull
-.\install.cmd    # Windows 用户
-# 或
-./scripts/install.sh    # macOS / Linux 用户
+./scripts/install.sh
 ```
 
-你的对话记录和数据会保留，不会丢失。
+你的对话记录和数据会保留，不会丢失。访问令牌每次启动都会重新生成，所以要打开宿主打印出来的地址，而不是沿用旧的浏览器标签页。
 
 ### 卸载
 

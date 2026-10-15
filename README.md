@@ -64,16 +64,44 @@ After it starts, it opens your browser automatically and shows the AI chat inter
 
 ### Upgrade
 
-When a new version is available, it only takes two steps:
+Use the upgrade script. It pulls the newest revision, verifies that every pinned
+plugin revision exists and that the two places recording it agree, reinstalls,
+and then boots the host once to confirm it still starts:
+
+**Windows (PowerShell):**
+
+```powershell
+.\upgrade.cmd
+```
+
+**macOS / Linux (terminal):**
+
+```bash
+./scripts/upgrade.sh
+```
+
+Add `--check` (`-Check` on Windows) to run the verification only and change
+nothing — useful before committing to an upgrade.
+
+If you prefer doing it by hand, the pull and the installer are equivalent:
+
+**Windows (PowerShell):**
+
+```powershell
+git pull
+.\install.cmd
+```
+
+**macOS / Linux (terminal):**
 
 ```bash
 git pull
-.\install.cmd    # Windows 用户
-# 或
-./scripts/install.sh    # macOS / Linux 用户
+./scripts/install.sh
 ```
 
-Your conversation history and data are kept and will not be lost.
+Your conversation history and data are kept and will not be lost. The access
+token is regenerated on every start, so open the URL the host prints rather than
+reusing an older browser tab.
 
 ### Uninstall
 
