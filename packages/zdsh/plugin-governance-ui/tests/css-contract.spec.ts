@@ -3,9 +3,11 @@
  * CSS contract test: every `css.*` reference in PluginManagerSettingsTab.tsx
  * must have a corresponding rule in PluginManagerSettingsTab.module.css.
  *
- * This catches the W2 regression class — TSX used `css.actionRow` but the CSS
- * module had no `.actionRow` rule, so the flex item collapsed. jsdom cannot
- * measure computed layout, so this static analysis is the regression lock.
+ * This catches the W2 regression class — the TSX used `css.actionRow` while the
+ * CSS module had no `.actionRow` rule, so the flex item collapsed to ~35px and
+ * wrapped to 172px tall. jsdom cannot measure computed layout, so this static
+ * analysis is the regression lock. It has already caught a second instance of
+ * the same class (`.healthChip`).
  */
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -19,26 +21,30 @@ const cssPath = join(here, '../src/client/PluginManagerSettingsTab.module.css')
 const tsxSource = readFileSync(tsxPath, 'utf8')
 const cssSource = readFileSync(cssPath, 'utf8')
 
-/** Extract every `css.xxx` reference from the TSX source. */
-function extractCssReferences(source: string): Set<string> {
-  const refs = new Set<string>()
-  const re = /\bcss\.([a-zA-Z][a-zA-Z0-9_-]*)/g
-  let m: RegExpExecArray | null
-  while ((m = re.exec(source)) !== null) {
-    refs.add(m[1])
+/**
+ * Collect the first capture of every match of `pattern` in `source`.
+ *
+ * `matchAll` rather than a `lastIndex` loop: the iteration is owned by the
+ * iterator, so there is no shared regex state to get wrong, and a capture group
+ * that did not participate is simply skipped.
+ */
+function captureAll(source: string, pattern: RegExp): Set<string> {
+  const found = new Set<string>()
+  for (const match of source.matchAll(pattern)) {
+    const captured = match[1]
+    if (captured !== undefined) found.add(captured)
   }
-  return refs
+  return found
 }
 
-/** Extract every `.xxx` class selector from the CSS source. */
+/** Every `css.xxx` name the component references. */
+function extractCssReferences(source: string): Set<string> {
+  return captureAll(source, /\bcss\.([a-zA-Z][a-zA-Z0-9_-]*)/g)
+}
+
+/** Every `.xxx` class selector the stylesheet defines. */
 function extractCssClasses(source: string): Set<string> {
-  const classes = new Set<string>()
-  const re = /\.([a-zA-Z][a-zA-Z0-9_-]*)/g
-  let m: RegExpExecArray | null
-  while ((m = re.exec(source)) !== null) {
-    classes.add(m[1])
-  }
-  return classes
+  return captureAll(source, /\.([a-zA-Z][a-zA-Z0-9_-]*)/g)
 }
 
 describe('PluginManagerSettingsTab CSS contract', () => {
@@ -50,7 +56,6 @@ describe('PluginManagerSettingsTab CSS contract', () => {
   })
 
   it('the W2 regression class actionRow has a rule', () => {
-    const classes = extractCssClasses(cssSource)
-    expect(classes.has('actionRow')).toBe(true)
+    expect(extractCssClasses(cssSource).has('actionRow')).toBe(true)
   })
 })
