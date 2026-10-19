@@ -202,8 +202,10 @@ describe('mount channel contract — fake loader records every create() arg', ()
       create: async (options: CreateCall) => { calls.push(options) },
       // SYNC-P3: the 0.1.7 mount channel inspects the entry/fiber face after
       // create (fail-closed when uncheckable) — the double models a created
-      // entry whose fiber settles clean.
-      resolve: (id: string) => ({ options: { name: '', id }, fiber: { await: async () => {} } }),
+      // entry whose fiber settles clean. W8 added the state requirement: the
+      // double must model ACTIVE (FiberState.ACTIVE = 2), or the channel
+      // correctly refuses to call it mounted.
+      resolve: (id: string) => ({ options: { name: '', id }, fiber: { await: async () => {}, state: 2 } }),
     }
     const ctx = new Context()
     contexts.push(ctx)
@@ -346,6 +348,133 @@ describe('mount channel over the REAL cordis loader — tmpdir fixtures', () => 
     expect(row?.status).toBe('installed')
     expect(row?.mount?.status).toBe('skipped')
     expect(row?.mount?.reason).toMatch(/no service factory/)
+  })
+})
+
+// A fixture whose fiber stays PENDING: it declares a service dependency that
+// never arrives. The fiber EXISTS, and `fiber.await()` still resolves for it —
+// a PENDING fiber keeps `epoch === INACTIVE` (fiber.ts:310-313, 575-578) and
+// clears `inertia` once its first reload cycle drains (fiber.ts:665-672), so the
+// `await()` settle at index.ts:485 cannot tell "present" from "providing".
+const PENDING_FIXTURE = `
+export const name = 'mount-channel-pending-fixture'
+export const inject = ['@fixture/never-provided-service']
+export function apply(ctx) { ctx.effect(() => () => {}) }
+`
+
+describe('mount channel — a PRESENT fiber is not a MOUNTED plugin (W8)', () => {
+  it('fixture premise: a declared-but-absent service leaves the fiber PENDING while it still exists', async () => {
+    const pendingDir = fixturePlugin('@fixture/mount-pending-premise', PENDING_FIXTURE)
+    const ctx = new Context()
+    contexts.push(ctx)
+    const { Loader } = await import('@deepseek-ai/cordis-plugin-loader')
+    await ctx.plugin(Loader)
+    await ctx.loader.create({ name: pathToFileURL(join(pendingDir, 'index.js')).href })
+
+    const entries = [...ctx.loader.entries()]
+    expect(entries, 'create must have produced exactly one entry').toHaveLength(1)
+    const entry = entries[0]!
+    // The fiber EXISTS …
+    expect(entry.fiber, 'the entry must own a fiber for this case to mean anything').toBeDefined()
+    // … it never left PENDING (FiberState.PENDING = 0) …
+    expect((entry.fiber as unknown as { state?: number } | undefined)?.state, 'fixture premise: the fiber must still be PENDING').toBe(0)
+    // … and `await()` settles on it WITHOUT throwing — which is exactly why
+    // awaiting the fiber alone cannot prove a mount.
+    await expect(entry.fiber!.await()).resolves.toBeDefined()
+  })
+
+  it('records failed (never mounted) when the created entry never reaches ACTIVE', async () => {
+    const pendingDir = fixturePlugin('@fixture/mount-pending', PENDING_FIXTURE)
+    const { gateway } = await bootGatewayWithRealLoader(writeSeed([
+      { id: 'fixture/mount-pending', package: '@fixture/mount-pending', version: '1.0.0', pin: 'b'.repeat(40), source: `local:${pendingDir}`, integrity: null, enabledAtBoot: true, family: 'fixture', failPolicy: 'fail-open' },
+    ]))
+    await gateway.settlePreinstall()
+
+    const row = gateway.preinstallReport().entries['fixture/mount-pending']
+    expect(row?.status, 'admission is unaffected: the artifact was still installed').toBe('installed')
+    // The false-green shape: a fiber that exists but never became active must
+    // NOT be reported as mounted.
+    expect(row?.mount?.status).toBe('failed')
+    expect(row?.mount?.reason).toMatch(/never became active/)
+  })
+})
+
+// C4 — a KNOWN vendor limitation, pinned as a characterization test.
+//
+// `Loader.unwrapExports` (vendor/loader/src/index.ts:201-208) returns
+// `exports.default` for an `__esModule` namespace. A module that declares its
+// dependency as a NAMED `inject` export while the plugin itself is the DEFAULT
+// export therefore loses that declaration: the object handed to
+// `registry.plugin()` carries no `inject`, so the fiber applies immediately
+// instead of waiting for the service.
+//
+// Measured here: the fiber reaches ACTIVE (2) although the module asked for a
+// service that never arrives. The correct behaviour would be PENDING (0).
+//
+// This is NOT fixed in-tree on purpose: `vendor/` is base code under the zDSH
+// lineage ruling (禁改底座代码) — a local edit would be silently reverted by
+// the next upstream re-vendor. The supported idiom is to declare `inject` on
+// the same object that carries `apply` (or use the `effect` deferred-injection
+// idiom). This test exists so that the day the vendor drops the limitation, the
+// assertion flips and the fix is noticed rather than absorbed silently.
+const DEFAULT_EXPORT_FIXTURE = `
+export const name = 'mount-channel-default-export'
+export const inject = ['@fixture/never-provided-service']
+export default { apply(ctx) { ctx.effect(() => () => {}) } }
+`
+
+describe('mount channel — C4: a default export drops the module-level inject (known vendor limitation)', () => {
+  it('characterizes the current behaviour: the fiber applies without waiting', async () => {
+    const dir = fixturePlugin('@fixture/mount-default-export', DEFAULT_EXPORT_FIXTURE)
+    const ctx = new Context()
+    contexts.push(ctx)
+    const { Loader } = await import('@deepseek-ai/cordis-plugin-loader')
+    await ctx.plugin(Loader)
+    await ctx.loader.create({ name: pathToFileURL(join(dir, 'index.js')).href })
+
+    const entry = [...ctx.loader.entries()][0]!
+    expect(entry.fiber).toBeDefined()
+    // 2 = ACTIVE: the named `inject` was dropped, so nothing held the fiber back.
+    // When the vendor fixes unwrapExports this becomes 0 (PENDING) — update the
+    // expectation and delete this comment block.
+    expect((entry.fiber as unknown as { state?: number } | undefined)?.state).toBe(2)
+  })
+})
+
+/** Poll until `predicate` holds; fail loudly with `label` rather than hang. */
+async function waitFor(predicate: () => boolean, label: string): Promise<void> {
+  for (let attempt = 0; attempt < 200; attempt++) {
+    if (predicate()) return
+    await new Promise(resolve => setTimeout(resolve, 10))
+  }
+  throw new Error(`timeout waiting for ${label}`)
+}
+
+const fiberState = (fiber: unknown): number | undefined =>
+  (fiber as { state?: number } | undefined)?.state
+
+describe('live enable/disable reaches the RUNNING fiber (W4)', () => {
+  it('disable disposes the live fiber; enable brings it back to ACTIVE', async () => {
+    const { ctx, gateway } = await bootGatewayWithRealLoader(writeRepoSeed([rowOf('core/webstack-bridge')]))
+    await gateway.settlePreinstall()
+
+    const id = 'core/webstack-bridge'
+    const entry = () => ctx.loader.resolve(`factory/${id}`)
+    // Mounted: the fiber is live and ACTIVE, and its service resolves.
+    expect(fiberState(entry().fiber)).toBe(2)
+    expect(ctx.get('bridge')).toBeTruthy()
+
+    // Disable: the live fiber is disposed (FiberState.DISPOSED = 4).
+    const disabled = await gateway.disable({ pluginId: cid(id), reason: 'W4 live-toggle probe' })
+    expect(disabled.ok).toBe(true)
+    await waitFor(() => fiberState(entry().fiber) === 4, 'the live fiber to be disposed')
+    expect(ctx.get('bridge'), 'a disposed fiber no longer provides its service').toBeFalsy()
+
+    // Enable: a fresh fiber comes up and reaches ACTIVE again.
+    const enabled = await gateway.enable({ pluginId: cid(id) })
+    expect(enabled.ok).toBe(true)
+    await waitFor(() => fiberState(entry().fiber) === 2, 'the re-enabled fiber to reach ACTIVE')
+    expect(ctx.get('bridge')).toBeTruthy()
   })
 })
 

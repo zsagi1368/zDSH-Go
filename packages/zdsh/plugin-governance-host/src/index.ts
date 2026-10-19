@@ -483,6 +483,14 @@ export class PluginGovernanceGateway extends TypertRemoteService {
               throw new Error(`the Loader dropped the import of ${moduleUrl} (import error logged on the host side)`)
             }
             await entry.fiber.await() // rejects with the start failure (fiber.ts:704-710)
+            // W8: `await()` alone cannot tell "present" from "providing" — a
+            // PENDING fiber keeps `epoch === INACTIVE` (fiber.ts:310-313) and
+            // clears `inertia` once its first reload cycle drains
+            // (fiber.ts:665-672), so it settles without an error. A fiber that
+            // merely exists has mounted nothing: require the state itself.
+            if (entry.fiber.state !== FIBER_ACTIVE) {
+              throw new Error(`the Loader entry for ${moduleUrl} never became active (state ${entry.fiber.state})`)
+            }
           } catch (cause) {
             // Failed mounts leave no live entry: 0.1.5 net-state parity (the
             // Loader's own rollback was removed upstream) + the official
