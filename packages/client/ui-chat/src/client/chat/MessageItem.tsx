@@ -55,7 +55,15 @@ function failureMessage(
   if (code === 'ACCOUNT_SIGNED_OUT') return t('message.failure.accountSignedOut')
   if (code === 'ACCOUNT_SIGN_IN_REQUIRED') return t('message.failure.accountSignInRequired')
   if (code === 'QUOTA' || code === 'ACCOUNT_QUOTA') return t('message.failure.quota')
-  return code === 'AUTH' ? t('message.failure.auth') : message
+  if (code !== 'AUTH') return message
+  // The provider's own objection, under the general sentence. The provider
+  // names the cause — a wrong key, a wrong endpoint, a gateway that wants the
+  // key somewhere else — and that name is the only thing that tells the
+  // reader which of those they hit.
+  const diagnostic = message.trim()
+  return diagnostic.length === 0
+    ? t('message.failure.auth')
+    : `${t('message.failure.auth')} ${diagnostic}`
 }
 
 function ModelRetryItem({ node, active, t }: {

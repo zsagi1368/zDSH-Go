@@ -61,6 +61,14 @@ export interface ProviderEditorProps {
    * override every one of them and the card does not offer it.
    */
   declared?: boolean
+  /**
+   * The endpoint the owning adapter serves this provider from when its profile
+   * names none — the address the provider actually uses. The endpoint field
+   * starts on it, so picking a provider fills the address rather than making
+   * the person look it up; clearing the field returns to the adapter's own
+   * address, which is what a blank field has always meant.
+   */
+  defaultBaseUrl?: string
   /** The owning namespace view (schema, layers, secrets). */
   namespace: SettingsNamespaceView
   /** Settings-owned synchronous schema and immutable path operations. */
@@ -229,6 +237,17 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
   // so a bad row is named by its position rather than by a blanket message.
   const modelFailure = validateDeepSeekModels(schema.getPath(draft, ['models']))
   const keyFailure = apiKeyFailure(keyDraft)
+  /**
+   * The endpoint the field shows: the profile's own address when it names
+   * one, and otherwise the address the adapter ships for this provider.
+   *
+   * The fallback is DISPLAY only. It is deliberately not written into the
+   * profile: a provider's models may each carry their own address, and pinning
+   * the provider-level one would override every one of them. A blank field
+   * still means "use the adapter's address", which is where the request goes
+   * either way — the field now shows it instead of hiding it.
+   */
+  const baseUrlText = stringAt(draft, 'baseURL') ?? props.defaultBaseUrl ?? ''
   // What a probe or a write must carry: the typed key with paste whitespace
   // removed. A blank field yields an empty string, which both call sites read
   // as "no key supplied" rather than as a key — that is how a card whose
@@ -438,7 +457,7 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
               <input
                 className={styles['input']}
                 type="text"
-                value={stringAt(draft, 'baseURL') ?? ''}
+                value={baseUrlText}
                 placeholder={family === 'deepseek'
                   ? t('deepSeekBaseUrl')
                   : stringAt(fallback, 'baseURL') ?? t('baseUrlDefault')}
@@ -450,6 +469,14 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
                 }}
               />
               {family === 'deepseek' ? <span id={`${props.provider}-endpoint-hint`} className={styles['advancedHint']}>{t('deepSeekEndpointHint')}</span> : null}
+              {/* The address the provider serves, when the adapter ships one and
+                  the profile names none. Stating it here is what turns the
+                  field from a blank the reader must look up into the address
+                  the provider actually uses. */}
+              {family === 'pi-ai' && props.defaultBaseUrl !== undefined
+                && stringAt(draft, 'baseURL') === undefined
+                ? <span className={styles['advancedHint']}>{t('baseUrlFilledHint')}</span>
+                : null}
             </div>
             {/* The protocol sits beside the endpoint it describes, as it does
                 on the create card. */}

@@ -151,7 +151,7 @@ A: All data lives in the `data/` folder under the project directory, including c
 |---|---|
 | Official base (DeepSeek Harness) | `0.2.1-alpha.2` |
 | zDSH mainline base | `v0.2.1-alpha.2-zDSH20261012a` |
-| zDSH-Go release | `v0.2.1-alpha.2-zDSH-Go20261012b` |
+| zDSH-Go release | `v0.2.1-alpha.2-zDSH-Go20261016a` |
 
 ### Project lineage
 
@@ -182,7 +182,7 @@ On first start, zDSH-Go automatically installs 8 factory plugins (6 enabled by d
 | `dsh-webstack-bridge` | Webstack data bridge | Yes |
 | `dsh-omnivision` | Vision capabilities | Yes |
 | `dsh-filehub` | File management | Yes |
-| `dsh-plugin-center` | Plugin management center | Yes |
+| `dsh-plugin-center` | Plugin management center (install, lifecycle, snapshot backup/restore/delete) | Yes |
 | `zdsh-workbench` | IDE-grade workbench (files / editor / terminal / git / tasks) | Yes |
 | `dsh-webstack-verticals` | Vertical-domain pack | No (enable on demand) |
 | `dsh-autopilot` | Automation tasks | No (enable on demand) |

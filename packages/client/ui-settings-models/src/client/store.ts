@@ -31,6 +31,12 @@ export interface ProviderDirectoryEntry {
   readonly settingsPath: readonly string[]
   readonly active: boolean
   readonly declared?: boolean
+  /**
+   * The endpoint the adapter serves this provider from when its profile names
+   * none — the default the editor's endpoint field shows, so picking a
+   * provider fills the address that provider actually uses.
+   */
+  readonly defaultBaseUrl?: string
   readonly error?: string
 }
 
@@ -53,6 +59,7 @@ export function joinProviderDirectory(
     settingsPath: [...entry.settingsPath],
     active: active.has(entry.provider),
     ...entry.declared === undefined ? {} : { declared: entry.declared },
+    ...entry.defaultBaseUrl === undefined ? {} : { defaultBaseUrl: entry.defaultBaseUrl },
     ...entry.error === undefined ? {} : { error: entry.error },
   }))
   for (const provider of registered) {

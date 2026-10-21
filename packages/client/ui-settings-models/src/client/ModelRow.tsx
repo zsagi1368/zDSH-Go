@@ -7,6 +7,7 @@ import {
 import type { DeepSeekModelDraft } from './DeepSeekModelsEditor.tsx'
 import type { ModelsKey } from './locales.ts'
 import { ModelInputTypes } from './ModelInputTypes.tsx'
+import { ModelReasoningEfforts } from './ModelReasoningEfforts.tsx'
 import styles from './ModelsSection.module.css'
 
 /** A capacity's editable text and adapter-specific inherited hint. */
@@ -24,6 +25,14 @@ interface ModelRowProps {
   inputField: 'inputModalities' | 'input'
   inputFallback?: readonly string[] | undefined
   inputLoading?: boolean
+  /**
+   * Whether this row may declare its reasoning levels. Only the pi-ai family
+   * accepts them: its model entries carry a `reasoningEfforts` field, and a
+   * hand-declared model declares its levels there. The direct DeepSeek
+   * adapter has no such field — its effort is a route-level switch — so
+   * offering the control there would write a field the schema refuses.
+   */
+  reasoningEfforts?: boolean
   expanded: boolean
   disabled: boolean
   t: (key: ModelsKey) => string
@@ -106,6 +115,13 @@ export function ModelRow(props: ModelRowProps): ReactNode {
               model={model} field={props.inputField} position={position}
               fallback={props.inputFallback} disabled={disabled || props.inputLoading === true} t={t} onChange={props.onChange}
             />
+            {props.reasoningEfforts === true
+              ? (
+                <ModelReasoningEfforts
+                  model={model} position={position} disabled={disabled} t={t} onChange={props.onChange}
+                />
+              )
+              : null}
           </div>
         )
         : null}

@@ -66,7 +66,7 @@ import type {} from '@deepseek-ai/dsh-fs'
 import { deepEqualJson } from '@deepseek-ai/dsh-util-values'
 import { PiAiAdapter } from './adapter.ts'
 import { authContextFrom, credentialStoreFrom } from './auth.ts'
-import { catalogProviderIds } from './catalog.ts'
+import { catalogProvider, catalogProviderIds } from './catalog.ts'
 import { assertServiceable, Config, resolveProfiles } from './config.ts'
 import type { ResolvedPiAiProviderProfile } from './config.ts'
 import { discoverModels } from './discovery.ts'
@@ -128,6 +128,11 @@ function directoryEntries(
   const catalog = new Set(catalogProviderIds())
   const entries = new Map<string, LlmConfigurableProvider>()
   const declare = (provider: string, displayName: string, error?: string): void => {
+    // The address the installed catalog serves this provider from, so a
+    // configuration surface can show it instead of making the person look it
+    // up. A provider whose models each carry their own address has no single
+    // one to state; the field stays absent and the surface asks for it.
+    const defaultBaseUrl = catalogProvider(provider)?.baseUrl
     entries.set(provider, {
       provider,
       displayName,
@@ -137,6 +142,7 @@ function directoryEntries(
       // narrowing a shipped provider's models stores a profile too, and that
       // route is still one pi-ai knows.
       declared: !catalog.has(provider),
+      ...defaultBaseUrl === undefined ? {} : { defaultBaseUrl },
       ...error === undefined ? {} : { error },
     })
   }

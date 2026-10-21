@@ -93,6 +93,8 @@ interface EditorTarget extends ProviderIdentity {
   credentialRef?: string
   /** The adapter reports this route as one it does not ship (see {@link ProviderEditorProps.declared}). */
   declared?: boolean
+  /** The address the adapter serves this provider from (see {@link ProviderEditorProps.defaultBaseUrl}). */
+  defaultBaseUrl?: string
 }
 
 /** A dormant directory row the add card can adopt, with its registered namespace. */
@@ -123,6 +125,7 @@ function renderProviderEditor({ target, ...props }: ProviderEditorRenderProps): 
       displayName={target.displayName}
       settingsPath={target.settingsPath}
       {...target.declared === true ? { declared: true } : {}}
+      {...target.defaultBaseUrl === undefined ? {} : { defaultBaseUrl: target.defaultBaseUrl }}
       {...props}
     />
   )
@@ -201,6 +204,8 @@ function targetOf(row: ProviderRow): EditorTarget {
     ...credentialRef === undefined ? {} : { credentialRef },
     // Only declared routes may expose route-owned fields.
     ...row.entry.declared === true ? { declared: true } : {},
+    // The address the adapter serves this provider from, when it ships one.
+    ...row.entry.defaultBaseUrl === undefined ? {} : { defaultBaseUrl: row.entry.defaultBaseUrl },
   }
 }
 
@@ -628,6 +633,9 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
                       namespace={draft.namespace}
                       schema={schema}
                       settingsPath={draft.target.settingsPath}
+                      {...draft.target.defaultBaseUrl === undefined
+                        ? {}
+                        : { defaultBaseUrl: draft.target.defaultBaseUrl }}
                       operations={operations}
                       t={t}
                       readOnly={!state.writable}

@@ -1265,6 +1265,10 @@ describe('configurable-provider directory', () => {
       settingsNs: 'llm-pi-ai',
       settingsPath: ['providers', 'openai-codex'],
       declared: false,
+      // The address the installed catalog serves this provider from, so a
+      // configuration surface can show it instead of making the reader look
+      // it up.
+      defaultBaseUrl: 'https://chatgpt.com/backend-api',
     })
   })
 })

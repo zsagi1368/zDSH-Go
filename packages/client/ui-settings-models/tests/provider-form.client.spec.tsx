@@ -104,6 +104,11 @@ function scriptedFace(options: {
   discover?: ReturnType<typeof vi.fn>
   mutate?: ReturnType<typeof vi.fn>
   set?: ReturnType<typeof vi.fn>
+  /**
+   * The address the adapter serves each provider from, as the Host's
+   * configurable-provider directory reports it.
+   */
+  defaultBaseUrls?: Readonly<Record<string, string>>
 } = {}) {
   const providers = options.providers ?? {
     openai: { apiKeyEnv: 'OPENAI_API_KEY', baseURL: 'https://proxy.example/v1' },
@@ -124,6 +129,9 @@ function scriptedFace(options: {
           settingsNs: 'llm-pi-ai',
           settingsPath: ['providers', provider],
           declared: options.declaredRoutes?.includes(provider) ?? false,
+          ...(options.defaultBaseUrls?.[provider] === undefined
+            ? {}
+            : { defaultBaseUrl: options.defaultBaseUrls[provider] }),
         })),
       ))),
       discoverModels: discover,
@@ -237,6 +245,13 @@ function openCustomMode(): void {
 /** Open one model row's advanced fold, where the capacities live. */
 function expandModel(index: number): void {
   fireEvent.click(screen.getByLabelText(`${en.modelAdvanced} ${index}`))
+}
+
+/** The endpoint field's current text. */
+function baseUrlValue(): string {
+  const field = screen.getByLabelText(en.baseUrl)
+  if (!(field instanceof HTMLInputElement)) throw new Error('the endpoint field is not an input')
+  return field.value
 }
 
 /** The button carrying `label`, typed so its disabled/title state is readable. */
@@ -473,6 +488,110 @@ describe('model list editing', () => {
       .toContainEqual({ op: 'unset', path: ['providers', 'openai', 'models'] })
   })
 
+  it('declares the reasoning levels a hand-declared model offers', async () => {
+    const { mutate } = await mountSection({
+      providers: { openai: { models: [{ id: 'acme-think' }] } },
+    })
+    openEditor('openai')
+    expandModel(1)
+
+    // The levels a model offers are a fact about the endpoint, and a model of
+    // the installed catalog inherits them. A hand-declared model declares
+    // none — so without this control it offers no effort at all.
+    const group = screen.getByRole('group', { name: `${en.modelReasoningEfforts} 1` })
+    fireEvent.click(within(group).getByRole('checkbox', { name: en['modelReasoningLevel.high'] }))
+    fireEvent.click(within(group).getByRole('checkbox', { name: en['modelReasoningLevel.off'] }))
+    fireEvent.click(screen.getByText(en.apply))
+
+    await waitFor(() => { expect(mutate).toHaveBeenCalled() })
+    expect(firstMutate(mutate).ops).toContainEqual({
+      op: 'set',
+      path: ['providers', 'openai', 'models'],
+      value: [{ id: 'acme-think', reasoningEfforts: { high: 'high', off: null } }],
+    })
+  })
+
+  it('sends the wire value the endpoint expects, not the level name', async () => {
+    const { mutate } = await mountSection({
+      providers: { openai: { models: [{ id: 'acme-think' }] } },
+    })
+    openEditor('openai')
+    expandModel(1)
+
+    const group = screen.getByRole('group', { name: `${en.modelReasoningEfforts} 1` })
+    fireEvent.click(within(group).getByRole('checkbox', { name: en['modelReasoningLevel.max'] }))
+    // A gateway may rename the level; the value is what dispatch sends.
+    fireEvent.change(screen.getByLabelText(`${en['modelReasoningLevel.max']} 1`), { target: { value: 'ultra' } })
+    fireEvent.click(screen.getByText(en.apply))
+
+    await waitFor(() => { expect(mutate).toHaveBeenCalled() })
+    expect(firstMutate(mutate).ops).toContainEqual({
+      op: 'set',
+      path: ['providers', 'openai', 'models'],
+      value: [{ id: 'acme-think', reasoningEfforts: { max: 'ultra' } }],
+    })
+  })
+
+  it('drops the declaration entirely when the last level is unchecked', async () => {
+    const { mutate } = await mountSection({
+      providers: { openai: { models: [{ id: 'acme-think', reasoningEfforts: { high: 'high' } }] } },
+    })
+    openEditor('openai')
+    expandModel(1)
+
+    const group = screen.getByRole('group', { name: `${en.modelReasoningEfforts} 1` })
+    fireEvent.click(within(group).getByRole('checkbox', { name: en['modelReasoningLevel.high'] }))
+    fireEvent.click(screen.getByText(en.apply))
+
+    await waitFor(() => { expect(mutate).toHaveBeenCalled() })
+    // An empty declaration is not a spelling of "no levels": the adapter
+    // refuses it, so the field leaves the profile instead.
+    expect(firstMutate(mutate).ops).toContainEqual({
+      op: 'set',
+      path: ['providers', 'openai', 'models'],
+      value: [{ id: 'acme-think' }],
+    })
+  })
+
+})
+
+describe('provider endpoint default', () => {
+  it('shows the address the provider is served from when the profile names none', async () => {
+    await mountSection({
+      providers: { openai: { apiKeyEnv: 'OPENAI_API_KEY' } },
+      defaultBaseUrls: { openai: 'https://api.openai.com/v1' },
+    })
+    openEditor('openai')
+    // Picking a provider fills the address that provider actually uses, so
+    // the reader does not have to look it up.
+    expect(baseUrlValue())
+      .toBe('https://api.openai.com/v1')
+  })
+
+  it('keeps the address out of the profile, so the provider keeps resolving its own', async () => {
+    const { mutate } = await mountSection({
+      providers: { openai: { apiKeyEnv: 'OPENAI_API_KEY' } },
+      defaultBaseUrls: { openai: 'https://api.openai.com/v1' },
+    })
+    openEditor('openai')
+    fireEvent.click(screen.getByText(en.apply))
+
+    // The default is DISPLAY only: a provider's models may each carry their
+    // own address, and pinning the provider-level one would override them.
+    // Nothing changed, so nothing is written at all.
+    await waitFor(() => { expect(screen.queryByText(en.apply)).toBeNull() })
+    expect(mutate).not.toHaveBeenCalled()
+  })
+
+  it('lets the profile name its own address over the default', async () => {
+    await mountSection({
+      providers: { openai: { apiKeyEnv: 'OPENAI_API_KEY', baseURL: 'https://proxy.example/v1' } },
+      defaultBaseUrls: { openai: 'https://api.openai.com/v1' },
+    })
+    openEditor('openai')
+    expect(baseUrlValue())
+      .toBe('https://proxy.example/v1')
+  })
 })
 
 describe('capacity spellings', () => {

@@ -744,7 +744,15 @@ function requestErrorMessage(
   request: Pick<TrajectoryRequestNumber, 'error' | 'errorCode'>,
   t: TrajectoryTranslate,
 ): string | undefined {
-  if (request.errorCode === 'AUTH') return t('details.failure.auth')
+  if (request.errorCode === 'AUTH') {
+    // The provider's own objection, under the general sentence: a wrong key,
+    // a wrong endpoint, and a gateway that wants the key elsewhere are three
+    // different things to do next.
+    const diagnostic = request.error?.trim() ?? ''
+    return diagnostic.length === 0
+      ? t('details.failure.auth')
+      : `${t('details.failure.auth')} ${diagnostic}`
+  }
   if (request.error === COMPACTION_INTERRUPTED_ERROR) return t('layout.compactionInterrupted')
   return request.error
 }

@@ -2301,7 +2301,10 @@ describe('ChatView', () => {
     const view = render(<h.ChatView {...h.props} />)
     const statuses = view.getAllByRole('status')
     expect(statuses.map(status => status.textContent)).toEqual([
-      '本轮运行失败API 密钥无效AUTH',
+      // The provider's own objection follows the general sentence: it is what
+      // tells the reader whether the key, the endpoint, or the protocol is the
+      // thing to fix.
+      '本轮运行失败API 密钥无效 API key is invalidAUTH',
       '本轮运行失败plugin exploded',
       '本轮运行失败当前请求的额度已用尽QUOTA',
       '本轮运行失败当前请求的额度已用尽ACCOUNT_QUOTA',

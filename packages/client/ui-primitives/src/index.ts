@@ -116,3 +116,4 @@ export {
 export { GuideArtworkBrowser, GuideArtworkFiles } from './guide-artwork.tsx'
 export { ImageLightbox } from './ImageLightbox.tsx'
 export type { ImageLightboxLabels } from './ImageLightbox.tsx'
+export { authDiagnostic, sanitizeAuthDiagnostic } from './auth-diagnostic.ts'

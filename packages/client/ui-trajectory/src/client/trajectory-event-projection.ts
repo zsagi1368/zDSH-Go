@@ -4,6 +4,7 @@ import type { ContentBlock, StreamChunk } from '@deepseek-ai/dsh-llm/types'
 import type {
   AssistantBlock, ContextProducerView, KnownContextForm,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import { authDiagnostic } from '@deepseek-ai/dsh-client-ui-primitives'
 
 /* jscpd:ignore-start -- Chat and Trajectory own independent event-to-view projections. */
 
@@ -128,9 +129,14 @@ export function displayFailure(failure: unknown): DisplayFailure {
   if (failure === null || typeof failure !== 'object') return { message: String(failure) }
   const record = failure as { code?: unknown; message?: unknown }
   const code = typeof record.code === 'string' ? record.code : undefined
-  // Provider AUTH messages may echo a masked or partially preserved credential.
-  // Keep the raw diagnostic in the Session log, but never retain it in UI state.
-  if (code === 'AUTH') return { code, message: '' }
+  // Provider AUTH messages may echo a masked or partially preserved credential,
+  // so the diagnostic is kept with its key-shaped runs removed rather than
+  // kept whole. Dropping it entirely was the worse trade: a provider that
+  // answered 401 says WHY, and that reason is what tells the reader what to
+  // do next. The raw text stays in the Session log.
+  if (code === 'AUTH') {
+    return { code, message: authDiagnostic(typeof record.message === 'string' ? record.message : '') }
+  }
   return {
     ...(code === undefined ? {} : { code }),
     message: typeof record.message === 'string' ? record.message : JSON.stringify(failure),

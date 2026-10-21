@@ -41,8 +41,18 @@ describe('toAssistantBlock', () => {
     expect(emptyAssistantBlock('future')).toEqual({ kind: 'other', block: null })
   })
 
-  it('redacts auth failures and presents the remaining durable values', () => {
-    expect(displayFailure({ code: 'AUTH', message: 'secret' })).toEqual({ code: 'AUTH', message: '' })
+  it('keeps the provider auth diagnostic but drops any key it echoes', () => {
+    // The provider's own objection is what tells the reader whether the key,
+    // the endpoint, or the protocol is the thing to fix — dropping it left
+    // every cause under one flat sentence.
+    expect(displayFailure({ code: 'AUTH', message: 'Incorrect API key provided' }))
+      .toEqual({ code: 'AUTH', message: 'Incorrect API key provided' })
+    // A credential the provider echoed back is removed, not displayed.
+    expect(displayFailure({ code: 'AUTH', message: 'key sk-abcdefghijklmnop rejected' }))
+      .toEqual({ code: 'AUTH', message: 'key [redacted] rejected' })
+    // A provider that said nothing useful still yields a sentence, not a blank.
+    expect(displayFailure({ code: 'AUTH', message: '' }))
+      .toEqual({ code: 'AUTH', message: 'The provider rejected the API key.' })
     expect(displayFailure({ code: 'TRANSPORT', message: 'offline' }))
       .toEqual({ code: 'TRANSPORT', message: 'offline' })
     expect(displayFailure({ code: 'UNKNOWN' })).toEqual({ code: 'UNKNOWN', message: '{"code":"UNKNOWN"}' })

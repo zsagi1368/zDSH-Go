@@ -537,6 +537,18 @@
   align-items: center;
 }
 
+/* One declared level: its name, then the value the endpoint receives. */
+.modelReasoningRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+}
+
+.modelReasoningRow .input {
+  max-width: 160px;
+}
+
 .modelFieldLabel {
   color: var(--dsw-alias-label-tertiary);
   font-size: 12px;
