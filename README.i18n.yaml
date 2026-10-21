@@ -24,14 +24,17 @@
   en: 01b77331aa5908b8
   zh: 319c4dc360655b19
 /zdsh-go/faq:
-  en: 4592a51c22b9d588
-  zh: e0bf6c917c4997fc
+  en: aaf7b2ecd163aca2
+  zh: 811ce69f94b64ce4
+/zdsh-go/adding-a-model-provider:
+  en: ce35ec6bb2195b7f
+  zh: 2b73e39f521d744f
 /zdsh-go/technical-details-developer-reference:
   en: b548b7afb8a9d9ec
   zh: fc87ea4ac484ac60
 /zdsh-go/technical-details-developer-reference/version-information:
-  en: 7110e20e7288052a
-  zh: 15fc0c26d5d6794a
+  en: 076146313e0396ee
+  zh: 2e0c96bba8c5824b
 /zdsh-go/technical-details-developer-reference/project-lineage:
   en: 4d5aedaeafb8ab03
   zh: f21984a9cb954481
@@ -39,7 +42,7 @@
   en: c88ace30b2aacdfb
   zh: 7e32f32453476dd5
 /zdsh-go/technical-details-developer-reference/factory-plugins:
-  en: f150a6fc7110aa32
+  en: 8c65d90759c47b90
   zh: 68f7d27bc5afee5a
 /zdsh-go/technical-details-developer-reference/configuration:
   en: a6471e6a5ab514d4

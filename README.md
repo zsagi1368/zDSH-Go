@@ -141,6 +141,21 @@ A: Yes. Their data directories do not interfere with each other: the official re
 **Q: Where is my data stored?**
 A: All data lives in the `data/` folder under the project directory, including conversation history, plugin configuration, model settings, and so on. Nothing is written outside the project directory.
 
+**Q: The chat says "API key is invalid" — what now?**
+A: The message carries the provider's own objection underneath it, because a wrong key, a wrong address, a gateway that wants the key somewhere else, and a provider-side disabled key are four different problems. Read the part after the general sentence: it names which one you hit. If it names a model, the model id is wrong for that provider; if it names the key, check the key; if it says nothing useful, check the address and the protocol.
+
+---
+
+## Adding a model provider
+
+Settings → Models is where the providers and their keys live. Three things are worth knowing before you start.
+
+**The address is filled in for you.** Pick a provider from the list and its endpoint field starts on the address that provider is actually served from — no looking it up. The value is a starting point, not a setting: leave it and the provider keeps resolving its own address, which is what you want when a provider's models each have their own. Edit it only for a gateway or a relay.
+
+**A custom model declares its own thinking levels.** A model of a built-in provider inherits its levels from that provider, so the composer's effort menu offers them. A model you type in yourself has no such source, so it offers nothing until you declare the levels: open the model's *Model options* fold and tick the levels it supports, filling in the value your endpoint expects for each (most gateways accept the level name; some rename it). Tick "Off" for a model that can think but should not, unless your endpoint wants thinking off by default.
+
+**The key is stored separately from the configuration.** The provider's profile records only a reference to the key; the key itself lives in the credential store, readable by nobody but the process that sends the request.
+
 ---
 
 ## Technical details (developer reference)
