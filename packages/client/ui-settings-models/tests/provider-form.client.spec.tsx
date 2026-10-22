@@ -1044,11 +1044,15 @@ describe('hand-declared providers', () => {
     cleanup()
 
     // A shipped route's models each carry their own protocol, so its editor
-    // offers no route-level protocol to override them with.
+    // offers the protocol only as the fallback for a model the catalog does
+    // not describe — a catalog that SPANS protocols (OpenRouter serves most
+    // models over OpenAI Chat Completions and a few over Anthropic Messages)
+    // has no single protocol for a new model to inherit, and the request was
+    // refused with "needs an api" until the route named one.
     await mountSection({ providers: { openai: { apiKeyEnv: 'OPENAI_API_KEY' } } })
     openEditor('openai')
     fireEvent.click(screen.getByText(en.customized))
-    expect(fields()).toEqual([en.keyInput, en.baseUrl])
+    expect(fields()).toEqual([en.keyInput, en.baseUrl, en.customApi])
     cleanup()
 
     // A hand-declared route named its own protocol at creation, so editing it
@@ -1059,6 +1063,27 @@ describe('hand-declared providers', () => {
     })
     openEditor('acme-gateway')
     expect(fields()).toEqual([en.keyInput, en.customDisplayName, en.baseUrl, en.customApi])
+  })
+
+  it('names the protocol for a catalog route whose models disagree on it', async () => {
+    // OpenRouter serves most models over OpenAI Chat Completions and a few
+    // over Anthropic Messages, so the route has no single protocol for a
+    // model the catalog does not describe to inherit — the request was
+    // refused with "needs an api" and the route had no field to answer it.
+    const { mutate } = await mountSection({
+      providers: { openrouter: { apiKeyEnv: 'OPENROUTER_API_KEY' } },
+      defaultBaseUrls: { openrouter: 'https://openrouter.ai/api/v1' },
+    })
+    openEditor('openrouter')
+    fireEvent.click(screen.getByText(en.customized))
+
+    fireEvent.change(screen.getByLabelText(en.customApi), { target: { value: 'openai-completions' } })
+    fireEvent.click(screen.getByText(en.apply))
+
+    await waitFor(() => { expect(mutate).toHaveBeenCalled() })
+    expect(firstMutate(mutate).ops).toContainEqual({
+      op: 'set', path: ['providers', 'openrouter', 'api'], value: 'openai-completions',
+    })
   })
 
   it('renames a declared route and falls back to its id when the name is cleared', async () => {

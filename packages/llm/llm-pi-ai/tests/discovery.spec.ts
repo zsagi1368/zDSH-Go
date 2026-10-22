@@ -88,12 +88,44 @@ describe('catalog-route model discovery', () => {
 
     const models = await ctx.llm.discoverModels('llm-pi-ai', { provider: 'deepseek', baseURL: server.url })
 
-    // pi-ai's own registry is the authority for its own providers, and it
-    // carries what a listing endpoint would not disclose.
-    expect(models.map(model => model.id).sort())
-      .toEqual(getBuiltinModels('deepseek').map(model => model.id).sort())
-    expect(models.every(model => (model.contextWindow ?? 0) > 0 && (model.maxTokens ?? 0) > 0)).toBe(true)
-    expect(server.paths).toEqual([])
+    // The ENDPOINT decides which models it serves — it is the live answer,
+    // and the installed catalog only catches up with a release. The catalog
+    // then enriches that list with the capacities no listing endpoint
+    // reports.
+    expect(models.map(model => model.id)).toEqual(['from-the-endpoint'])
+    expect(server.paths).toEqual(['/models'])
+  })
+
+  it('enriches the endpoint list with the capacities the catalog knows', async () => {
+    // A model the catalog describes keeps its capacities even though the
+    // listing endpoint reports none — that is what the catalog is for.
+    const known = getBuiltinModels('deepseek')[0]
+    if (known === undefined) throw new Error('the deepseek catalog is empty')
+    const server = await listingServer({ body: JSON.stringify({ data: [{ id: known.id }] }) })
+    const ctx = await harness()
+
+    const models = await ctx.llm.discoverModels('llm-pi-ai', { provider: 'deepseek', baseURL: server.url })
+
+    expect(models).toHaveLength(1)
+    expect(models[0]?.id).toBe(known.id)
+    expect(models[0]?.contextWindow).toBe(known.contextWindow)
+    expect(models[0]?.maxTokens).toBe(known.maxTokens)
+  })
+
+  it('offers a model the catalog has not caught up with', async () => {
+    // A newly released model is in the endpoint's list and not in the
+    // installed catalog. It has no capacities yet, and it is still offered.
+    const server = await listingServer({
+      body: JSON.stringify({ data: [{ id: 'brand-new-model' }, { id: 'deepseek-v4-pro' }] }),
+    })
+    const ctx = await harness()
+
+    const models = await ctx.llm.discoverModels('llm-pi-ai', { provider: 'deepseek', baseURL: server.url })
+
+    expect(models.map(model => model.id)).toEqual(['brand-new-model', 'deepseek-v4-pro'])
+    // The one the catalog knows keeps its capacity; the new one has none.
+    expect(models[0]?.contextWindow).toBeUndefined()
+    expect(models[1]?.contextWindow).toBeGreaterThan(0)
   })
 
   it('needs no endpoint for a route the catalog describes', async () => {

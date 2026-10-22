@@ -437,6 +437,17 @@ describe('UiWorkspaceService', () => {
     expect(b.selectPanel).not.toHaveBeenCalled()
   })
 
+  it('reports the Session the user is looking at', () => {
+    // A plugin that acts ON the current conversation needs to know which one
+    // it is. The selection used to be published on the session list and was
+    // removed with that snapshot's rework, so every plugin's lookup answered
+    // "no current session" — whether or not a task was open.
+    const b = bench()
+    expect(b.uiWorkspace.currentSession()).toBeUndefined()
+    b.uiWorkspace.openSession(sid('target'))
+    expect(b.uiWorkspace.currentSession()).toBe(sid('target'))
+  })
+
   it('releases a newly retained target when Workspace preparation throws', async () => {
     const b = bench({
       workspaces: workspaceState([workspace('a')]),

@@ -270,21 +270,32 @@ export async function discoverModels(
   request: LlmModelDiscoveryOperation,
   storedProfile?: () => StoredModelDiscoveryProfile | undefined,
 ): Promise<readonly LlmDiscoveredModel[]> {
-  // A catalog route already has its answer, and a better one: the installed
-  // entries carry context windows and output caps no listing endpoint reports.
-  if (request.provider !== undefined) {
-    const installed = catalogModels(request.provider)
-    if (installed.size > 0) {
-      return [...installed.values()].map(model => ({
-        id: model.id,
-        name: model.name,
-        contextWindow: model.contextWindow,
-        maxTokens: model.maxTokens,
-        inputModalities: [...model.input],
-      }))
-    }
-  }
+  // Two sources, each good at something the other lacks.
+  //
+  // The ENDPOINT knows WHICH models it serves right now: a provider adds
+  // models continuously, and the installed catalog only catches up with a
+  // release. The CATALOG knows the CAPACITIES of the models it describes —
+  // context windows and output caps no listing endpoint reports.
+  //
+  // So the endpoint decides the list and the catalog enriches it. Asking only
+  // the endpoint would leave every model without a capacity; asking only the
+  // catalog would hide the newest models behind a stale list, which is
+  // exactly what a reader who asks "what models do you have?" is looking
+  // for. With no endpoint named, the catalog answers alone.
+  const catalogAnswer = request.provider === undefined
+    ? undefined
+    : catalogModels(request.provider)
+  const catalogRows = catalogAnswer === undefined
+    ? []
+    : [...catalogAnswer.values()].map(model => ({
+      id: model.id,
+      name: model.name,
+      contextWindow: model.contextWindow,
+      maxTokens: model.maxTokens,
+      inputModalities: [...model.input],
+    }))
   if (request.baseURL === undefined || request.baseURL.length === 0) {
+    if (catalogRows.length > 0) return catalogRows
     throw new LlmError(
       `pi-ai ships no catalog for provider "${request.provider ?? ''}", so its models can only come from its`
       + " endpoint; set a baseURL, or enter this provider's models by hand",
@@ -359,5 +370,23 @@ export async function discoverModels(
   } catch (error: unknown) {
     throw new LlmError(`${url} did not answer with JSON`, 'DISCOVERY_FAILED', { cause: error })
   }
-  return readListing(body)
+  const listed = readListing(body)
+  if (catalogRows.length === 0) return listed
+  // The endpoint decides the list; the catalog enriches it. A model the
+  // catalog describes keeps the capacities no listing endpoint reports, and
+  // a model the catalog has not caught up with is still offered — it simply
+  // has no capacities yet, which is what a newly released model looks like.
+  const byId = new Map(catalogRows.map(row => [row.id, row]))
+  return listed.map((model) => {
+    const known = byId.get(model.id)
+    if (known === undefined) return model
+    // The endpoint's own values win; the catalog only fills what the endpoint
+    // left out, because a listing reports no capacities at all.
+    return {
+      ...model,
+      ...(model.contextWindow === undefined ? { contextWindow: known.contextWindow } : {}),
+      ...(model.maxTokens === undefined ? { maxTokens: known.maxTokens } : {}),
+      ...(model.inputModalities === undefined ? { inputModalities: known.inputModalities } : {}),
+    }
+  })
 }

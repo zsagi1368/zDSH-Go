@@ -261,7 +261,13 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
   // What the form currently shows, which is what an interrogation must ask:
   // an edited-but-unsaved endpoint, and a key typed but not yet stored.
   const probeApi = stringAt(draft, 'api') ?? stringAt(fallback, 'api')
-  const probeBaseURL = stringAt(draft, 'baseURL') ?? stringAt(fallback, 'baseURL')
+  const probeBaseURL = stringAt(draft, 'baseURL')
+    ?? stringAt(fallback, 'baseURL')
+    // The address the adapter ships for this provider, when the profile
+    // names none. A catalog route reaches the endpoint with it, so the
+    // "fetch available models" action asks the provider what it serves
+    // rather than reading the catalog's older list.
+    ?? props.defaultBaseUrl
   const probe = {
     settingsNs: namespace.ns,
     // Naming the route lets an adapter that already describes it answer from
@@ -479,8 +485,20 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
                 : null}
             </div>
             {/* The protocol sits beside the endpoint it describes, as it does
-                on the create card. */}
-            {ownsIdentity
+                on the create card.
+
+                A catalog route normally needs no protocol of its own: each
+                of its shipped models carries one, and the route inherits it
+                per model. But some catalogs SPAN protocols (OpenRouter
+                serves most models over OpenAI Chat Completions and a
+                handful over Anthropic Messages), and for those the route has
+                no single protocol to inherit — so a model the catalog does
+                not describe has nothing to fall back on and the request is
+                refused with "needs an api". The field is therefore offered
+                on every pi-ai route: leaving it unset keeps the per-model
+                inheritance, and setting it names the protocol for the models
+                the catalog has not caught up with. */}
+            {family === 'pi-ai'
               ? (
                 <div className={styles['field']}>
                   <span className={styles['fieldLabel']}>{t('customApi')}</span>
@@ -500,6 +518,9 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
                     {probeApi === undefined ? <option value="">{t('customApiUnset')}</option> : null}
                     {protocols.map(choice => <option key={choice} value={choice}>{protocolLabel(t, choice)}</option>)}
                   </select>
+                  {ownsIdentity ? null : (
+                    <span className={styles['advancedHint']}>{t('catalogApiHint')}</span>
+                  )}
                 </div>
               )
               : null}

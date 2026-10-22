@@ -33,6 +33,20 @@ export type StartSessionOptions = DraftInitializationOptions
 /** Workspace archive and directory operations consumed by Client UI domains. */
 export interface UiWorkspace {
   /**
+   * The Session the user is currently looking at.
+   *
+   * A plugin that acts ON the current conversation — handing it a request,
+   * reading its state — needs to know which one that is. The selection used
+   * to be published on the session list (`sessions.list.getSnapshot().current`)
+   * and was removed with that snapshot's rework, which left every plugin
+   * reading a field that no longer exists: the lookup answered "no current
+   * session" unconditionally, so a plugin could not tell "the user has no task
+   * open" from "the API moved".
+   *
+   * @returns the current Session id, or undefined when no Session is open.
+   */
+  currentSession(): SessionId | undefined
+  /**
    * Select a Session and show its Conversation as one UI navigation action.
    * @param target - known Session identity or durable direct-parent subagent address to display.
    */
@@ -170,6 +184,10 @@ class UiWorkspaceService extends Service implements UiWorkspace {
         reference?.release()
       }
     }, 'ui-workspace: Workspace navigation policy')
+  }
+
+  currentSession(): SessionId | undefined {
+    return this.selection.getSnapshot().sessionId
   }
 
   connectWorkspace(workspaceId: WorkspaceId): Promise<SessionId> {
