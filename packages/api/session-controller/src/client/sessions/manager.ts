@@ -7,6 +7,7 @@ import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 import type {
   SessionControlBaseline,
   SessionControlFrame,
+  SessionDeleteValue,
   SessionProjectionHints,
   SessionRenameValue,
   SessionSummary,
@@ -581,6 +582,29 @@ export class SessionManager {
     const result = await this.remote.session.rename({ sessionId, title })
     if (result.ok) {
       this.projectionStore(sessionId).apply('title', result.value.title, SessionSeq(result.value.seq))
+    }
+    return result
+  }
+
+  /**
+   * Contract session.delete; on success the Session leaves the list
+   * immediately, so the row disappears without waiting for the Host's own
+   * removal event.
+   * @param sessionId - Session to delete.
+   * @param options - Whether the Host stops the Session's running work instead of refusing.
+   * @returns the deletion receipt, or the Remote failure.
+   */
+  async delete(
+    sessionId: SessionId,
+    options: { readonly stopActivity?: boolean } = {},
+  ): Promise<RemoteResult<SessionDeleteValue>> {
+    const result = await this.remote.session.delete({
+      sessionId,
+      ...(options.stopActivity === true ? { stopActivity: true } : {}),
+    })
+    if (result.ok) {
+      this.recordMutation({ kind: 'remove', sessionId })
+      this.sessions.get(sessionId)?.handleRemoved()
     }
     return result
   }

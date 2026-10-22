@@ -26,11 +26,11 @@
  * row of a Session's "..." menu is an entry of
  * `sidebar.workspaces.session.menu.item`, and every hover button at the row's
  * end is an entry of `sidebar.workspaces.session.row.action`. The shipped
- * actions — pin, rename, fork, archive — are ordinary entries this package
- * registers from `apply`, each carrying its own behavior in its own inject
- * face and reading its own Host state through hooks that face injects, so a
- * client plugin's action lands beside them by `order` and needs nothing from
- * the browser beyond the row identity.
+ * actions — pin, rename, fork, archive, delete — are ordinary entries this
+ * package registers from `apply`, each carrying its own behavior in its own
+ * inject face and reading its own Host state through hooks that face
+ * injects, so a client plugin's action lands beside them by `order` and needs
+ * nothing from the browser beyond the row identity.
  *
  * The browser entry additionally declares two `list` seats per Session row
  * (`sidebar.session.row.leading` / `sidebar.session.row.hover`) for ambient
@@ -380,6 +380,48 @@ export interface SessionArchiveConfirmInjected {
   stopAndArchiveSession: (sessionId: SessionId) => Promise<void>
 }
 
+/**
+ * Delete action share (menu row and hover button). The callback carries the
+ * whole behavior: it raises the irreversible-delete confirmation, which
+ * names the Session and asks the Host to remove it.
+ */
+export interface DeleteSessionInjected {
+  /** Ask for the delete confirmation, naming the Session. */
+  requestSessionDelete: (sessionId: SessionId, displayTitle: string) => void
+}
+
+/**
+ * A delete confirmation the delete action asked for: the Host accepted the
+ * deletion of this Session, or refused it while work was still running.
+ */
+export interface SessionDeleteConfirmRequest {
+  /** Session to delete. */
+  sessionId: SessionId
+  /** The row's display title, named in the dialog. */
+  displayTitle: string
+  /** What the Host reported running, when it refused the deletion. */
+  activity: readonly SessionActivity[]
+}
+
+/**
+ * Delete dialog share: the pending confirmation, its settlement, and the
+ * deletion hop the dialog confirms with.
+ */
+export interface SessionDeleteConfirmInjected {
+  hooks: {
+    /** The confirmation asked for, until the dialog consumes or cancels it. */
+    deleteRequest: HostObservable<SessionDeleteConfirmRequest | null>
+  }
+  /** Consume or cancel the pending confirmation. */
+  settleSessionDelete: () => void
+  /**
+   * Delete a Session on the Host; resolves once its durable artifacts are
+   * gone. The Host's refusal for running work rejects with the reported
+   * activity.
+   */
+  deleteSession: (sessionId: SessionId, options?: { readonly stopActivity?: boolean }) => Promise<void>
+}
+
 /** Fork action share. */
 export interface ForkSessionInjected {
   /** Fork a Session at its last completed turn; the child arrives through the Host list. */
@@ -441,6 +483,13 @@ export type SessionArchiveConfirmProps =
   & PropsLocale<'workspace'>
   & Omit<SessionArchiveConfirmInjected, 'hooks'>
   & PropsHooks<SessionArchiveConfirmInjected['hooks']>
+
+/** Props of the delete-confirmation dialog entry in `shell.overlay`. */
+export type SessionDeleteConfirmProps =
+  PropsRuntime<'shell.overlay'>
+  & PropsLocale<'workspace'>
+  & Omit<SessionDeleteConfirmInjected, 'hooks'>
+  & PropsHooks<SessionDeleteConfirmInjected['hooks']>
 
 /**
  * Props of the row toast entry in `shell.overlay`. The declared viewing store

@@ -347,8 +347,19 @@ export async function discoverModels(
     throw new LlmError(`could not reach ${url}`, 'DISCOVERY_FAILED', { cause: error })
   }
   if (!response.ok) {
+    // Name the likely cause. A bare status is not actionable: 404 usually
+    // means the address is right but the PATH is wrong (a gateway that
+    // publishes its models under a prefix), and 401 means the key was
+    // refused. The reader cannot tell those apart from the status alone.
+    const cause = response.status === 401 || response.status === 403
+      ? 'check the API key'
+      : response.status === 404
+        ? 'the endpoint answered but has no model listing at this path; check the base URL, and whether the provider publishes its models under a path prefix'
+        : response.status === 405
+          ? 'the endpoint does not accept a model listing at this path; check the base URL'
+          : ''
     throw new LlmError(
-      `${url} answered ${response.status}${response.status === 401 || response.status === 403 ? '; check the API key' : ''}`,
+      `${url} answered ${response.status}${cause === '' ? '' : `; ${cause}`}`,
       'DISCOVERY_FAILED',
     )
   }

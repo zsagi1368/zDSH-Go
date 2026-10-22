@@ -21,6 +21,7 @@ import {
 } from './agent.ts'
 import { SessionCommandController } from './commands.ts'
 import { SessionControlController } from './control.ts'
+import { SessionDeleteController } from './delete.ts'
 import { SessionHistoryController } from './history.ts'
 import { SessionFileReferences } from './file-references.ts'
 import { ApiSessionList } from './list.ts'
@@ -39,6 +40,8 @@ import type {
   SessionControlFrame,
   SessionCreateRequest,
   SessionCreateValue,
+  SessionDeleteRequest,
+  SessionDeleteValue,
   SessionFollowFrame,
   SessionFollowRequest,
   SessionForkRequest,
@@ -125,6 +128,7 @@ export class SessionController extends TypertRemoteService {
   private readonly agents: ApiSessionAgentController
   private readonly commands: SessionCommandController
   private readonly controlState: SessionControlController
+  private readonly deletions: SessionDeleteController
   private readonly history: SessionHistoryController
   private readonly listState: ApiSessionList
   private readonly openPath: (path: string, signal: AbortSignal) => Promise<void>
@@ -151,6 +155,7 @@ export class SessionController extends TypertRemoteService {
       return result.agent
     }), 'session-controller: file-upload Agent resolver')
     this.controlState = new SessionControlController(ctx)
+    this.deletions = new SessionDeleteController(ctx)
     // Registered before history so reverse-order teardown closes every
     // follower before waiting for already-admitted promotions.
     ctx.effect(() => async () => {
@@ -472,6 +477,20 @@ export class SessionController extends TypertRemoteService {
   @Remote('cancel')
   cancel(request: SessionCancelRequest): SessionCancelValue {
     return this.commands.cancel(request)
+  }
+
+  /**
+   * Delete one Session irreversibly: its live Agent is torn down, it leaves
+   * every Workspace accounting surface, and its durable log and artifacts are
+   * removed. A Session with running work is refused as `session/active`
+   * unless `stopActivity` asks the Host to stop that work first. Attachments
+   * are kept: they are content-addressed and shared between Sessions.
+   * @param request - Session identity and whether its running work is stopped.
+   * @returns receipt after the durable artifacts are gone.
+   */
+  @Remote('delete')
+  delete(request: SessionDeleteRequest): Promise<SessionDeleteValue> {
+    return this.deletions.delete(request)
   }
 
   /**

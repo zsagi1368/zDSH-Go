@@ -7,18 +7,19 @@
  * own `single` directory-flow child hole for the composed picker package's
  * client half. WorkspaceBrowser additionally declares the two Session row
  * action lists, and this apply registers the shipped actions — pin, rename,
- * fork, archive — into them the way any client plugin would, each with its
- * own behavior, plus the rename dialog and the row-action notice into
- * `shell.overlay` (see the contract module doc). It also declares two
- * Session-row seats: the leading decoration a row renders only while its own
- * primary state is idle, and the section the row's hover card renders between
- * its relative time and its trailing status line. Export discipline:
+ * fork, archive, delete — into them the way any client plugin would, each
+ * with its own behavior, plus the rename dialog, the archive confirmation,
+ * the delete confirmation, and the row-action notice into `shell.overlay`
+ * (see the contract module doc). It also declares two Session-row seats: the
+ * leading decoration a row renders only while its own primary state is idle,
+ * and the section the row's hover card renders between its relative time and
+ * its trailing status line. Export discipline:
  * packages/client/AGENTS.md.
  */
 import type {} from '@deepseek-ai/dsh-client-product-analytics/client'
 import type { Context } from '@deepseek-ai/cordis'
 import type { RemoteHostFacts } from '@deepseek-ai/dsh-api-remotes/client'
-import type { ISessions, SessionForkError } from '@deepseek-ai/dsh-api-session-controller/client'
+import type { ISessions, SessionDeleteError, SessionForkError } from '@deepseek-ai/dsh-api-session-controller/client'
 import type {
   IWorkspaces, SessionActivity, WorkspaceArchiveError, WorkspaceSnapshot,
 } from '@deepseek-ai/dsh-api-workspace-controller/client'
@@ -36,8 +37,10 @@ import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 // Type-only: pulls the Session root standard-hook merge.
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import {
-  type ArchiveSessionInjected, type ForkSessionInjected, menuOpenStateFactory, type PinSessionInjected,
+  type ArchiveSessionInjected, type DeleteSessionInjected, type ForkSessionInjected, menuOpenStateFactory,
+  type PinSessionInjected,
   type SessionArchiveConfirmInjected, type SessionArchiveConfirmRequest,
+  type SessionDeleteConfirmInjected, type SessionDeleteConfirmRequest,
   type RenameSessionInjected, type RowToast, type RowToastInjected, type RowToastState, type SessionRenameDialogInjected,
   type WorkspaceBrowserInjected, type WorkspacePickerInjected,
 } from './contract/slots.ts'
@@ -47,6 +50,7 @@ import { createWorkspaceViewStore } from './stores.ts'
 import { WorkspaceBrowser } from './rows/WorkspaceBrowser.tsx'
 import { ArchiveSessionMenuItem, ArchiveSessionRowButton, SessionArchiveConfirmDialog } from './session-actions/ArchiveSession.tsx'
 import { derive } from './session-actions/derived.ts'
+import { DeleteSessionMenuItem, DeleteSessionRowButton, SessionDeleteConfirmDialog } from './session-actions/DeleteSession.tsx'
 import { ForkSessionMenuItem } from './session-actions/ForkSession.tsx'
 import { PinSessionMenuItem, PinSessionRowButton } from './session-actions/PinSession.tsx'
 import { RenameSessionMenuItem, SessionRenameDialog } from './session-actions/RenameSession.tsx'
@@ -152,6 +156,7 @@ export function apply(ctx: Context): void {
   // its bound hook.
   const renameRequest = derive(shortcutControls.state, state => state.renameTarget)
   const archiveRequest = createSnapshotStore<SessionArchiveConfirmRequest | null>(null)
+  const deleteRequest = createSnapshotStore<SessionDeleteConfirmRequest | null>(null)
   const requestSessionRename = shortcutControls.rename
   const unarchiveSession = (sessionId: SessionId): void => {
     uiWorkspace.unarchiveSession(sessionId).catch((reason: unknown) => {
@@ -205,6 +210,31 @@ export function apply(ctx: Context): void {
     stopAndArchiveSession: async (sessionId) => {
       await uiWorkspace.archiveSession(sessionId, { stopActivity: true })
       notify({ kind: 'stoppedAndArchived', sessionId })
+    },
+  })
+  // The deletion is irreversible, so the action always asks first: the
+  // dialog names the Session. A Host refusal for running work keeps the same
+  // dialog open and names that work, so a second confirmation stops it and
+  // deletes.
+  const deleteInjected = (): DeleteSessionInjected => ({
+    requestSessionDelete: (sessionId, displayTitle) => {
+      deleteRequest.set({ sessionId, displayTitle, activity: [] })
+    },
+  })
+  const deleteConfirmInjected = (): SessionDeleteConfirmInjected => ({
+    hooks: { deleteRequest },
+    settleSessionDelete: () => { deleteRequest.set(null) },
+    deleteSession: async (sessionId, options) => {
+      try {
+        await uiWorkspace.deleteSession(sessionId, options)
+      } catch (reason: unknown) {
+        const activity = activeSessionDeleteRefusal(reason)
+        if (activity === undefined) throw reason
+        // The Host refused while work was running: the same dialog stays open
+        // and now names that work, so the next confirmation stops it.
+        const displayTitle = sessions.list.getSnapshot().byId[sessionId]?.displayTitle ?? sessionId
+        deleteRequest.set({ sessionId, displayTitle, activity })
+      }
     },
   })
   const forkInjected = (): ForkSessionInjected => ({
@@ -297,10 +327,12 @@ export function apply(ctx: Context): void {
     yield ctx.slots.register({ name: 'sidebar.workspaces.session.menu.item', id: 'rename', order: 200, locale: NS, inject: renameInjected }, RenameSessionMenuItem)
     yield ctx.slots.register({ name: 'sidebar.workspaces.session.menu.item', id: 'fork', order: 300, locale: NS, inject: forkInjected }, ForkSessionMenuItem)
     yield ctx.slots.register({ name: 'sidebar.workspaces.session.menu.item', id: 'archive', order: 400, locale: NS, inject: archiveInjected }, ArchiveSessionMenuItem)
+    yield ctx.slots.register({ name: 'sidebar.workspaces.session.menu.item', id: 'delete', order: 450, locale: NS, inject: deleteInjected }, DeleteSessionMenuItem)
   })
   ctx.slots.inject('sidebar.workspaces.session.row.action', function* () {
     yield ctx.slots.register({ name: 'sidebar.workspaces.session.row.action', id: 'archive', order: 100, locale: NS, inject: archiveInjected }, ArchiveSessionRowButton)
     yield ctx.slots.register({ name: 'sidebar.workspaces.session.row.action', id: 'pin', order: 200, locale: NS, inject: pinInjected }, PinSessionRowButton)
+    yield ctx.slots.register({ name: 'sidebar.workspaces.session.row.action', id: 'delete', order: 300, locale: NS, inject: deleteInjected }, DeleteSessionRowButton)
   })
   // The surfaces the actions raise live in the frame-wide layer: they must
   // outlive the row menu the action sat in.
@@ -311,6 +343,9 @@ export function apply(ctx: Context): void {
     yield ctx.slots.register({
       name: 'shell.overlay', id: 'workspace.session-archive', locale: NS, inject: archiveConfirmInjected,
     }, SessionArchiveConfirmDialog)
+    yield ctx.slots.register({
+      name: 'shell.overlay', id: 'workspace.session-delete', locale: NS, inject: deleteConfirmInjected,
+    }, SessionDeleteConfirmDialog)
     // The toast shares the browser's viewing store: it reads the archived
     // filter to drop the archived notice's filter action once rows are visible.
     yield ctx.slots.register({
@@ -337,4 +372,15 @@ function activeSessionRefusal(reason: unknown): readonly SessionActivity[] | und
   if (!(reason instanceof Error) || reason.name !== 'WorkspaceArchiveError') return undefined
   const { rpcError } = reason as WorkspaceArchiveError
   return rpcError.code === 'workspace/session-active' ? rpcError.details.activity : undefined
+}
+
+/**
+ * The activity a Host `session/active` refusal reported, or nothing for any
+ * other failure. The class identity check goes by name: client plugin
+ * bundles do not share error-class identity.
+ */
+function activeSessionDeleteRefusal(reason: unknown): readonly SessionActivity[] | undefined {
+  if (!(reason instanceof Error) || reason.name !== 'SessionDeleteError') return undefined
+  const { rpcError } = reason as SessionDeleteError
+  return rpcError.code === 'session/active' ? rpcError.details.activity : undefined
 }

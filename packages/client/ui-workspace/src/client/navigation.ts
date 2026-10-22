@@ -98,6 +98,14 @@ export interface UiWorkspace {
    */
   unarchiveSession(sessionId: SessionId): Promise<void>
   /**
+   * Delete a Session irreversibly: the Host removes its conversation log and
+   * local files, and the Session leaves every Workspace accounting surface.
+   * The current selection is cleared when it names the deleted Session.
+   * @param sessionId - Session to delete.
+   * @param options - `stopActivity` asks the Host to stop the Session's running work instead of refusing.
+   */
+  deleteSession(sessionId: SessionId, options?: { readonly stopActivity?: boolean }): Promise<void>
+  /**
    * Pin a Session on the Host, then lead it in its accounts' saved orders
    * (its Workspace group or Ungrouped, and the flat list). The order write
    * reads the memberships current at completion, so reorders that landed
@@ -322,6 +330,11 @@ class UiWorkspaceService extends Service implements UiWorkspace {
 
   async unarchiveSession(sessionId: SessionId): Promise<void> {
     await this.workspaces.unarchiveSession(sessionId)
+  }
+
+  async deleteSession(sessionId: SessionId, options: { readonly stopActivity?: boolean } = {}): Promise<void> {
+    await this.sessions.delete(sessionId, options)
+    if (this.mainReference?.sessionId === sessionId) this.clearMain()
   }
 
   async pinSession(sessionId: SessionId): Promise<void> {

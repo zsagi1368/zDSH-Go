@@ -22,12 +22,13 @@ import { createHash, randomBytes } from 'node:crypto'
 import {
   SessionPersistence, SessionPersistenceRevision, SessionFormatUnsupportedError,
   SessionPersistenceCorruptionError,
-  SessionAlreadyExistsError, SessionPersistenceNotFoundError,
+  SessionAlreadyExistsError, SessionAlreadyOwnedError, SessionPersistenceNotFoundError,
   assertStoredId, materializeCreateHeader, sessionFormatVersionRefusal, validateStoredEvents,
   type SessionAccess, type SessionHandle,
   type SessionHandleReadResult,
   type SessionLocation, type SessionPersistenceCreateOptions,
   type SessionPersistenceListOptions, type SessionPersistenceOpenOptions,
+  type SessionPersistencePurgeOptions,
   type SessionPersistenceSnapshot, type SessionPersistenceStatOptions,
   type SessionPersistenceRevision as PersistenceRevision,
 } from '@deepseek-ai/dsh-session-persistence'
@@ -513,6 +514,53 @@ class JsonlSessionPersistence extends SessionPersistence {
     }
     signal?.throwIfAborted()
     return snapshots
+  }
+
+  /**
+   * Remove one stored session's durable artifacts, irreversibly.
+   *
+   * The whole session directory goes: every log generation, the write-lease
+   * file, and any other session-owned artifact. A live writer holds that
+   * directory's kernel lock, so the removal refuses while the lease is taken
+   * — deleting the artifacts under a running writer would tear its log.
+   * This process's own write claim refuses the same way: its write handle is
+   * a live writer too.
+   *
+   * @param id - the stored session to remove.
+   * @param options - optional cancellation.
+   * @returns `true` when the session's artifacts are gone, `false` when the
+   *   session had no artifacts in this backend.
+   * @throws {SessionAlreadyOwnedError} while a writer holds the session.
+   */
+  async purge(id: SessionId, options?: SessionPersistencePurgeOptions): Promise<boolean> {
+    options?.signal?.throwIfAborted()
+    await this.ensureRootEncoding()
+    options?.signal?.throwIfAborted()
+    // This process's own write claim is a live writer: the handle still owns
+    // the session, and its next append would recreate the artifacts.
+    if (this.tracker.hasWriter(id)) throw new SessionAlreadyOwnedError(id)
+    const dirs: string[] = []
+    for (const dir of await this.sessionDirectories(id, options?.signal)) {
+      if (await this.isDirectory(dir)) dirs.push(dir)
+    }
+    if (dirs.length === 0) return false
+    for (const dir of dirs) {
+      // Acquiring the session's kernel write lock IS the ownership test: the
+      // lease is held for the whole life of a write handle, so a successful
+      // acquisition proves no writer holds this session. The lock is held
+      // across the removal so a writer cannot start between the test and
+      // the deletion.
+      const lease = await SessionWriteLease.acquire(dir, id)
+      try {
+        options?.signal?.throwIfAborted()
+        await rm(dir, { recursive: true, force: true })
+      } finally {
+        await lease.release()
+      }
+    }
+    this.coldLogMemo.delete(id)
+    this.migrationPreparations.delete(id)
+    return true
   }
 
   // --- handle-facing storage internals (package-private via the handle class below) ---
@@ -1508,6 +1556,35 @@ class JsonlSessionPersistence extends SessionPersistence {
     }
     signal?.throwIfAborted()
     return matches[0]
+  }
+
+  /**
+   * Every directory that could hold one session's artifacts: one per project
+   * directory under the root. A session's canonical directory is one of them,
+   * but a removed or moved project leaves a stale copy behind, and the purge
+   * removes the session's artifacts wherever they are.
+   * @param id - the session whose encoded segment names the directories.
+   * @param signal - optional cancellation for the directory scans.
+   * @returns the candidate session directories.
+   */
+  private async sessionDirectories(id: SessionId, signal?: AbortSignal): Promise<string[]> {
+    const dirs: string[] = []
+    for (const project of await this.listProjectDirs(signal)) {
+      signal?.throwIfAborted()
+      dirs.push(join(project, encodeSegment(id)))
+    }
+    signal?.throwIfAborted()
+    return dirs
+  }
+
+  /** Whether a path is an existing directory; an absent path is not one. */
+  private async isDirectory(path: string): Promise<boolean> {
+    try {
+      return (await stat(path)).isDirectory()
+    } catch (error: unknown) {
+      if (isENOENT(error)) return false
+      throw error
+    }
   }
 
   /** Require an existing configured root to be a readable directory. */

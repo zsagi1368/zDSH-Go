@@ -62,7 +62,7 @@
       "id": "core/plugin-center",
       "package": "dsh-plugin-center",
       "version": "0.2.0",
-      "pin": "869f95c60f65113cec2d4f1e60b20feae0452d72",
+      "pin": "17071e2099fb32fcc047623fd2d1be1031dabb2a",
       "source": "local:packages/zdsh/factory-bundle/node_modules/dsh-plugin-center",
       "integrity": null,
       "enabledAtBoot": true,

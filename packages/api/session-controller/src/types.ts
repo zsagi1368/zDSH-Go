@@ -10,7 +10,7 @@ import type { TextBlock } from '@deepseek-ai/dsh-llm'
 import type { SessionId, SessionSeqCursor } from '@deepseek-ai/dsh-session/types'
 import type { SessionProjectionMap } from '@deepseek-ai/dsh-session-projection/types'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
-import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
+import type { SessionActivity, WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 
 declare module '@deepseek-ai/dsh-session-projection/types' {
   interface SessionProjectionStateMap {
@@ -227,6 +227,15 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     'session/title-invalid': { readonly sessionId: SessionId }
     'session/fork-unavailable': { readonly sessionId: SessionId }
     'session/migration-required': { readonly sessionId: SessionId }
+    /**
+     * The Session still has running work — its own turn, a subagent, a
+     * background job, or an active schedule — so its deletion was refused
+     * without a write; `activity` names what must stop first.
+     */
+    'session/active': {
+      readonly sessionId: SessionId
+      readonly activity: readonly SessionActivity[]
+    }
     'subagent/not-found': {
       readonly parentSessionId: SessionId
       readonly childSessionId: SessionId
@@ -382,6 +391,23 @@ export interface SessionCancelRequest {
 /** Receipt after cancellation is admitted to the live Agent. */
 export interface SessionCancelValue {
   readonly accepted: true
+}
+
+/** Session requested for irreversible deletion. */
+export interface SessionDeleteRequest {
+  readonly sessionId: SessionId
+  /**
+   * Stop the Session's running work — its turn, subagent descendants, owned
+   * background jobs, and active schedules — instead of refusing the deletion
+   * as `session/active`. The stops are requested before the deletion and are
+   * not awaited; the response arrives once the durable artifacts are gone.
+   */
+  readonly stopActivity?: boolean
+}
+
+/** Receipt after one Session's durable artifacts are removed. */
+export interface SessionDeleteValue {
+  readonly deleted: true
 }
 
 /** Request to open one path prepared by a Session-aware caller on the Host desktop. */

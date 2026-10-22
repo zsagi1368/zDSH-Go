@@ -97,6 +97,26 @@ export class SessionForkError extends Error {
   }
 }
 
+/**
+ * Structured session-delete failure. `rpcError.code` distinguishes the
+ * active-session refusal (`session/active`, whose details name what still
+ * runs) from a missing session or a carrier fault.
+ */
+export class SessionDeleteError extends Error {
+  override readonly name = 'SessionDeleteError'
+
+  /**
+   * @param rpcError - Host business or folded transport error.
+   * @param targetSessionId - the session the deletion named.
+   */
+  constructor(
+    readonly rpcError: RemoteFailure,
+    readonly targetSessionId: SessionId,
+  ) {
+    super(`session delete failed: ${rpcError.code}: ${rpcError.message}`)
+  }
+}
+
 /** Identity-stable logical binding for one materialized Client Session. */
 export interface SessionBinding {
   readonly sessionId: SessionId
@@ -484,6 +504,21 @@ export class ClientSessions implements ISessions {
    */
   scope(id: SessionId): AgentContext | undefined {
     return this.scopes.get(id)?.ctx
+  }
+
+  /**
+   * Delete a Session on the Host: its live Agent is torn down, it leaves
+   * every Workspace accounting surface, and its durable log and artifacts
+   * are removed. The deletion is irreversible.
+   * @param sessionId - Session to delete.
+   * @param options - `stopActivity` asks the Host to stop the Session's running work instead of refusing.
+   * @returns completion of the deletion.
+   * @throws when the Host refuses the deletion.
+   */
+  async delete(sessionId: SessionId, options: { readonly stopActivity?: boolean } = {}): Promise<void> {
+    const result = await this.manager.delete(sessionId, options)
+    if (!result.ok) throw new SessionDeleteError(result.error, sessionId)
+    this.projectList()
   }
 
   /**

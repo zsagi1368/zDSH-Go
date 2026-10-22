@@ -6,6 +6,7 @@ import { isAppendSurfaceEvent, isReplacementSurfaceEvent } from '@deepseek-ai/ds
 import type { InboxState } from './inbox.ts'
 import { chatNode } from './common.ts'
 import { contextForm, contextProducer } from './event-projection.ts'
+import { stripRuntimeContextBlocks } from './runtime-context-prefix.ts'
 
 interface ReferencedUserMessageNode extends UserMessageNode {
   /** Labels cited by the immediately following session-reference context. */
@@ -92,20 +93,26 @@ export const messageDefinition: ConversationNodeDefinition<MessageNode> = {
     }
     const claimed = reader.previous<InboxState>('inbox-next-step')
       ?.state.currentClaimed.has(String(event.data.id)) === true
+    // The harness folds its per-turn operational facts into the PREFIX of the
+    // next real user message, so the model sees them ahead of the person's
+    // words. The transcript is for the person, and the prefix is the
+    // harness's bookkeeping — it is stripped here so the bubble shows what
+    // was typed. The message on the wire keeps the prefix untouched.
+    const content = stripRuntimeContextBlocks(event.data.content)
     return claimed
       ? {
         kind: 'steering',
         messageId: event.data.id,
         seq: event.seq,
         time: event.time,
-        content: event.data.content,
+        content,
         source: event.data.source,
       }
       : {
         kind: 'user',
         seq: event.seq,
         time: event.time,
-        content: event.data.content,
+        content,
         source: event.data.source,
       }
   },

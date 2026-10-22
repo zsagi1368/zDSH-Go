@@ -138,6 +138,17 @@ export interface ISessions {
     allowMigration?: boolean
   }): Promise<SessionId>
   /**
+   * Delete a Session on the Host: its live Agent is torn down, it leaves
+   * every Workspace accounting surface, and its durable log and artifacts
+   * are removed. The deletion is irreversible.
+   * @param sessionId - Session to delete.
+   * @param options - `stopActivity` asks the Host to stop the Session's running work instead of refusing.
+   * @returns completion of the deletion.
+   * @throws when the Host refuses — an unknown Session, or one whose running
+   *   work was not stopped because `stopActivity` was not set.
+   */
+  delete(sessionId: SessionId, options?: { readonly stopActivity?: boolean }): Promise<void>
+  /**
    * Borrow an already-retained Agent-scoped Context without extending its lifetime.
    * @param id - session id.
    * @returns the live scoped Context, or undefined without a retained generation.

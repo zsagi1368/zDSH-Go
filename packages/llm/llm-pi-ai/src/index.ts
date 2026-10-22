@@ -66,7 +66,7 @@ import type {} from '@deepseek-ai/dsh-fs'
 import { deepEqualJson } from '@deepseek-ai/dsh-util-values'
 import { PiAiAdapter } from './adapter.ts'
 import { authContextFrom, credentialStoreFrom } from './auth.ts'
-import { catalogProvider, catalogProviderIds } from './catalog.ts'
+import { catalogModels, catalogProvider, catalogProviderIds } from './catalog.ts'
 import { assertServiceable, Config, resolveProfiles } from './config.ts'
 import type { ResolvedPiAiProviderProfile } from './config.ts'
 import { discoverModels } from './discovery.ts'
@@ -130,9 +130,14 @@ function directoryEntries(
   const declare = (provider: string, displayName: string, error?: string): void => {
     // The address the installed catalog serves this provider from, so a
     // configuration surface can show it instead of making the person look it
-    // up. A provider whose models each carry their own address has no single
-    // one to state; the field stays absent and the surface asks for it.
-    const defaultBaseUrl = catalogProvider(provider)?.baseUrl
+    // up.
+    //
+    // Some providers state no address of their own and give one to each of
+    // their models instead (OpenCode Go serves two families from two paths
+    // under one host). When every model agrees, that shared address IS the
+    // provider's; when they differ there is no single one to state, and the
+    // field stays absent so the surface asks for it.
+    const defaultBaseUrl = catalogProviderBaseUrl(provider)
     entries.set(provider, {
       provider,
       displayName,
@@ -149,6 +154,47 @@ function directoryEntries(
   for (const provider of catalog) declare(provider, provider)
   for (const [provider, profile] of profiles) declare(provider, profile.displayName, profile.catalogError)
   return [...entries.values()]
+}
+
+/**
+ * The one address a catalog provider is served from, when it has one.
+ *
+ * A provider that names its own address answers with it. A provider that
+ * gives each of its models an address answers with the address they all
+ * share.
+ *
+ * When they DIFFER, the address the MAJORITY of its models use is the one
+ * worth offering: a provider that serves most of its models over OpenAI
+ * Chat Completions from one address and a handful over Anthropic Messages
+ * from another is addressed by its OpenAI one for the listing endpoint
+ * (which speaks OpenAI's shape) — and the handful keep their own address
+ * because each model carries it. The minority address is a real address the
+ * provider serves, so this is the address that reaches the most models.
+ *
+ * @param provider - the catalog provider id.
+ * @returns the address, or undefined when the provider has no single one.
+ */
+function catalogProviderBaseUrl(provider: string): string | undefined {
+  const stated = catalogProvider(provider)?.baseUrl
+  if (stated !== undefined) return stated
+  const models = catalogModels(provider)
+  const byAddress = new Map<string, number>()
+  for (const model of models.values()) {
+    if (typeof model.baseUrl !== 'string' || model.baseUrl.length === 0) continue
+    byAddress.set(model.baseUrl, (byAddress.get(model.baseUrl) ?? 0) + 1)
+  }
+  if (byAddress.size === 0) return undefined
+  if (byAddress.size === 1) return [...byAddress.keys()][0]
+  // The address the most models are served from.
+  let best: string | undefined
+  let bestCount = 0
+  for (const [address, count] of byAddress) {
+    if (count > bestCount) {
+      best = address
+      bestCount = count
+    }
+  }
+  return best
 }
 
 /** Register one generic pi-ai adapter for all configured provider routes. */

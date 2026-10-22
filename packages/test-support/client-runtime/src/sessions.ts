@@ -311,7 +311,7 @@ export class TestSessions implements ISessions {
 
   /** Calls observed on the service-level face, newest last. */
   readonly calls: {
-    method: 'create' | 'refreshProjections' | 'refresh' | 'search' | 'fork'
+    method: 'create' | 'refreshProjections' | 'refresh' | 'search' | 'fork' | 'delete'
     args: unknown[]
   }[] = []
 
@@ -680,6 +680,28 @@ export class TestSessions implements ISessions {
   fork(opts: Parameters<ISessions['fork']>[0]): Promise<SessionId> {
     this.calls.push({ method: 'fork', args: [opts] })
     return Promise.resolve(opts.sessionId)
+  }
+
+  /**
+   * Recorded delete: the Session leaves the fixture catalog (the call is
+   * still recorded).
+   * @param sessionId - Session the caller deleted.
+   * @param options - whether the Host would stop the Session's running work.
+   * @returns completion of the recorded deletion.
+   */
+  delete(sessionId: SessionId, options?: { readonly stopActivity?: boolean }): Promise<void> {
+    this.calls.push({ method: 'delete', args: [sessionId, options] })
+    this.records.delete(sessionId)
+    this.generations.delete(sessionId)
+    const state = this.list.getSnapshot()
+    const ids = state.ids.filter(id => id !== sessionId)
+    // The row leaves the map by rebuilding it without that key: a dynamic
+    // `delete` on an object literal moves it into dictionary mode.
+    const byId = Object.fromEntries(
+      Object.entries(state.byId).filter(([id]) => id !== sessionId),
+    )
+    this.list.set({ ...state, ids, byId })
+    return Promise.resolve()
   }
 
   /**

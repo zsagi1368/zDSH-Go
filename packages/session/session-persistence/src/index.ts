@@ -108,6 +108,12 @@ export interface SessionPersistenceListOptions {
   readonly signal?: AbortSignal
 }
 
+/** Options for {@link SessionPersistence.purge}. */
+export interface SessionPersistencePurgeOptions {
+  /** Optional cancellation for backend removal work. */
+  readonly signal?: AbortSignal
+}
+
 declare module '@deepseek-ai/cordis' {
   interface Context {
     sessionPersistence: SessionPersistence
@@ -201,6 +207,21 @@ export abstract class SessionPersistence extends Service {
    * @returns one snapshot per stored session.
    */
   abstract list(options?: SessionPersistenceListOptions): Promise<readonly SessionPersistenceSnapshot[]>
+
+  /**
+   * Remove one stored session's durable artifacts, irreversibly.
+   *
+   * The removal is destructive and never reversible: the stored event log
+   * and every backend-owned artifact of that session are gone afterwards.
+   * A backend MUST refuse while another writer holds the session's write
+   * ownership, so a live append can never race the removal.
+   *
+   * @param id - the stored session to remove.
+   * @param options - optional cancellation.
+   * @returns `true` when the session existed and its artifacts are gone,
+   *   `false` when it did not exist.
+   */
+  abstract purge(id: SessionId, options?: SessionPersistencePurgeOptions): Promise<boolean>
 }
 
 export default SessionPersistence
