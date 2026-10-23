@@ -155,7 +155,7 @@ export class SessionController extends TypertRemoteService {
       return result.agent
     }), 'session-controller: file-upload Agent resolver')
     this.controlState = new SessionControlController(ctx)
-    this.deletions = new SessionDeleteController(ctx)
+    this.deletions = new SessionDeleteController(ctx, this.agents)
     // Registered before history so reverse-order teardown closes every
     // follower before waiting for already-admitted promotions.
     ctx.effect(() => async () => {

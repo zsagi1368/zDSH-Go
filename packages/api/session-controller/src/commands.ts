@@ -267,7 +267,10 @@ export class SessionCommandController {
     const composition = await this.agents.composeAgent(this.agents.presetForObservation(source))
     try {
       const { provider, model } = this.ctx.agentDefaultModel.currentSelection()
-      await this.ctx.agents.create({
+      // Through the controller that owns it: a fork publishes a live Agent,
+      // and an Agent created outside the owner leaves its Session's write
+      // handle open forever — which makes the forked Session undeletable.
+      await this.agents.createOwned({
         sessionId: childId,
         seed,
         inheritedEventCount: SessionLogOffset(boundary + 1),

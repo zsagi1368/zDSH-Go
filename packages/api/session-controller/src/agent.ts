@@ -4,7 +4,8 @@ import { mkdir } from 'node:fs/promises'
 import type { Context } from '@deepseek-ai/cordis'
 import { installModelSelection } from '@deepseek-ai/dsh-agent'
 import type {
-  Agent, AgentOptions, AgentSetup, ModelSelection as AgentModelSelection, ModelSelectionRef,
+  Agent, AgentHandle, AgentOptions, AgentSetup, CreateAgentOptions,
+  ModelSelection as AgentModelSelection, ModelSelectionRef,
 } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-agent-default-model'
 import type {} from '@deepseek-ai/dsh-agent-preset-registry'
@@ -142,6 +143,14 @@ export class ApiSessionAgentController {
   private readonly creations = new Map<SessionId, Promise<Agent>>()
   private readonly selections = new WeakMap<Agent, InstalledSelection>()
   private readonly imageAdmissionChains = new WeakMap<Agent, Promise<void>>()
+  /**
+   * The disposer of every Agent this controller brought into being. The
+   * factory hands it out as a CAPABILITY and only to the consumer that
+   * resolved the Agent, so retaining it here is what makes a Session this
+   * process opened deletable at all: the Agent owns the Session's durable
+   * write handle, and only its disposal closes that handle.
+   */
+  private readonly owned = new Map<SessionId, AgentHandle>()
 
   /** @param ctx - Host context carrying Agent, model, persistence, and Typert services. */
   constructor(private readonly ctx: Context) {
@@ -160,6 +169,61 @@ export class ApiSessionAgentController {
       if ('error' in found) throw found.error
       return found.agent.ctx
     })
+    // Another owner may dispose an Agent this controller resolved (app
+    // teardown, or the agent's own lifecycle). Drop the stale capability, but
+    // only for the exact Agent it was minted for: a later Agent reusing the id
+    // must keep its own disposer.
+    ctx.on('agent/disposed', ({ agent }) => {
+      if (this.owned.get(agent.id)?.agent === agent) this.owned.delete(agent.id)
+    })
+  }
+
+  /**
+   * Keep one resolved Agent's disposer, replacing any disposer for the same
+   * identity (a re-resume after a disposal mints a new one).
+   * @param handle - the owned Agent and its disposer.
+   */
+  private retain(handle: AgentHandle): void {
+    this.owned.set(handle.agent.id, handle)
+  }
+
+  /**
+   * Dispose the Agent this controller owns for one Session, closing the
+   * Session's durable write handle with it. A no-op when this controller
+   * resolved no Agent for the identity — an Agent some other owner created
+   * (a configured startup Agent, a subagent, another transport) is not this
+   * controller's to tear down.
+   *
+   * The disposer is dropped only once it settled: a teardown that failed may
+   * still hold the write handle, and a caller that retries the deletion must
+   * reach the same disposer again rather than find this controller claiming
+   * it never had one.
+   * @param sessionId - Session whose Agent is released.
+   * @returns after the Agent's teardown quiesced.
+   */
+  async disposeAgent(sessionId: SessionId): Promise<void> {
+    const handle = this.owned.get(sessionId)
+    if (handle === undefined) return
+    await handle.dispose()
+    // The disposal above emits `agent/disposed`, which prunes the entry; this
+    // covers an implementation that settled without announcing one.
+    if (this.owned.get(sessionId) === handle) this.owned.delete(sessionId)
+  }
+
+  /**
+   * Create an Agent this controller owns, retaining its disposer. The owner
+   * of a creation is the only holder of that disposer, so a creation made
+   * directly through `ctx.agents` is unreleasable afterwards — and an Agent
+   * that is never released keeps its Session's durable write handle, which
+   * makes that Session impossible to delete. Route every creation this
+   * controller's Sessions can reach through here.
+   * @param options - the creation request forwarded to the Agent registry.
+   * @returns the published Agent.
+   */
+  async createOwned(options: CreateAgentOptions): Promise<Agent> {
+    const handle = await this.ctx.agents.create(options)
+    this.retain(handle)
+    return handle.agent
   }
 
   /**
@@ -434,11 +498,13 @@ export class ApiSessionAgentController {
     if (published !== undefined && hasApiSessionSubagentOwner(this.ctx, published, live)) {
       throw new ApiSessionSubagentOwnership(sessionId)
     }
-    return (await this.ctx.agents.resume({
+    const handle = await this.ctx.agents.resume({
       resumeSessionId: sessionId,
       agentOptions: this.agentOptions(),
       setup: composition.setup,
-    })).agent
+    })
+    this.retain(handle)
+    return handle.agent
   }
 
   private async createOrAdopt(
@@ -466,11 +532,13 @@ export class ApiSessionAgentController {
         const storedPreset = this.presetForObservation(observation)
         this.assertPresetUnchanged(sessionId, presetId, storedPreset)
         const composition = await this.composeAgent(storedPreset)
-        return (await this.ctx.agents.resume({
+        const handle = await this.ctx.agents.resume({
           resumeSessionId: sessionId,
           agentOptions: this.agentOptions(),
           setup: composition.setup,
-        })).agent
+        })
+        this.retain(handle)
+        return handle.agent
       } catch (error: unknown) {
         if (!(error instanceof SessionQueryError)
           || error.code !== 'SESSION_QUERY_SESSION_NOT_FOUND') throw error
@@ -483,7 +551,7 @@ export class ApiSessionAgentController {
       throw new Error(`failed to ensure project directory "${cwd}": ${String(error)}`, { cause: error })
     }
     const composition = await this.composeAgent(presetId)
-    return (await this.ctx.agents.create({
+    const handle = await this.ctx.agents.create({
       sessionId,
       agentOptions: this.agentOptions(),
       meta: {
@@ -491,7 +559,9 @@ export class ApiSessionAgentController {
         ...(composition.agentPreset === undefined ? {} : { agentPreset: composition.agentPreset }),
       },
       setup: composition.setup,
-    })).agent
+    })
+    this.retain(handle)
+    return handle.agent
   }
 
   private agentOptions(): AgentOptions {
