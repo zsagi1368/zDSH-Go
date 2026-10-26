@@ -936,8 +936,13 @@ export class PluginGovernanceGateway extends TypertRemoteService {
       )
     }
     await this.registry.enable(pluginId)
-    await this.applyLiveToggle(pluginId, false)
-    await this.mountFactoryOffIfNeeded(pluginId)
+    // Mount a factory-off row FIRST: the on-demand mount brings the entry up
+    // enabled, so the live toggle below is only for a row that already exists.
+    // Toggling first warned "no live entry … needs a restart" on the very
+    // enable that was about to create the row — misleading noise (review 2).
+    if (!await this.mountFactoryOffIfNeeded(pluginId)) {
+      await this.applyLiveToggle(pluginId, false)
+    }
     return this.persistRegistryChange(() => {
       void this.registry.disable(pluginId)
     })
@@ -951,19 +956,24 @@ export class PluginGovernanceGateway extends TypertRemoteService {
    * promise nothing keeps. Failure never rolls the enable back: the registry
    * holds the operator's decision, the ledger's mount dimension holds what
    * actually happened, and the roster reads both.
+   * @returns whether this call mounted the entry now (already-enabled); the
+   * caller skips its live toggle in that case.
    */
-  private async mountFactoryOffIfNeeded(pluginId: PluginGovernanceId): Promise<void> {
-    if (this.installedSources.get(pluginId)?.kind !== 'preinstall') return
+  private async mountFactoryOffIfNeeded(pluginId: PluginGovernanceId): Promise<boolean> {
+    if (this.installedSources.get(pluginId)?.kind !== 'preinstall') return false
     const loader = this.resolveLoader()
-    if (loader === undefined) return
-    if (findLoaderEntry(loader, `factory/${pluginId}`) !== undefined) return
+    if (loader === undefined) return false
+    if (findLoaderEntry(loader, `factory/${pluginId}`) !== undefined) return false
     try {
       const mounted = await this.preinstaller.mountAdmitted(pluginId)
       if (mounted.status !== 'mounted') {
         this.warn(`mounting ${String(pluginId)} on enable did not take (${mounted.status}${mounted.reason == null ? '' : `: ${mounted.reason}`}); the registry holds the enable decision`)
+        return false
       }
+      return true
     } catch (cause) {
       this.warn(`mounting ${String(pluginId)} on enable failed (${describe(cause)}); the registry holds the enable decision`)
+      return false
     }
   }
 
@@ -1009,16 +1019,16 @@ export class PluginGovernanceGateway extends TypertRemoteService {
   private async applyLiveToggle(pluginId: string, disabled: boolean): Promise<void> {
     const loader = this.resolveLoader()
     if (loader === undefined) {
-      this.warn(`no Loader on this context; ${String(pluginId)} ${disabled ? 'disable' : 'enable'} needs a restart to apply`)
+      this.warn(`no Loader on this context; ${pluginId} ${disabled ? 'disable' : 'enable'} needs a restart to apply`)
       return
     }
     const entry = findLoaderEntry(loader, `factory/${pluginId}`)
     if (entry === undefined) {
-      this.warn(`no live Loader entry for ${String(pluginId)}; ${disabled ? 'disable' : 'enable'} needs a restart to apply`)
+      this.warn(`no live Loader entry for ${pluginId}; ${disabled ? 'disable' : 'enable'} needs a restart to apply`)
       return
     }
     if (entry.update === undefined) {
-      this.warn(`Loader entry for ${String(pluginId)} exposes no update channel; ${disabled ? 'disable' : 'enable'} needs a restart to apply`)
+      this.warn(`Loader entry for ${pluginId} exposes no update channel; ${disabled ? 'disable' : 'enable'} needs a restart to apply`)
       return
     }
     try {
