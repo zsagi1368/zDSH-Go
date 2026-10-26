@@ -9,8 +9,8 @@
   en: d26b77029fa722ab
   zh: 8e6bed763372b561
 /deepseek-ai-dsh-shell-env/summary:
-  en: 021be213f32988e1
-  zh: f3ce1ef82377b4f4
+  en: 884f6c180a44f2a1
+  zh: 3450d753571fcb9c
 /deepseek-ai-dsh-shell-env/table-of-contents:
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
@@ -18,8 +18,8 @@
   en: 34d2f05183df200f
   zh: 7753b97c91743901
 /deepseek-ai-dsh-shell-env/use-this-package/what-every-shell-call-receives:
-  en: eae86664fefc6690
-  zh: 05a4e5946c8d2b87
+  en: c6115b2958aea22f
+  zh: 57d4fbd698f99d24
 /deepseek-ai-dsh-shell-env/use-this-package/adding-your-own-environment-facts:
   en: 21ef223626e35905
   zh: 5c468055099b0135
@@ -27,14 +27,14 @@
   en: 0041438f2b7f7e4f
   zh: 93fa165b07adcdf4
 /deepseek-ai-dsh-shell-env/use-this-package/what-can-go-wrong:
-  en: 42c75945b581b7e6
-  zh: 6b5c487cfa28b206
+  en: cc875250374e9a54
+  zh: 7d001e99a24f93db
 /deepseek-ai-dsh-shell-env/understand-the-implementation:
   en: f782557ca8da3138
   zh: e8f0082b9692cacc
 /deepseek-ai-dsh-shell-env/understand-the-implementation/design-philosophy:
-  en: 311b66ea29b5702f
-  zh: 3a98c2fb1fcaa519
+  en: 35fd32314de20aab
+  zh: e1e75c261339024f
 /deepseek-ai-dsh-shell-env/understand-the-implementation/source-map:
   en: 72eba3bfadcfa581
   zh: dcd83e02a1910f27
@@ -51,8 +51,8 @@
   en: e95e649f0410fa75
   zh: b3d64877420b4c0d
 /deepseek-ai-dsh-shell-env/known-limitations-and-deferred-work:
-  en: be9888161315f026
-  zh: 97d1d05c1c322596
+  en: ad6422bc70886e59
+  zh: 80308c3a14dcb6d3
 /deepseek-ai-dsh-shell-env/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: 3bb0c20c93f16f98
