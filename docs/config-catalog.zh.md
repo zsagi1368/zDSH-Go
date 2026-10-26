@@ -2450,7 +2450,7 @@ export interface PlanModeConfig {
 
 ## `@deepseek-ai/dsh-plugin-governance-host`
 
-- `source`: [`packages/zdsh/plugin-governance-host/src/index.ts:230`](../packages/zdsh/plugin-governance-host/src/index.ts)
+- `source`: [`packages/zdsh/plugin-governance-host/src/index.ts:231`](../packages/zdsh/plugin-governance-host/src/index.ts)
 
 ```ts config-catalog
 /** Deployment configuration of the governance service. */
