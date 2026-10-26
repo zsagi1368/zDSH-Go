@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-shell-env` provides the trusted `DSH_*` environment that every model shell call — bash or pwsh — runs with: built-in facts such as `DSH_HOME`, `DSH_SHELL=1`, the agent's `DSH_SESSION_ID`, the launched profile's `DSH_PROFILE` and `DSH_PROFILE_DIR`, and — when the host resolved them in its own process — the distribution's remaining home directories `DSH_BRANCH_HOME` and `DSH_AGENTS_HOME`. Plugin authors can register their own facts with declared keys, collected per execution and disposed with their plugin; duplicate ownership or undeclared runtime keys fail loudly instead of silently overwriting. The registry changes nothing else the model sees — the shell tools own their own schemas and prompts. Choose it in any composition that mounts a model shell tool; configuration only picks the Harness home directory.
+`dsh-shell-env` provides the trusted `DSH_*` environment that every model shell call — bash or pwsh — runs with: built-in facts such as `DSH_HOME`, `DSH_SHELL=1`, the agent's `DSH_SESSION_ID`, the launched profile's `DSH_PROFILE` and `DSH_PROFILE_DIR`, plus the host-resolved distribution home directories. Plugin authors register their own facts with declared keys, collected per execution, disposed with their plugin; duplicate ownership or undeclared runtime keys fail loudly instead of silently overwriting. The registry changes nothing else the model sees — the shell tools own their schemas and prompts. Choose it wherever a model shell tool is mounted; configuration only picks the home directory.
 
 ## Table of Contents
 
