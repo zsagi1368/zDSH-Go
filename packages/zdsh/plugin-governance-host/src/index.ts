@@ -92,6 +92,7 @@ const STATUS_NAMES = {
 
 /** Runtime mirror: `FiberState` is a cross-package const enum with no runtime object. */
 const FIBER_ACTIVE = 2 as FiberState.ACTIVE
+const FIBER_PENDING = 0 as FiberState.PENDING
 
 /** Minimal read view of one service implementation stored on a mounted fiber. */
 interface ProvidedImplementation {
@@ -494,7 +495,13 @@ export class PluginGovernanceGateway extends TypertRemoteService {
               // the executor records a `skipped` verdict, and rethrow it PAST
               // the compensation below: the entry STAYS mounted-PENDING for
               // the probe locks (gate-p P5 / ra1), unlike a broken artifact.
-              throw new ServiceGatedMountError(`the Loader entry for ${moduleUrl} never became active (state ${entry.fiber.state}); its declared services are absent on this host face`)
+              // Any OTHER non-active settle (FAILED, DISPOSED, UNLOADING) is a
+              // broken artifact: it takes the ordinary failed+remove path
+              // below, so the skip cannot mask real breakage.
+              if (entry.fiber.state === FIBER_PENDING) {
+                throw new ServiceGatedMountError(`the Loader entry for ${moduleUrl} never became active (state ${entry.fiber.state}); its declared services are absent on this host face`)
+              }
+              throw new Error(`the Loader entry for ${moduleUrl} broke during start (state ${entry.fiber.state})`)
             }
           } catch (cause) {
             if (cause instanceof ServiceGatedMountError) throw cause
