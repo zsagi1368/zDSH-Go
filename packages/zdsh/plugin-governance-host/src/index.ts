@@ -44,7 +44,7 @@ import {
 import { TarExtractionError, extractNpmPackageTarball } from './install/tarball.ts'
 import { writeFileAtomicSync } from './atomic-write-sync.ts'
 import { resolveContainedPath, resolveFactoryModulePath } from './path-containment.ts'
-import { SeedPreinstaller } from './preinstall/preinstaller.ts'
+import { NO_SERVICE_FACTORY_SKIP_REASON, SeedPreinstaller, ServiceGatedMountError } from './preinstall/preinstaller.ts'
 import { mountProjectPluginsOnHost } from './project-source.ts'
 import type {
   DisablePluginRequest,
@@ -489,9 +489,15 @@ export class PluginGovernanceGateway extends TypertRemoteService {
             // (fiber.ts:665-672), so it settles without an error. A fiber that
             // merely exists has mounted nothing: require the state itself.
             if (entry.fiber.state !== FIBER_ACTIVE) {
-              throw new Error(`the Loader entry for ${moduleUrl} never became active (state ${entry.fiber.state})`)
+              // A3b: PENDING is service-gated, not broken — the declared
+              // injects are absent on this host face. Throw the typed error so
+              // the executor records a `skipped` verdict, and rethrow it PAST
+              // the compensation below: the entry STAYS mounted-PENDING for
+              // the probe locks (gate-p P5 / ra1), unlike a broken artifact.
+              throw new ServiceGatedMountError(`the Loader entry for ${moduleUrl} never became active (state ${entry.fiber.state}); its declared services are absent on this host face`)
             }
           } catch (cause) {
+            if (cause instanceof ServiceGatedMountError) throw cause
             // Failed mounts leave no live entry: 0.1.5 net-state parity (the
             // Loader's own rollback was removed upstream) + the official
             // unmount idiom; a retry (next boot / next url) starts from a
@@ -549,8 +555,12 @@ export class PluginGovernanceGateway extends TypertRemoteService {
     // Late-mounting Loader entries land between polls; each roster read gives
     // the mirror one chance to pick them up without making the read async.
     void this.syncMountedPlugins()
+    // One read-only ledger projection per roster read (never a pass): the
+    // mount dimension turns "admitted but never started" into an honest
+    // status below instead of a false active.
+    const preinstall = this.preinstaller.report().entries
     return Object.freeze({
-      plugins: Object.freeze(this.registry.getAll().map(plugin => this.summaryOf(plugin))),
+      plugins: Object.freeze(this.registry.getAll().map(plugin => this.summaryOf(plugin, preinstall))),
     })
   }
 
@@ -577,7 +587,9 @@ export class PluginGovernanceGateway extends TypertRemoteService {
       .find(row => row.id === manifest.id)?.errors ?? []
     const project = this.projectSources.get(canonicalId(manifest.id))
     return succeeded(Object.freeze({
-      summary: this.summaryOf(plugin),
+      // Same mount-aware projection as `list`, so a detail view never shows
+      // an active the roster calls disabled.
+      summary: this.summaryOf(plugin, this.preinstaller.report().entries),
       description: manifest.description ?? null,
       author: manifest.author ?? null,
       certification: manifest.certification?.level ?? null,
@@ -925,9 +937,34 @@ export class PluginGovernanceGateway extends TypertRemoteService {
     }
     await this.registry.enable(pluginId)
     await this.applyLiveToggle(pluginId, false)
+    await this.mountFactoryOffIfNeeded(pluginId)
     return this.persistRegistryChange(() => {
       void this.registry.disable(pluginId)
     })
+  }
+
+  /**
+   * Mount a factory-off preinstall on demand. An entry the factory admitted
+   * with `enabledAtBoot: false` has no `factory/<id>` Loader row to toggle
+   * and the boot pass never revisits it (the id is already registered), so
+   * `enable` has to create the mount itself or the roster's switch is a
+   * promise nothing keeps. Failure never rolls the enable back: the registry
+   * holds the operator's decision, the ledger's mount dimension holds what
+   * actually happened, and the roster reads both.
+   */
+  private async mountFactoryOffIfNeeded(pluginId: PluginGovernanceId): Promise<void> {
+    if (this.installedSources.get(pluginId)?.kind !== 'preinstall') return
+    const loader = this.resolveLoader()
+    if (loader === undefined) return
+    if (findLoaderEntry(loader, `factory/${pluginId}`) !== undefined) return
+    try {
+      const mounted = await this.preinstaller.mountAdmitted(pluginId)
+      if (mounted.status !== 'mounted') {
+        this.warn(`mounting ${String(pluginId)} on enable did not take (${mounted.status}${mounted.reason == null ? '' : `: ${mounted.reason}`}); the registry holds the enable decision`)
+      }
+    } catch (cause) {
+      this.warn(`mounting ${String(pluginId)} on enable failed (${describe(cause)}); the registry holds the enable decision`)
+    }
   }
 
   /**
@@ -1480,16 +1517,33 @@ export class PluginGovernanceGateway extends TypertRemoteService {
   }
 
   /** Build the list-line projection for one plugin. */
-  private summaryOf(plugin: GovernedPlugin): GovernedPluginSummary {
+  private summaryOf(plugin: GovernedPlugin, preinstall: PreinstallReport['entries'] = {}): GovernedPluginSummary {
     const manifest = plugin.manifest
     const pluginId = canonicalId(manifest.id)
     const project = this.projectSources.get(pluginId)
     const installed = this.installedSources.get(pluginId)
+    const registryStatus = STATUS_NAMES[this.registry.getStatus(pluginId)]
+    // A factory-off preinstall is admitted but has no Loader row: reporting
+    // the registry's own ACTIVE would tell the operator it is running, and
+    // the UI keys its enable/disable affordance off exactly this field, so
+    // the switch would be the disable one — on something that never started.
+    // The ledger's mount dimension is the truth about that, but only where
+    // the verdict is meaningful: without a Loader nothing can be mounted and
+    // the registry state is all anyone knows, and a no-factory artifact has
+    // nothing to mount by design (its activity was never a service fiber).
+    const mount = installed?.kind === 'preinstall' ? preinstall[pluginId]?.mount : undefined
+    const mountLies = mount !== undefined
+      && mount.status !== 'mounted'
+      && !(mount.status === 'skipped' && mount.reason === NO_SERVICE_FACTORY_SKIP_REASON)
+      && this.resolveLoader() !== undefined
+    const status = registryStatus === 'active' && mountLies
+      ? 'disabled' as const
+      : registryStatus
     return Object.freeze({
       pluginId,
       displayName: manifest.name,
       version: manifest.version,
-      status: STATUS_NAMES[this.registry.getStatus(pluginId)],
+      status,
       // Entries mirrored from the Loader are distinguishable from native
       // registrations so the UI can badge their origin; project plugins
       // carry their root and source from the server-side origin table.

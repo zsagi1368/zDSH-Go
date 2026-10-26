@@ -739,9 +739,21 @@ describe('Gate-P P5 — real mount spectrum over the seed rows + fail-open + lif
     await gateway.settlePreinstall()
 
     const report = gateway.preinstallReport()
-    for (const id of ['core/webstack-bridge', 'core/omnivision', 'core/filehub', 'core/plugin-center', 'core/webstack', 'core/workbench']) {
+    // W8/A3b split of the six boot-enabled rows: bridge/omnivision/plugin-center
+    // mount LOADED (their injects are satisfiable here), while filehub/webstack/
+    // workbench declare host-face services (`webServer` et al.) the bare harness
+    // does not provide — their fibers settle PENDING, the ledger records the
+    // service-gated skip (NOT a failure: the artifact did not break), and the
+    // probe table below reads their surviving PENDING state as the integrity
+    // lock. Both projections must agree: mounted ⟺ ACTIVE (W8).
+    for (const id of ['core/webstack-bridge', 'core/omnivision', 'core/plugin-center']) {
       expect(report.entries[id]?.status, `Gate-P P5: ${id} production row must be installed`).toBe('installed')
       expect(report.entries[id]?.mount?.status, `Gate-P P5: ${id} must mount in the W3 production posture`).toBe('mounted')
+    }
+    for (const id of ['core/filehub', 'core/webstack', 'core/workbench']) {
+      expect(report.entries[id]?.status, `Gate-P P5: ${id} production row must be installed`).toBe('installed')
+      expect(report.entries[id]?.mount?.status, `Gate-P P5: ${id} is service-gated in the bare harness and must record a skip, not a mount or a failure`).toBe('skipped')
+      expect(report.entries[id]?.mount?.reason, `Gate-P P5: ${id} skip must cite the service gate`).toMatch(/never became active/)
     }
     // verticals production stays factory-off: never mounted, ledger skipped.
     expect(report.entries['core/webstack-verticals']?.status).toBe('installed')

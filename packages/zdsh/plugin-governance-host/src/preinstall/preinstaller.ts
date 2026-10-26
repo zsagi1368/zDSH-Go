@@ -69,6 +69,25 @@ import {
  */
 const PREINSTALL_LOCK_WAIT_MS = 120_000
 
+/**
+ * The `mount` verdict for an admitted artifact with no service factory exit:
+ * there is nothing to mount BY DESIGN (tool-only and similar capabilities are
+ * admitted and active without one), so consumers must not read this skip as
+ * "declared off" — the roster keys its honesty downgrade on the difference.
+ */
+export const NO_SERVICE_FACTORY_SKIP_REASON = 'the admitted manifest declares no service factory path'
+
+/**
+ * Thrown by the mount hook when the created fiber settled PENDING instead of
+ * ACTIVE (W8): the artifact did not break — its apply never ran because the
+ * declared injects are absent on THIS host face (`webServer` on a bare
+ * harness, say). {@link SeedPreinstaller.mountEntry} reclassifies it as a
+ * `skipped` mount verdict and the entry STAYS in the Loader tree, so probes
+ * can still read the service-gated state as the artifact-integrity lock; only
+ * a genuinely broken artifact (import/apply failure) is compensated away.
+ */
+export class ServiceGatedMountError extends Error {}
+
 /** The gateway capabilities the executor needs, injected to avoid a cycle. */
 export interface SeedPreinstallerHost {
   /** Monotonic clock for ledger timestamps (overridable in tests). */
@@ -217,6 +236,33 @@ export class SeedPreinstaller {
   }
 
   /**
+   * Mount one already-admitted entry on demand, for the operator's `enable`.
+   *
+   * A factory-off entry (`enabledAtBoot: false`) is admitted but never
+   * mounted: it has no `factory/<id>` Loader row for `enable` to toggle, and
+   * the boot pass skips it forever after because the id is already
+   * registered. This is the operator-facing face of the same generic mount
+   * channel the boot pass uses (§9.3) — without it the roster's switch is a
+   * promise nothing keeps. The mount runs OUTSIDE the ledger lock (it can
+   * span module imports), then the row's `mount` dimension is updated under
+   * the lock; without a prior row nothing is written (admission is the
+   * ledger's precondition, never this call's guess).
+   * @param pluginId - canonical plugin id with an existing ledger row.
+   * @returns the mount verdict; `at` stamps this call, while the ledger row
+   * keeps its own transition stamps (the writeRow discipline).
+   */
+  async mountAdmitted(pluginId: string): Promise<PreinstallMountResult> {
+    const id = normalizePluginId(pluginId)
+    const mount = await this.mountEntry(id)
+    await this.withLedger((ledger) => {
+      const prior = ledger.entries[id]
+      if (prior === undefined) return false
+      return this.writeRow(ledger, id, { ...prior, mount }, prior)
+    })
+    return { ...mount, at: this.host.now() }
+  }
+
+  /**
    * Read-modify-write the ledger under the exclusive writer lock. The mutator
    * re-reads committed state inside the lock so a serialized second process
    * sees the first's work, and the file is rewritten only when it returns true
@@ -329,12 +375,19 @@ export class SeedPreinstaller {
       return { status: 'failed', reason: `factory resolution failed: ${cause instanceof Error ? cause.message : String(cause)}` }
     }
     if (urls.length === 0) {
-      return { status: 'skipped', reason: 'the admitted manifest declares no service factory path' }
+      return { status: 'skipped', reason: NO_SERVICE_FACTORY_SKIP_REASON }
     }
     for (const url of urls) {
       try {
         await this.host.mount(id, url, true)
       } catch (cause) {
+        // Service-gated (W8/A3b): the fiber settled PENDING on absent host
+        // services — held out of THIS host face, not broken. Reclassify the
+        // hook's throw as a queryable skip; the entry survives for the probe
+        // locks (gate-p P5 / ra1 read its PENDING state).
+        if (cause instanceof ServiceGatedMountError) {
+          return { status: 'skipped', reason: cause.message }
+        }
         // The ledger reason stays a one-line message (the row's change
         // detection compares the string, so a stack there would read as a
         // changed row on every boot); the stack goes to the warn channel

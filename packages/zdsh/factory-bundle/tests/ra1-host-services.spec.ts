@@ -496,12 +496,18 @@ describe('RA-1 sandbox mount proof (fixture + real loader.create; fixture is the
       'RA-1 counterexample A: filehub reached ACTIVE without any host service (false green)',
     ).not.toBe(2)
     expect(tryGet(bare.ctx, 'tools'), 'RA-1 counterexample A: tools materialized out of nothing').toBeUndefined()
-    // RA-F3 精确失败模式销案（实证登记）：create 不 reject、台账仍写 mounted——
-    // 唯一可靠红灯是 entryState≠2 + 能力面缺席；断言锁死该语义防 cordis 漂移。
+    // RA-F3 精确失败模式销案（W8/A3b 更新）：create 不 reject；旧语义「台账仍写
+    // mounted」正是 W8 杀掉的假绿——现在 PENDING 结算记 service-gated skip，
+    // 红灯从「entryState≠2 + 能力面缺席」升级为台账本身：mounted ⟺ ACTIVE。
     expect(
       bare.gateway.preinstallReport().entries['core/filehub']?.mount?.status,
-      'RA-1 counterexample A: the ledger dimension drifted from the observed fail-open settle semantics',
-    ).toBe('mounted')
+      'RA-1 counterexample A: the ledger must never report a green mount for a PENDING fiber',
+    ).toBe('skipped')
+    // 完整性锁仍在：工件未破损，条目保留在 PENDING（区别于 failed 的补偿移除）。
+    expect(
+      entryState(bare.ctx, 'factory/core/filehub'),
+      'RA-1 counterexample A: the service-gated entry must survive at PENDING',
+    ).toBe(0)
 
     // (B) 成对铁律回归锁：只撤 tools（systemPrompt 等其余五件在场）。
     const noTools = await bootWithServices(
