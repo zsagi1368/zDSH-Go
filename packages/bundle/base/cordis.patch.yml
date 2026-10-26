@@ -94,6 +94,16 @@
     - id: llm-retry
       name: '@deepseek-ai/dsh-llm-retry'
 
+    # Auxiliary-model slots (title, compaction summary, plan, vision). The
+    # settings face addresses a plugin entry's own Config by its Loader id and
+    # the Models page pins the literal `llm-model-slots`, so this row's id IS
+    # the settings namespace: without the row every write to the vision slot
+    # fails with "No configurable plugin entry", and the image-reading tool,
+    # which resolves the slot through this service, has nothing to resolve
+    # against.
+    - id: llm-model-slots
+      name: '@deepseek-ai/dsh-model-slots'
+
     # Live Config forms persist through the active profile patch.
 
     # Live configuration forms persist through the launcher's profile.

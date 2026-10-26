@@ -6,6 +6,7 @@ import type { PtcBindingFunction, PtcRunRequest } from '@deepseek-ai/dsh-ptc-run
 import type { SubprocessHandle, SubprocessOutcome } from '@deepseek-ai/dsh-subprocess'
 import { SandboxUnavailableError } from '@deepseek-ai/dsh-sandbox'
 import type { ConfinedArgv } from '@deepseek-ai/dsh-sandbox'
+import { HARNESS_HOME_ENVIRONMENT_NAMES as HARNESS_HOME } from '../src/environment.ts'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import type { Config } from '../src/index.ts'
 import { JsonChannel } from '../src/channel.ts'
@@ -505,6 +506,15 @@ describe('Node runtime host failures', () => {
     expect(Object.hasOwn(spec?.env ?? {}, 'PATH')).toBe(false)
     expect(spec?.argv).toEqual([process.execPath, '134217728'])
     expect(Object.fromEntries(Object.entries(spec?.env ?? {}).filter(([, value]) => value !== undefined)))
-      .toEqual({ DSH_PTC_RUNTIME_NODE: '1', NODE_OPTIONS: '--max-old-space-size=512' })
+      .toEqual({
+        DSH_PTC_RUNTIME_NODE: '1',
+        NODE_OPTIONS: '--max-old-space-size=512',
+        // The harness home directories are the one ambient family a program
+        // keeps, so this shape must tolerate them: an install exports
+        // DSH_HOME (scripts/install.ps1), and the exact shape then differs.
+        ...Object.fromEntries([...HARNESS_HOME]
+          .filter(key => process.env[key] !== undefined)
+          .map(key => [key, process.env[key] as string])),
+      })
   })
 })

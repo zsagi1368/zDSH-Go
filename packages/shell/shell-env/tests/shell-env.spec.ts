@@ -6,7 +6,7 @@
 
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { Agent } from '@deepseek-ai/dsh-agent'
@@ -51,6 +51,21 @@ describe('ShellEnvRegistry', () => {
     expect(registry.collect(execution('session-a'))).toEqual({
       DSH_HOME: resolve('./test-dsh-home'),
       DSH_SESSION_ID: 'session-a',
+      DSH_SHELL: '1',
+    })
+  })
+
+  it('carries the other two distribution homes so a nested dsh stays in this distribution', () => {
+    vi.stubEnv('DSH_BRANCH_HOME', 'D:\\dist\\data\\zdsh')
+    vi.stubEnv('DSH_AGENTS_HOME', 'D:\\dist\\data\\agents')
+    onTestFinished(() => { vi.unstubAllEnvs() })
+    const ctx = new Context()
+    const registry = new ShellEnvRegistry(ctx, { dshHome: './test-dsh-home' })
+
+    expect(registry.collect(execution())).toEqual({
+      DSH_AGENTS_HOME: 'D:\\dist\\data\\agents',
+      DSH_BRANCH_HOME: 'D:\\dist\\data\\zdsh',
+      DSH_HOME: resolve('./test-dsh-home'),
       DSH_SHELL: '1',
     })
   })

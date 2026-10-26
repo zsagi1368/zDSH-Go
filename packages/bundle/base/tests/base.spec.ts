@@ -43,6 +43,14 @@ describe('dsh-base bundle', () => {
     expect(rows.filter(row => row.id === 'subagent-claude-code')).toHaveLength(0)
     expect(rows.find(row => row.id === 'web')?.config).toMatchObject({ fetchProvider: 'http' })
     expect(rows.find(row => row.id === 'web-fetch-http')).toBeDefined()
+    // The auxiliary-model slot registry. Its Loader id IS the settings
+    // namespace the Models page writes (`llm-model-slots`), and the image tool
+    // resolves the vision slot through the service it provides — without this
+    // row the vision editor cannot save and the slot cannot resolve at all.
+    expect(rows.find(row => row.id === 'llm-model-slots')).toMatchObject({
+      name: '@deepseek-ai/dsh-model-slots',
+    })
+    expect(manifest.dependencies).toHaveProperty('@deepseek-ai/dsh-model-slots')
     // The self-developed governance gateway is mounted here (Q1 activation):
     // its roster, preinstall report, and admission Remotes are unreachable
     // without this base-plane row, so assert its presence explicitly.

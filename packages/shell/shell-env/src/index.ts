@@ -75,6 +75,11 @@ const DSH_PROFILE_KEY = `${DSH_ENV_PREFIX}PROFILE` as const
 const DSH_PROFILE_DIR_KEY = `${DSH_ENV_PREFIX}PROFILE_DIR` as const
 const RESERVED_BASH_ENV_KEYS = new Set<DshEnvironmentKey>([
   DSH_HOME_ENV,
+  // The other two distribution homes are host-resolved facts like DSH_HOME:
+  // a contributor that could own them could point a nested `dsh` command at
+  // another distribution, which is the whole thing this registry prevents.
+  `${DSH_ENV_PREFIX}BRANCH_HOME` as DshEnvironmentKey,
+  `${DSH_ENV_PREFIX}AGENTS_HOME` as DshEnvironmentKey,
   DSH_SHELL_KEY,
   DSH_SESSION_ID_KEY,
   DSH_PROFILE_KEY,
@@ -94,6 +99,8 @@ export class ShellEnvRegistry extends Service {
   private readonly contributors = new Map<string, BashEnvContributor>()
   private readonly keyOwners = new Map<DshEnvironmentKey, string>()
   private readonly dshHome: string
+  /** The remaining distribution home directories, resolved by the host. */
+  private readonly homeOverlay: Readonly<Record<string, string>>
 
   /**
    * Create and install the `ctx.shellEnv` service.
@@ -103,6 +110,15 @@ export class ShellEnvRegistry extends Service {
   constructor(ctx: Context, config: Config = {}) {
     super(ctx, 'shellEnv')
     this.dshHome = resolveDshHome(config.dshHome)
+    // Only what the host itself resolved: a child may not pick these, so they
+    // are read from the process the harness resolved them in, never from the
+    // values a tool call supplied.
+    const branchHome = process.env['DSH_BRANCH_HOME']
+    const agentsHome = process.env['DSH_AGENTS_HOME']
+    this.homeOverlay = Object.freeze({
+      ...(branchHome === undefined || branchHome.trim().length === 0 ? {} : { DSH_BRANCH_HOME: branchHome }),
+      ...(agentsHome === undefined || agentsHome.trim().length === 0 ? {} : { DSH_AGENTS_HOME: agentsHome }),
+    })
   }
 
   /**
@@ -158,6 +174,12 @@ export class ShellEnvRegistry extends Service {
       [DSH_HOME_ENV]: this.dshHome,
       [DSH_SHELL_KEY]: '1',
     }
+    // The other two home directories, resolved by the host and never taken
+    // from a tool call: a `dsh` command a shell tool runs must keep its
+    // plugins AND its skills/agents state in the distribution running it.
+    // Without these it keeps the right plugins and shares the official
+    // `~/.agents`, so the three distributions leak into one another.
+    for (const [key, value] of Object.entries(this.homeOverlay)) values[key as DshEnvironmentKey] = value
     if (execution.agent !== undefined) {
       values[DSH_SESSION_ID_KEY] = execution.agent.session.header.id
     }

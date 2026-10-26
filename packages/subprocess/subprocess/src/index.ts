@@ -15,6 +15,14 @@ import type { SubprocessHandle, SubprocessSpawnSpec } from './types.ts'
 import type { SubprocessTerminalEnvironment, SubprocessTerminalHandle, SubprocessTerminalSpawnSpec } from './types.ts'
 
 export { DSH_ENV_PREFIX } from './types.ts'
+
+/**
+ * The home-directory names a child keeps, so a nested `dsh` command addresses
+ * the distribution running it rather than the official default home. Kept here
+ * (not imported from a home-path package) because every spawner in this tree
+ * already depends on this module and must not grow a dependency for a list.
+ */
+const DISTRIBUTION_HOME_ENV: ReadonlySet<string> = new Set(['DSH_HOME', 'DSH_BRANCH_HOME', 'DSH_AGENTS_HOME'])
 export type {
   CollectedOutput,
   DshEnvironment,
@@ -66,7 +74,14 @@ export const SENSITIVE_ENV_PATTERN = /KEY|PASSWORD|SECRET|TOKEN/i
 export function scrubbedParentEnv(): Record<string, string> {
   const env: Record<string, string> = {}
   for (const [key, value] of Object.entries(process.env)) {
-    if (value !== undefined && !SENSITIVE_ENV_PATTERN.test(key) && !key.toUpperCase().startsWith(DSH_ENV_PREFIX)) env[key] = value
+    if (value === undefined || SENSITIVE_ENV_PATTERN.test(key)) continue
+    const upper = key.toUpperCase()
+    // The harness home family says WHICH distribution this child belongs to.
+    // Scrubbing it sends a nested `dsh` command to the official default home,
+    // so the official harness, zDSH and zDSH-Go would install into and read
+    // from one another. These names carry paths, not secrets.
+    if (upper.startsWith(DSH_ENV_PREFIX) && !DISTRIBUTION_HOME_ENV.has(upper)) continue
+    env[key] = value
   }
   // A child Node ignores the inherited proxy variables unless the flag this adds is set, so an MCP
   // stdio server or subagent CLI would connect directly while its parent proxies. The same overlay
