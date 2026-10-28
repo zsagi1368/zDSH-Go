@@ -111,6 +111,15 @@ export interface SeedPreinstallerHost {
    */
   setBootState(pluginId: string, enabled: boolean): Promise<unknown>
   /**
+   * The operator's persisted enable decision for one id, read from the
+   * durable registry snapshot: `true` enabled, `false` disabled, `null` when
+   * no decision is recorded. The pass consults it BEFORE re-admitting, so a
+   * restart re-mounts an operator-enabled factory-off artifact and never
+   * re-fires the first-admit disable over an explicit choice — the seed's
+   * `enabledAtBoot` is the factory default, not an override of the operator.
+   */
+  persistedDecision(pluginId: string): boolean | null
+  /**
    * Record the G2 factory origin row (§1.3) for one successfully
    * installed `local:` preinstall. Synchronous and throw-permissive at this
    * boundary: the executor wraps the call so a ledger write failure warns
@@ -331,6 +340,11 @@ export class SeedPreinstaller {
     // silent downgrade to the executor's own defaults.
     const issue = seedEntryContractIssue(entry)
     if (issue !== null) return this.writeRow(ledger, id, { status: 'failed', reason: issue }, existing)
+    // Read the operator's decision BEFORE re-admitting: the install below
+    // registers the id, and a roster sync interleaving after that consumes
+    // the recorded decision — the restart posture below needs the
+    // pre-registration read to survive that race.
+    const operatorDecision = this.host.persistedDecision(id)
     const outcome = await this.installOne(entry, id)
     if (outcome.status === 'installed') {
       // G2 origin (§1.3): a `local:` artifact admitted through the shared
@@ -338,10 +352,14 @@ export class SeedPreinstaller {
       // already written by the install channel itself, dir included).
       if (entry.source.startsWith('local:')) this.requestOrigin(entry, id)
       // Step 4 (§9.3): boot-enabled entries additionally take the generic
-      // mount channel; a `enabledAtBoot: false` entry is never created and
-      // records the `skipped` mount dimension (§9.4) so Gate-P can tell
-      // "declared off" apart from "tried and failed" at a glance.
-      const mount = entry.enabledAtBoot
+      // mount channel; a `enabledAtBoot: false` entry the operator has not
+      // enabled is never created and records the `skipped` mount dimension
+      // (§9.4) so Gate-P can tell "declared off" apart from "tried and
+      // failed" at a glance. An operator-enabled factory-off artifact mounts
+      // on every boot: without this the enable only lived for one session —
+      // the next pass re-admitted the (never-registered) id, downgraded the
+      // mount verdict, and re-disabled the artifact over the operator's head.
+      const mount = entry.enabledAtBoot || operatorDecision === true
         ? await this.mountEntry(id)
         : { status: 'skipped' as const, reason: 'not mounted: the seed entry declares enabledAtBoot=false' }
       const changed = this.writeRow(ledger, id, { status: 'installed', mount }, existing)
@@ -349,10 +367,12 @@ export class SeedPreinstaller {
       // (activation is not admission): boot-enabled entries enable, and a
       // factory-off entry (`enabledAtBoot: false`, §1.1) takes the
       // registry's default-ACTIVE admission, so the executor disables it once
-      // on first admit. Restarts skip the disable (row unchanged) and instead
-      // honor the operator's own persisted enable/disable decision.
+      // on first admit. A recorded operator decision — either direction —
+      // replaces that posture, and a re-admit whose row changed for any other
+      // reason (a mount-dimension rewrite, say) must not dress up as a first
+      // admit and disable over the operator's choice.
       if (entry.enabledAtBoot) this.requestBootState(id, true)
-      else if (changed) this.requestBootState(id, false)
+      else if (changed && operatorDecision === null) this.requestBootState(id, false)
       return changed
     }
     return this.writeRow(ledger, id, { status: 'failed', reason: outcome.reason }, existing)

@@ -449,6 +449,14 @@ export class PluginGovernanceGateway extends TypertRemoteService {
             pluginId: canonicalId(id),
             reason: 'factory preset: installed disabled by default (seed enabledAtBoot=false)',
           }),
+        // The durable decision snapshot the pass consults before re-admitting
+        // a factory-off row: without it every boot re-took the seed's
+        // enabledAtBoot as the final word and re-disabled an operator-enabled
+        // artifact (the "出厂未激活 every restart" loop).
+        persistedDecision: (id) => {
+          const decision = this.persistedDecisions.get(canonicalId(id))
+          return decision === 'active' ? true : decision === 'disabled' ? false : null
+        },
         recordOrigin: (id, spec, version) => {
           const pluginId = canonicalId(id)
           // The npm: install channel already wrote this id's row (storage tree

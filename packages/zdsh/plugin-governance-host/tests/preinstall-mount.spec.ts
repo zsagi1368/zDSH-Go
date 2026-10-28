@@ -696,6 +696,56 @@ describe('enable reaches a factory-off preinstall (A3)', () => {
   })
 })
 
+// ============================================================================
+// W12 — an operator-enabled factory-off artifact survives a restart. The seed
+// pass re-admits the (never-registered) id on every boot, and that re-admit
+// used to take the seed's enabledAtBoot as the final word: the mount verdict
+// was downgraded back to skipped and the first-admit disable re-fired over the
+// operator's persisted enable — the "出厂未激活 every restart" loop.
+// ============================================================================
+
+describe('operator-enabled factory-off artifact re-mounts across a restart (W12)', () => {
+  it('honors the persisted enable: the restart re-admit mounts the artifact and never re-disables it', async () => {
+    const storageRoot = scratch()
+    const seedPath = writeRepoSeed([
+      rowOf('core/webstack-verticals'), // production posture: enabledAtBoot=false
+    ])
+    const init = async (ctx: Context): Promise<PluginGovernanceGateway> => {
+      const { Loader } = await import('@deepseek-ai/cordis-plugin-loader')
+      await ctx.plugin(Loader)
+      const gateway = new PluginGovernanceGateway(ctx, { storageRoot, seedPath })
+      await (gateway as unknown as Record<symbol, () => Promise<void>>)[Service.init]!.call(gateway as never)
+      return gateway
+    }
+
+    // Boot 1: first admit — no operator decision yet, so the factory-off
+    // posture holds (skipped mount + the one-time disable).
+    const ctx1 = new Context()
+    contexts.push(ctx1)
+    const gateway1 = await init(ctx1)
+    await gateway1.settlePreinstall()
+    expect(gateway1.preinstallReport().entries['core/webstack-verticals']?.mount?.status).toBe('skipped')
+
+    // The operator enables: a live mount takes, and the decision persists.
+    const enabled = await gateway1.enable({ pluginId: cid('core/webstack-verticals') })
+    expect(enabled.ok).toBe(true)
+    expect(gateway1.preinstallReport().entries['core/webstack-verticals']?.mount?.status).toBe('mounted')
+
+    // Boot 2 over the SAME storage root: the re-admit must read the durable
+    // decision, mount again, and leave the registry enabled.
+    const ctx2 = new Context()
+    contexts.push(ctx2)
+    const gateway2 = await init(ctx2)
+    await gateway2.settlePreinstall()
+
+    const row = gateway2.preinstallReport().entries['core/webstack-verticals']
+    expect(row?.mount?.status).toBe('mounted')
+    const entry = ctx2.loader.resolve('factory/core/webstack-verticals')
+    expect((entry.fiber as unknown as { state?: number } | undefined)?.state).toBe(2)
+    expect(gateway2.list().plugins.find(plugin => plugin.pluginId === cid('core/webstack-verticals'))?.status).toBe('active')
+  })
+})
+
 // Guard: this suite's own premise — the real artifacts are on disk (the same
 // existsSync lock gate-p P4 uses to pin "prebuilt-inclusive" trees red).
 for (const id of ['core/webstack-verticals', 'core/omnivision', 'core/webstack-bridge']) {
