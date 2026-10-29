@@ -85,18 +85,53 @@ export async function saveManifest(dir: string, manifest: ProfileManifest): Prom
   await writeFileAtomic(join(dir, 'package.json'), JSON.stringify(manifest, undefined, 2) + '\n', { mode: 0o600 })
 }
 
-/** Reconcile package removals and newly installed bundles without re-enabling retained dependencies. */
-async function reconcile(before: ProfileManifest, dir: string, anchor: string, options: PackageOperationOptions): Promise<void> {
+/**
+ * Whether one spec the run was asked for names the same package source as a
+ * dependency's recorded spec. Exact equality, or — for git and tarball specs,
+ * whose spelling varies between the `git+https://`, `github:`, and codeload
+ * forms while the commit pin stays fixed — containment either way.
+ */
+function sameSource(spec: string, recorded: string): boolean {
+  if (spec === recorded) return true
+  const gitish = spec.includes('#') || recorded.includes('#')
+  return gitish && (spec.includes(recorded) || recorded.includes(spec))
+}
+
+/**
+ * Reconcile package removals and newly installed bundles without re-enabling
+ * retained dependencies. `namedSpecs` carries the specs THIS run was explicitly
+ * asked to install: an add the operator repeats after a failed attempt names a
+ * dependency the earlier failure already wrote into the manifest, and that
+ * retry's activation intent is explicit — the untouched-dependency exemption
+ * protects unrelated operations, never a re-run of the same request (2026-10-29
+ * 审计：a failed CLI add left the dep in the manifest, the successful retry then
+ * skipped activation silently, and the plugin stayed installed-but-disabled
+ * with no signal).
+ */
+async function reconcile(
+  before: ProfileManifest, dir: string, anchor: string, options: PackageOperationOptions, namedSpecs: readonly string[] = [],
+): Promise<void> {
   const after = readProfileManifest('dsh', dir)
   const dependencies = Object.keys(after.dependencies ?? {})
   const beforeDeps = new Set(Object.keys(before.dependencies ?? {}))
+  const afterSpecs = after.dependencies ?? {}
   const previous = after.dsh?.profile?.bundles ?? []
   const bundles = previous.filter((name) => {
     if (!beforeDeps.has(name) && !dependencies.includes(name)) return true
     return dependencies.includes(name) && bundleManifest(name, dir, anchor) !== undefined
   })
   for (const name of dependencies) {
-    if (beforeDeps.has(name)) continue
+    if (beforeDeps.has(name) && !namedSpecs.some((spec) => {
+      if (sameSource(spec, afterSpecs[name] ?? '')) return true
+      try {
+        const parsed = parseInstallSpec(spec)
+        return 'name' in parsed && parsed.name === name
+      } catch (error) {
+        // A path or malformed spec names no remote package; it matches only by source string above.
+        void error
+        return false
+      }
+    })) continue
     const metadata = bundleManifest(name, dir, anchor)
     if (metadata?.dsh?.bundle === undefined) {
       options.onOutput?.(`dsh: warning: ${name} declares no dsh.bundle — installed as a plain dependency, not a profile layer\n`, 'stderr')
@@ -335,7 +370,8 @@ export async function runProfilePnpm(
   const exemptions = readProfileVersionExemptions(dir)
   // The run's own registry flags, so the lookup asks the registry the installation will use.
   const registryFlags = args.filter(argument => argument.startsWith('--registry='))
-  for (const raw of namedSpecs(args)) {
+  const runNamedSpecs = namedSpecs(args)
+  for (const raw of runNamedSpecs) {
     // A spec whose manifest cannot be read or validated is left to the run itself and to the check
     // after installation, which reports what it could not validate.
     try {
@@ -519,7 +555,7 @@ export async function runProfilePnpm(
         options.onOutput?.(diagnostic, 'stderr')
         append(Buffer.from(diagnostic))
       } else if (options.activateNewBundles !== false) {
-        await reconcile(before, dir, context.installAnchor, options)
+        await reconcile(before, dir, context.installAnchor, options, runNamedSpecs)
       }
     }
   } finally {

@@ -580,6 +580,33 @@ it('retains partial package-manager changes after a failed install without activ
   expect(readProfileManifest('test', dir).dsh?.profile?.bundles).toEqual([])
 })
 
+it('activates a bundle on the retry of a spec an earlier failed add already recorded', async () => {
+  const { dir, context, pnpm } = fixture()
+  // Attempt 1 fails after pnpm wrote the dependency: the manifest keeps it, nothing activates.
+  pnpm.mutate = (target) => { install(target, 'partial') }
+  pnpm.exitCode = 1
+  expect(await runProfilePnpm(context, ['add', 'partial'], { execution: 'service', outputBytes: 100 })).toMatchObject({ exitCode: 1 })
+  expect(readProfileManifest('test', dir).dsh?.profile?.bundles).toEqual([])
+  // The operator retries the same request: the retained dependency is explicit now, and activates.
+  pnpm.mutate = () => {}
+  pnpm.exitCode = 0
+  expect(await runProfilePnpm(context, ['add', 'partial'], { execution: 'service', outputBytes: 100 })).toMatchObject({ exitCode: 0 })
+  expect(readProfileManifest('test', dir).dsh?.profile?.bundles).toEqual(['partial'])
+})
+
+it('an unrelated successful run still leaves a failed add unactivated', async () => {
+  const { dir, context, pnpm } = fixture()
+  pnpm.mutate = (target) => { install(target, 'partial') }
+  pnpm.exitCode = 1
+  await runProfilePnpm(context, ['add', 'partial'], { execution: 'service', outputBytes: 100 })
+  // A different spec's run must not activate the retained dependency: the untouched-dependency
+  // exemption protects unrelated operations even when they install their own bundle.
+  pnpm.mutate = (target) => { install(target, 'other-bundle') }
+  pnpm.exitCode = 0
+  await runProfilePnpm(context, ['add', 'other-bundle'], { execution: 'service', outputBytes: 100 })
+  expect(readProfileManifest('test', dir).dsh?.profile?.bundles).toEqual(['other-bundle'])
+})
+
 
 it('initializes missing profiles under the same lock and reports initialization', async () => {
   const { home, context } = fixture()
