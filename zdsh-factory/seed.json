@@ -73,7 +73,7 @@
       "id": "core/autopilot",
       "package": "dsh-autopilot",
       "version": "0.1.0",
-      "pin": "43f98906d151409582a26ece78150f6bd6f2bfc4",
+      "pin": "5c20e66b58a848010de55f3f3920fd4307a43cdf",
       "source": "local:packages/zdsh/factory-bundle/node_modules/dsh-autopilot",
       "integrity": null,
       "enabledAtBoot": false,

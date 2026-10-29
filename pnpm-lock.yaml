@@ -15105,8 +15105,8 @@ importers:
         specifier: link:../../../vendor/schemastery
         version: link:../../../vendor/schemastery
       dsh-autopilot:
-        specifier: git+https://github.com/zsagi1368/zdsh-autopilot.git#43f98906d151409582a26ece78150f6bd6f2bfc4
-        version: https://codeload.github.com/zsagi1368/zdsh-autopilot/tar.gz/43f98906d151409582a26ece78150f6bd6f2bfc4(@deepseek-ai/cordis@vendor+cordis)
+        specifier: git+https://github.com/zsagi1368/zdsh-autopilot.git#5c20e66b58a848010de55f3f3920fd4307a43cdf
+        version: https://codeload.github.com/zsagi1368/zdsh-autopilot/tar.gz/5c20e66b58a848010de55f3f3920fd4307a43cdf(@deepseek-ai/cordis@vendor+cordis)
       dsh-filehub:
         specifier: git+https://github.com/zsagi1368/zdsh-filehub.git#e241cf83261aecccfa20ddc8af36a3bae31d01ed
         version: https://codeload.github.com/zsagi1368/zdsh-filehub/tar.gz/e241cf83261aecccfa20ddc8af36a3bae31d01ed(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/schemastery@vendor+schemastery)(react@18.3.1)
@@ -20179,8 +20179,8 @@ packages:
     resolution: {integrity: sha512-uBq4egWHTcTt33a72vpSG0z3HnPuIl6NqYcTrKEg2azoEyl2hpW0zqlxysq2pK9HlDIHyHyakeYaYnSAwd8bow==}
     engines: {node: '>=12'}
 
-  dsh-autopilot@https://codeload.github.com/zsagi1368/zdsh-autopilot/tar.gz/43f98906d151409582a26ece78150f6bd6f2bfc4:
-    resolution: {gitHosted: true, integrity: sha512-4SzClrbUGjM8tUDvh6TicLNqOTiE1BvoLx+Wb9ZuapCTHJdFM/FLPG9p1vjed2vXyFoLQnxkiyBrk8wkjszaKw==, tarball: https://codeload.github.com/zsagi1368/zdsh-autopilot/tar.gz/43f98906d151409582a26ece78150f6bd6f2bfc4}
+  dsh-autopilot@https://codeload.github.com/zsagi1368/zdsh-autopilot/tar.gz/5c20e66b58a848010de55f3f3920fd4307a43cdf:
+    resolution: {gitHosted: true, integrity: sha512-kGdaA4VS3Z4mHcyKR9uJvMdHI5jcRnAWoWQfrulF1TrR67LtE2dVlqQ5jnVbwjJ6Q8rVyRKaQDRZHyCLcAd/9A==, tarball: https://codeload.github.com/zsagi1368/zdsh-autopilot/tar.gz/5c20e66b58a848010de55f3f3920fd4307a43cdf}
     version: 0.1.0
     engines: {node: '>=22'}
     peerDependencies:
@@ -27726,7 +27726,7 @@ snapshots:
 
   dotenv@16.6.1: {}
 
-  dsh-autopilot@https://codeload.github.com/zsagi1368/zdsh-autopilot/tar.gz/43f98906d151409582a26ece78150f6bd6f2bfc4(@deepseek-ai/cordis@vendor+cordis):
+  dsh-autopilot@https://codeload.github.com/zsagi1368/zdsh-autopilot/tar.gz/5c20e66b58a848010de55f3f3920fd4307a43cdf(@deepseek-ai/cordis@vendor+cordis):
     optionalDependencies:
       '@deepseek-ai/cordis': link:vendor/cordis
 
