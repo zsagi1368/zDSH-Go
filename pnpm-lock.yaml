@@ -15105,14 +15105,14 @@ importers:
         specifier: link:../../../vendor/schemastery
         version: link:../../../vendor/schemastery
       dsh-autopilot:
-        specifier: git+https://github.com/zsagi1368/zdsh-autopilot.git#5c20e66b58a848010de55f3f3920fd4307a43cdf
-        version: https://codeload.github.com/zsagi1368/zdsh-autopilot/tar.gz/5c20e66b58a848010de55f3f3920fd4307a43cdf(@deepseek-ai/cordis@vendor+cordis)
+        specifier: git+https://github.com/zsagi1368/zdsh-autopilot.git#330237f90212aa28c4d64295c6913a9738e7dc6d
+        version: https://codeload.github.com/zsagi1368/zdsh-autopilot/tar.gz/330237f90212aa28c4d64295c6913a9738e7dc6d(@deepseek-ai/cordis@vendor+cordis)
       dsh-filehub:
         specifier: git+https://github.com/zsagi1368/zdsh-filehub.git#e241cf83261aecccfa20ddc8af36a3bae31d01ed
         version: https://codeload.github.com/zsagi1368/zdsh-filehub/tar.gz/e241cf83261aecccfa20ddc8af36a3bae31d01ed(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/schemastery@vendor+schemastery)(react@18.3.1)
       dsh-omnivision:
-        specifier: git+https://github.com/zsagi1368/dsh-omnivision.git#994140d4b0ac82a2ef46289c5dcd2be15817957d
-        version: https://codeload.github.com/zsagi1368/dsh-omnivision/tar.gz/994140d4b0ac82a2ef46289c5dcd2be15817957d(@deepseek-ai/schemastery@vendor+schemastery)(sharp@0.35.5(@types/node@22.20.1))
+        specifier: git+https://github.com/zsagi1368/dsh-omnivision.git#9ade1483be88d98618bbb3c32e6922c526838faf
+        version: https://codeload.github.com/zsagi1368/dsh-omnivision/tar.gz/9ade1483be88d98618bbb3c32e6922c526838faf(@deepseek-ai/schemastery@vendor+schemastery)(sharp@0.35.5(@types/node@22.20.1))
       dsh-plugin-center:
         specifier: git+https://github.com/zsagi1368/zdsh-plugin-center.git#17071e2099fb32fcc047623fd2d1be1031dabb2a
         version: https://codeload.github.com/zsagi1368/zdsh-plugin-center/tar.gz/17071e2099fb32fcc047623fd2d1be1031dabb2a(@deepseek-ai/cordis@vendor+cordis)(react@18.3.1)
@@ -20179,8 +20179,8 @@ packages:
     resolution: {integrity: sha512-uBq4egWHTcTt33a72vpSG0z3HnPuIl6NqYcTrKEg2azoEyl2hpW0zqlxysq2pK9HlDIHyHyakeYaYnSAwd8bow==}
     engines: {node: '>=12'}
 
-  dsh-autopilot@https://codeload.github.com/zsagi1368/zdsh-autopilot/tar.gz/5c20e66b58a848010de55f3f3920fd4307a43cdf:
-    resolution: {gitHosted: true, integrity: sha512-kGdaA4VS3Z4mHcyKR9uJvMdHI5jcRnAWoWQfrulF1TrR67LtE2dVlqQ5jnVbwjJ6Q8rVyRKaQDRZHyCLcAd/9A==, tarball: https://codeload.github.com/zsagi1368/zdsh-autopilot/tar.gz/5c20e66b58a848010de55f3f3920fd4307a43cdf}
+  dsh-autopilot@https://codeload.github.com/zsagi1368/zdsh-autopilot/tar.gz/330237f90212aa28c4d64295c6913a9738e7dc6d:
+    resolution: {gitHosted: true, integrity: sha512-8poeFfs5gb76NPf2+kpgOB3E5wOBitjiS6jdZKkCo2XskvP41+UjpZ+UKaeGLRddf9kxkcZSaLcloSnAwHp2Wg==, tarball: https://codeload.github.com/zsagi1368/zdsh-autopilot/tar.gz/330237f90212aa28c4d64295c6913a9738e7dc6d}
     version: 0.1.0
     engines: {node: '>=22'}
     peerDependencies:
@@ -20229,8 +20229,8 @@ packages:
       react:
         optional: true
 
-  dsh-omnivision@https://codeload.github.com/zsagi1368/dsh-omnivision/tar.gz/994140d4b0ac82a2ef46289c5dcd2be15817957d:
-    resolution: {gitHosted: true, integrity: sha512-cJfq/hB0V7wnKF+49B2FWjOMGz+tTnBeNIhMxOgG72342zQNpAk71ZY3d7cW9bOm9Zm45yreg6V5mAccRIVhwg==, tarball: https://codeload.github.com/zsagi1368/dsh-omnivision/tar.gz/994140d4b0ac82a2ef46289c5dcd2be15817957d}
+  dsh-omnivision@https://codeload.github.com/zsagi1368/dsh-omnivision/tar.gz/9ade1483be88d98618bbb3c32e6922c526838faf:
+    resolution: {gitHosted: true, integrity: sha512-ML9BJknbZLO/ZRDYzLaweoUWwq9dhTRuxlW1LCBkhqPDF9iJ08Pvwnn7qWOhESdTN+g1J1ooXsvCDHyKuyMF6Q==, tarball: https://codeload.github.com/zsagi1368/dsh-omnivision/tar.gz/9ade1483be88d98618bbb3c32e6922c526838faf}
     version: 0.1.0-alpha
     engines: {node: '>=22.19.0'}
     peerDependencies:
@@ -27726,7 +27726,7 @@ snapshots:
 
   dotenv@16.6.1: {}
 
-  dsh-autopilot@https://codeload.github.com/zsagi1368/zdsh-autopilot/tar.gz/5c20e66b58a848010de55f3f3920fd4307a43cdf(@deepseek-ai/cordis@vendor+cordis):
+  dsh-autopilot@https://codeload.github.com/zsagi1368/zdsh-autopilot/tar.gz/330237f90212aa28c4d64295c6913a9738e7dc6d(@deepseek-ai/cordis@vendor+cordis):
     optionalDependencies:
       '@deepseek-ai/cordis': link:vendor/cordis
 
@@ -27741,7 +27741,7 @@ snapshots:
       '@deepseek-ai/schemastery': link:vendor/schemastery
       react: 18.3.1
 
-  dsh-omnivision@https://codeload.github.com/zsagi1368/dsh-omnivision/tar.gz/994140d4b0ac82a2ef46289c5dcd2be15817957d(@deepseek-ai/schemastery@vendor+schemastery)(sharp@0.35.5(@types/node@22.20.1)):
+  dsh-omnivision@https://codeload.github.com/zsagi1368/dsh-omnivision/tar.gz/9ade1483be88d98618bbb3c32e6922c526838faf(@deepseek-ai/schemastery@vendor+schemastery)(sharp@0.35.5(@types/node@22.20.1)):
     optionalDependencies:
       '@deepseek-ai/schemastery': link:vendor/schemastery
       sharp: 0.35.5(@types/node@22.20.1)

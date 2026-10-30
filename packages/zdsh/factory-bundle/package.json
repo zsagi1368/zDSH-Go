@@ -9,11 +9,11 @@
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/schemastery": "workspace:~",
     "dsh-webstack-verticals": "git+https://github.com/zsagi1368/dsh-webstack.git#5610b547be582a1ac00e777330715fecd3d63733",
-    "dsh-omnivision": "git+https://github.com/zsagi1368/dsh-omnivision.git#994140d4b0ac82a2ef46289c5dcd2be15817957d",
+    "dsh-omnivision": "git+https://github.com/zsagi1368/dsh-omnivision.git#9ade1483be88d98618bbb3c32e6922c526838faf",
     "dsh-webstack-bridge": "git+https://github.com/zsagi1368/dsh-webstack.git#5610b547be582a1ac00e777330715fecd3d63733",
     "dsh-filehub": "git+https://github.com/zsagi1368/zdsh-filehub.git#e241cf83261aecccfa20ddc8af36a3bae31d01ed",
     "dsh-plugin-center": "git+https://github.com/zsagi1368/zdsh-plugin-center.git#17071e2099fb32fcc047623fd2d1be1031dabb2a",
-    "dsh-autopilot": "git+https://github.com/zsagi1368/zdsh-autopilot.git#5c20e66b58a848010de55f3f3920fd4307a43cdf",
+    "dsh-autopilot": "git+https://github.com/zsagi1368/zdsh-autopilot.git#330237f90212aa28c4d64295c6913a9738e7dc6d",
     "dsh-webstack": "git+https://github.com/zsagi1368/dsh-webstack.git#5610b547be582a1ac00e777330715fecd3d63733",
     "zdsh-workbench": "git+https://github.com/zsagi1368/zdsh-workbench.git#f8934fce04f50781b7788a722f68f2c418829f3a"
   }
