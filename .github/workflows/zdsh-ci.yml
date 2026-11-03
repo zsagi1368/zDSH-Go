@@ -67,7 +67,7 @@ jobs:
       # Runner-private pnpm destination, house pattern from ci.yml. The
       # version is pinned to the merged packageManager value so the installer
       # and the lockfile are produced by the same release line.
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v5
         with:
           version: 11.28.5
           dest: ${{ runner.temp }}/setup-pnpm-${{ github.run_id }}-${{ github.run_attempt }}
