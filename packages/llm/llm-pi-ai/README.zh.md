@@ -247,5 +247,6 @@ pi-ai 事件变成 harness 的推理、文本、工具调用、用量与 finish 
 
 - 提供的协议集合刻意比 pi-ai 的完整 API 集合更窄：Bedrock、Vertex、Azure 与 Codex 通过 profile 无法以密钥、端点与标头完整描述的流程认证；目录路由仍可经自有提供方到达它们，只有显式覆盖会被拒绝。Codex 可经授权流程的 OAuth grant 登录。
 - `compat` 开关集合由漂移门禁钉在 pi-ai 的 compat 类型上；上游升级若新增字段、为更多协议赋予 compat 类型或扩大值联合，会在有人分类前让构建失败。
+- ContextManagement 镜像自本仓治理（2026-11-04 权威侧声明，CTX-OPT-20261104 D7）：插件仓（zDSH-plugins/ContextManagement）`plugin/` 与 `packages/` 轨中的 guardian / L3 / L0 / budget / return-cap 副本是只读、单向生成的快照，唯一权威是本仓。禁双头同步——只改本树，不改快照；用 `node scripts/generate-plugin-snapshots.mjs --check` 对账（含 cache/ledger 双 `declare module` 同形断言），完整声明见该脚本头部。
 
 </details>

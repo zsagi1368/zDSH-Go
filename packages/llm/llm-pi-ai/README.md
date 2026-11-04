@@ -247,5 +247,6 @@ This Dev Note is non-authoritative working context: undecided directions and not
 
 - The offered protocol set is deliberately narrower than pi-ai's full API set: Bedrock, Vertex, Azure, and Codex authenticate through flows a profile cannot completely describe with a key, an endpoint, and headers; catalog routes still reach them through their own provider, and only an explicit override is refused. Codex is sign-in-able through the authorization flow's OAuth grant.
 - The `compat` switch set is pinned to pi-ai's compat types by drift gates; an upstream upgrade that adds a field, gives a further protocol a compat type, or widens a value union fails the build until someone classifies it.
+- The ContextManagement mirror is governed from this tree (authority declaration, 2026-11-04, D7 of CTX-OPT-20261104): the guardian / L3 / L0 / budget / return-cap copies under the sibling plugin repository's `plugin/` and `packages/` tracks are read-only, one-way generated snapshots, and this repository is the sole authority. Dual-head sync is forbidden — edit this tree, never the snapshot; check drift (and the cache/ledger dual `declare module` same-shape assertion) with `node scripts/generate-plugin-snapshots.mjs --check`, whose header carries the full declaration.
 
 </details>
