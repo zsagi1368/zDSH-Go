@@ -12,6 +12,15 @@
  * 压缩当量 = Σ 每次压缩的摘要输入 / 平均轮增量
  * and the acceptance rule is `压缩当量 ≤ 总轮数 × 20%`.
  *
+ * oneShotCount is pinned at 0 as a REGISTERED EXEMPTION (D6, CTX-OPT-20261104):
+ * the one-shot domains — summary, branch summary, and subagent one-shot calls
+ * (CONTEXT-CACHE-MANAGEMENT.md §2 L0 semantics) — structurally never enter the
+ * parent session's event stream, so no increment branch exists by design, and
+ * fresh-session single rounds are counted as warm-up instead. This is not a
+ * defect; it is accepted maintenance debt, not a zero-cost solution. The field
+ * and stateSchema stay in place (removal would force a stateVersion migration
+ * with no offsetting benefit). Pinned by tests/cache-metrics.spec.ts.
+ *
  * @module @deepseek-ai/dsh-token-meter/cache-metrics
  */
 
@@ -53,7 +62,8 @@ export interface CacheMetricsProjection {
   readonly hitRate: number
   /** Warm-up requests excluded from hit-rate (first request after each reset). */
   readonly warmUpCount: number
-  /** One-shot requests excluded from hit-rate (fresh sessionId, disposable). */
+  /** One-shot requests excluded from hit-rate (fresh sessionId, disposable).
+   * Always 0 — registered exemption, not a defect (see module header). */
   readonly oneShotCount: number
   /** Registered reset events (compaction, model change, session recovery, seed boundary). */
   readonly resetCount: number

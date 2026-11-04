@@ -113,6 +113,42 @@ describe('cacheMetrics projection', () => {
     expect(m.resetCount).toBe(0) // initial request is not a "reset event"
   })
 
+  // Spec pin (D6, CTX-OPT-20261104): a fresh-session single round is absorbed by
+  // the warm-up counter, and oneShotCount stays identically zero.
+  it('pins fresh-session single round into warmUpCount with oneShotCount identically 0', async () => {
+    const { ctx, session } = await harness()
+    appendHeader(session, 'initial')
+    appendAssistant(session, 1, 1, { inputTokens: 100, outputTokens: 50 })
+    const m = projected(ctx, session)
+    expect(m.warmUpCount).toBe(1)
+    expect(m.oneShotCount).toBe(0)
+  })
+
+  // REGISTERED EXEMPTION, NOT A DEFECT (D6, CTX-OPT-20261104 REPORT §6):
+  // oneShotCount ≡ 0 is the registered exemption for the one-shot domains —
+  // summary, branch summary, and subagent one-shot calls (CONTEXT-CACHE-
+  // MANAGEMENT.md §2 L0 semantics). Those calls structurally never enter the
+  // parent session's event stream, so the projection has no increment branch by
+  // design; fresh-session single rounds are counted as warm-up instead. This is
+  // accepted maintenance debt, not a zero-cost solution; the field and
+  // stateSchema stay (removal would force a stateVersion migration with no
+  // offsetting benefit). Do NOT "fix" the zero as a regression — the deviation
+  // is registered in packages/llm/token-meter/README.md ("Known Limitations").
+  it('pins oneShotCount ≡ 0 as the registered exemption, not a defect', async () => {
+    const { ctx, session } = await harness()
+    appendHeader(session, 'initial')
+    appendAssistant(session, 1, 1, { inputTokens: 100, outputTokens: 50 })
+    appendHeader(session, 'resume')
+    appendAssistant(session, 2, 1, { inputTokens: 80, cacheReadTokens: 70, outputTokens: 30 })
+    const m = projected(ctx, session)
+    // Registered exemption (D6): no increment branch exists by design.
+    expect(m.oneShotCount).toBe(0)
+    // The exemption does not disturb the rest of the projection.
+    expect(m.warmUpCount).toBe(1)
+    expect(m.mainChainRequests).toBe(1)
+    expect(m.mainChainHits).toBe(1)
+  })
+
   it('counts sub-sequent requests as main-chain and computes hit rate', async () => {
     const { ctx, session } = await harness()
     appendHeader(session, 'initial')
