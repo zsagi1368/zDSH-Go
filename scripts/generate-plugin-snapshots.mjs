@@ -15,20 +15,44 @@
 //   "kept byte-identical" hand-sync wording in the plugin repository's README is
 //   superseded by this declaration.
 //
-// This wave ships the `--check` mode only: per-file SHA-256 comparison of this tree
-// (authority) against the plugin-repository snapshot, plus the cache/ledger dual
-// `declare module` same-shape assertion (agent.ts and token-meter/cache-metrics.ts
-// must declare the same event vocabulary — interface merging makes a shape split a
-// silent type hole). Snapshot drift is REPORTED, not written back; writeback
-// generation from this tree is a later, separately-gated piece of work.
+// This wave ships the `--check` mode only. Coverage is reported in BOTH directions:
+//   snapshot -> authority  per-file SHA-256 comparison (MATCH / DRIFT), plus
+//                          MISSING-AUTHORITY (snapshot has no counterpart here) and
+//                          PLUGIN-TRACK-UNMAPPED (snapshot plugin-track file absent
+//                          from PLUGIN_TRACK_MAP);
+//   authority -> snapshot  AUTHORITY-ONLY (authority file in a mirror-covered
+//                          directory with no snapshot counterpart — content this
+//                          tree owns that the mirror does not carry yet;
+//                          informational: extending the mirror is a maintainer
+//                          decision, so these never fail --strict, and
+//                          package-local metadata is excluded symmetrically with
+//                          the forward EXCLUDED-CONFIG class).
+// Snapshot drift is REPORTED, not written back; writeback generation from this tree
+// is a later, separately-gated piece of work.
+//
+// The cache/ledger dual `declare module` same-shape assertion (agent.ts and
+// token-meter/cache-metrics.ts must declare the same event vocabulary — interface
+// merging makes a shape split a silent type hole) is FAIL-LOUD: if either file
+// yields no parseable event vocabulary (module name or interface renamed away,
+// unbalanced braces), the run aborts with exit 1 instead of comparing empty maps
+// to empty maps and calling them equal (REV-A-1). Both single- and double-quoted
+// module specifiers parse; the assertion never silently skips.
 //
 // Usage:
-//   node scripts/generate-plugin-snapshots.mjs --check [--strict] [--plugins-root <path>]
+//   node scripts/generate-plugin-snapshots.mjs --check [--strict]
+//        [--plugins-root <path>] [--authority-root <path>]
+//
+// Path resolution: the default plugin root is `<repo>/../../zDSH-plugins/ContextManagement`
+// and the default authority root is this repository, both resolved against the
+// REPOSITORY ROOT (the parent of scripts/). An explicit `--plugins-root` /
+// `--authority-root` value is ALSO resolved against the repository root when
+// relative — not against the process cwd (REV-A-7); pass an absolute path to
+// escape the repository entirely.
 //
 // Exit codes:
-//   0  check ran; drift/missing counterparts may be reported (see output) unless --strict
-//   1  hard failure: same-shape assertion violated, unparseable declare block,
-//      plugin repository not found, or --strict and any drift/missing entry
+//   0  check ran; drift/missing/coverage gaps may be reported (see output) unless --strict
+//   1  hard failure: same-shape assertion violated or unparseable declare block,
+//      plugin repository not found, or --strict and any reported gap
 //
 // Snapshot-side layout (zDSH-plugins/ContextManagement):
 //   packages/**  path-for-path mirror (same relative path in this repository)
@@ -36,6 +60,8 @@
 //   plugin/tests plugin-track specs, mapped likewise
 // Only TypeScript sources are compared; the mirror's package.json / tsconfig.json are
 // fork-scoped patch context and are listed as EXCLUDED-CONFIG, not compared.
+// Automated coverage for the assertion semantics lives in
+// scripts/generate-plugin-snapshots.spec.ts (REV-A-5).
 import { createHash } from 'node:crypto'
 import { readdirSync, readFileSync, existsSync } from 'node:fs'
 import { dirname, join, relative, resolve, sep } from 'node:path'
@@ -55,9 +81,15 @@ const PLUGIN_TRACK_MAP = [
   ['plugin/tests/cache-metrics-ledger.spec.ts', 'packages/llm/token-meter/tests/cache-metrics-ledger.spec.ts'],
   ['plugin/tests/l3.spec.ts', 'packages/core/tools/tests/l3.spec.ts'],
   ['plugin/tests/return-cap.spec.ts', 'packages/subagent/subagent/tests/return-cap.spec.ts'],
-  // plugin/src/index.ts is intentionally absent: it is plugin-bundle glue with no
-  // authority counterpart in this tree, so the plugin repository stays its owner.
+  // plugin/src/index.ts is intentionally absent (KNOWN_UNMAPPED_SNAPSHOT_FILES below):
+  // it is plugin-bundle glue with no authority counterpart in this tree, so the
+  // plugin repository stays its owner.
 ]
+
+// Snapshot plugin-track files with no authority counterpart, by design. They are
+// reported as UNMAPPED-EXPECTED rather than as a coverage gap; anything else that
+// shows up unmapped is a real gap and fails --strict.
+const KNOWN_UNMAPPED_SNAPSHOT_FILES = new Set(['plugin/src/index.ts'])
 
 // agent.ts authors the `cache/ledger` event; cache-metrics.ts re-declares it because
 // project-references builds compile token-meter without agent-loop in its program.
@@ -68,24 +100,42 @@ const DUAL_DECLARE_FILES = [
 const DUAL_DECLARE_MODULE = '@deepseek-ai/dsh-session/types'
 const DUAL_DECLARE_INTERFACE = 'SessionEventMap'
 
-const argv = process.argv.slice(2)
-const strict = argv.includes('--strict')
-const check = argv.includes('--check')
-const pluginsRootIndex = argv.indexOf('--plugins-root')
-const pluginsRootOverride = pluginsRootIndex >= 0 ? argv[pluginsRootIndex + 1] : undefined
-
 function usage(fail) {
   const lines = [
-    'Usage: node scripts/generate-plugin-snapshots.mjs --check [--strict] [--plugins-root <path>]',
-    '  --check              compare this tree (authority) against the plugin-repository snapshot',
-    '  --strict             treat reported drift/missing counterparts as a failure (exit 1)',
-    '  --plugins-root <p>   plugin repository root (default: <repo>/../../zDSH-plugins/ContextManagement)',
+    'Usage: node scripts/generate-plugin-snapshots.mjs --check [--strict] [--plugins-root <path>] [--authority-root <path>]',
+    '  --check               compare this tree (authority) against the plugin-repository snapshot, both directions',
+    '  --strict              fail when reported drift/missing/plugin-track gaps exist (AUTHORITY-ONLY is informational)',
+    '  --plugins-root <p>    plugin repository root; relative values resolve against the REPOSITORY ROOT, not cwd',
+    '  --authority-root <p>  authority tree root; relative values resolve against the REPOSITORY ROOT, not cwd (default: this repository)',
+    '  -h, --help            print this usage and exit',
   ]
   for (const line of lines) console.log(line)
   if (fail) process.exit(1)
+  process.exit(0)
 }
 
-if (!check || argv.includes('-h') || argv.includes('--help')) usage(!check)
+function parseArgs(args) {
+  if (args.includes('-h') || args.includes('--help')) usage(false)
+  if (!args.includes('--check')) usage(true)
+  const valueAfter = (flag) => {
+    const index = args.indexOf(flag)
+    return index >= 0 ? args[index + 1] : undefined
+  }
+  // Both overrides resolve against the repository root, matching the default paths
+  // (REV-A-7: relative --plugins-root must not silently depend on the caller's cwd).
+  const pluginsRoot = resolve(repoRoot, valueAfter('--plugins-root') ?? join(repoRoot, '..', '..', 'zDSH-plugins', 'ContextManagement'))
+  const authorityRoot = resolve(repoRoot, valueAfter('--authority-root') ?? repoRoot)
+  if (!existsSync(pluginsRoot)) {
+    console.error(`generate-plugin-snapshots: plugin repository not found at ${pluginsRoot}`)
+    console.error('Pass --plugins-root <path> (relative values resolve against the repository root) to point at zDSH-plugins/ContextManagement.')
+    process.exit(1)
+  }
+  if (!existsSync(authorityRoot)) {
+    console.error(`generate-plugin-snapshots: authority root not found at ${authorityRoot}`)
+    process.exit(1)
+  }
+  return { pluginsRoot, authorityRoot, strict: args.includes('--strict') }
+}
 
 const sha256 = (data) => createHash('sha256').update(data).digest('hex')
 
@@ -106,33 +156,34 @@ function listFiles(root, base) {
   return out.sort()
 }
 
-function parseArgs(args) {
-  const pluginRepo = pluginsRootOverride
-    ? resolve(process.cwd(), pluginsRootOverride)
-    : resolve(repoRoot, '..', '..', 'zDSH-plugins', 'ContextManagement')
-  if (!existsSync(pluginRepo)) {
-    console.error(`generate-plugin-snapshots: plugin repository not found at ${pluginRepo}`)
-    console.error('Pass --plugins-root <path> to point at zDSH-plugins/ContextManagement.')
-    process.exit(1)
-  }
-  return { pluginRepo }
-}
-
-/** Extract every `declare module '<name>' { interface <iface> { ... } }` event vocabulary. */
-function extractDeclaredEvents(source, moduleName, interfaceName, origin) {
-  const events = new Map()
-  const moduleRe = new RegExp(`declare\\s+module\\s+'${moduleName.replace(/[-/]/g, '\\$&')}'\\s*\\{`)
+/**
+ * Extract every `declare module '<name>' { interface <iface> { ... } }` event
+ * vocabulary. FAIL-LOUD (REV-A-1): a missing module block, a missing interface,
+ * or zero parsed events throws instead of returning an empty map — two empty
+ * maps must never compare equal. Single- and double-quoted module specifiers
+ * both parse.
+ */
+export function extractDeclaredEvents(source, moduleName, interfaceName, origin) {
+  const moduleRe = new RegExp(`declare\\s+module\\s+['"]${moduleName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}['"]\\s*\\{`)
   const moduleMatch = moduleRe.exec(source)
-  if (moduleMatch === null) return events
+  if (moduleMatch === null) {
+    throw new Error(`generate-plugin-snapshots: no 'declare module ${moduleName}' block found in ${origin}; the dual-declare same-shape gate cannot run on an unparseable file (fail-loud, REV-A-1)`)
+  }
   const moduleBody = balancedBlock(source, source.indexOf('{', moduleMatch.index), origin, 'declare module')
   const ifaceIndex = moduleBody.indexOf(`interface ${interfaceName}`)
-  if (ifaceIndex === -1) return events
+  if (ifaceIndex === -1) {
+    throw new Error(`generate-plugin-snapshots: 'interface ${interfaceName}' not found inside the 'declare module ${moduleName}' block of ${origin}; the dual-declare same-shape gate cannot run (fail-loud, REV-A-1)`)
+  }
   const ifaceBody = balancedBlock(moduleBody, moduleBody.indexOf('{', ifaceIndex), origin, `interface ${interfaceName}`)
-  const entryRe = /'([a-z0-9/-]+)'\s*:\s*\{/g
+  const events = new Map()
+  const entryRe = /['"]([a-z0-9/-]+)['"]\s*:\s*\{/g
   let entry
   while ((entry = entryRe.exec(ifaceBody)) !== null) {
     const payload = balancedBlock(ifaceBody, ifaceBody.indexOf('{', entry.index), origin, `event ${entry[1]}`)
     events.set(entry[1], parsePayloadKeys(payload, origin, entry[1]))
+  }
+  if (events.size === 0) {
+    throw new Error(`generate-plugin-snapshots: zero event entries parsed from 'interface ${interfaceName}' in ${origin}; refusing to compare an empty vocabulary (fail-loud, REV-A-1)`)
   }
   return events
 }
@@ -156,7 +207,7 @@ function balancedBlock(text, openIndex, origin, what) {
 /** Top-level `key: type` pairs of a payload block, comments stripped, whitespace collapsed.
  * Interface members are `key: type` lines (commas optional in TS), so keys are matched
  * per line and values stay on their own line — a greedy multi-line value would swallow
- * the following member and under-report the vocabulary. */
+ * the following member and under-report the vocabulary (Z10). */
 function parsePayloadKeys(payload, origin, eventName) {
   const body = payload.slice(1, -1)
   const clean = body
@@ -174,11 +225,11 @@ function parsePayloadKeys(payload, origin, eventName) {
   return keys
 }
 
-function assertDualDeclareSameShape() {
-  const declarations = DUAL_DECLARE_FILES.map((rel) => {
-    const source = readFileSync(join(repoRoot, rel), 'utf8')
-    return { rel, events: extractDeclaredEvents(source, DUAL_DECLARE_MODULE, DUAL_DECLARE_INTERFACE, rel) }
-  })
+export function assertDualDeclareSameShape(sources) {
+  const declarations = sources.map(({ rel, source }) => ({
+    rel,
+    events: extractDeclaredEvents(source, DUAL_DECLARE_MODULE, DUAL_DECLARE_INTERFACE, rel),
+  }))
   let ok = true
   const [first, ...rest] = declarations
   for (const other of rest) {
@@ -213,16 +264,49 @@ function assertDualDeclareSameShape() {
   return ok
 }
 
+function readDualDeclareSources(authorityRoot) {
+  return DUAL_DECLARE_FILES.map((rel) => ({ rel, source: readFileSync(join(authorityRoot, rel), 'utf8') }))
+}
+
+/**
+ * Reverse coverage (REV-A-4): authority files living in a mirror-covered directory
+ * without a snapshot counterpart. Scope = direct children of each directory that
+ * contains at least one mirrored/mapped authority file (recursive nesting below a
+ * covered directory is out of scope and would only add fixture noise), restricted
+ * to the comparable file class: package-local metadata (.json manifests, .md docs,
+ * .i18n.yaml pairing records) is excluded symmetrically with the forward
+ * EXCLUDED-CONFIG category. AUTHORITY-ONLY entries are informational — extending
+ * PLUGIN_TRACK_MAP / the mirror is a maintainer decision, so they do not fail
+ * --strict (harness-local files such as agent-loop/src/inbox.ts legitimately stay
+ * unmirrored); everything else still does.
+ */
+export function authorityOnlyEntries(authorityRoot, coveredDirs, knownAuthorityPaths) {
+  const out = []
+  for (const dir of [...coveredDirs].sort()) {
+    const full = join(authorityRoot, dir)
+    if (!existsSync(full)) continue
+    for (const entry of readdirSync(full, { withFileTypes: true })) {
+      if (!entry.isFile()) continue
+      if (/\.(json|md|i18n\.yaml)$/.test(entry.name)) continue
+      const rel = `${dir}/${entry.name}`
+      if (knownAuthorityPaths.has(rel)) continue
+      out.push(rel)
+    }
+  }
+  return out.sort()
+}
+
 function main() {
-  const { pluginRepo } = parseArgs(argv)
-  const mirrorRoot = join(pluginRepo, 'packages')
+  const { pluginsRoot, authorityRoot, strict } = parseArgs(process.argv.slice(2))
+  const mirrorRoot = join(pluginsRoot, 'packages')
 
   console.log('generate-plugin-snapshots --check')
-  console.log(`  authority : ${repoRoot}`)
-  console.log(`  snapshot  : ${pluginRepo}`)
+  console.log(`  authority : ${authorityRoot}`)
+  console.log(`  snapshot  : ${pluginsRoot}`)
   console.log('')
 
   const pairs = []
+  const coveredDirs = new Set()
   for (const rel of listFiles(mirrorRoot, mirrorRoot)) {
     if (rel.endsWith('.json')) {
       pairs.push({ snapshot: `packages/${rel}`, authority: `packages/${rel}`, category: 'EXCLUDED-CONFIG' })
@@ -235,10 +319,21 @@ function main() {
   }
   pairs.sort((a, b) => a.snapshot.localeCompare(b.snapshot))
 
-  const counts = { MATCH: 0, DRIFT: 0, 'MISSING-AUTHORITY': 0, 'EXCLUDED-CONFIG': 0, 'MISSING-SNAPSHOT': 0 }
+  const counts = {
+    MATCH: 0,
+    DRIFT: 0,
+    'MISSING-AUTHORITY': 0,
+    'MISSING-SNAPSHOT': 0,
+    'EXCLUDED-CONFIG': 0,
+    'AUTHORITY-ONLY': 0,
+    'PLUGIN-TRACK-UNMAPPED': 0,
+    'UNMAPPED-EXPECTED': 0,
+  }
+  const knownAuthorityPaths = new Set(pairs.map((pair) => pair.authority))
   for (const pair of pairs) {
-    const snapshotPath = join(pluginRepo, pair.snapshot)
-    const authorityPath = join(repoRoot, pair.authority)
+    coveredDirs.add(dirname(pair.authority).split(sep).join('/'))
+    const snapshotPath = join(pluginsRoot, pair.snapshot)
+    const authorityPath = join(authorityRoot, pair.authority)
     if (pair.category === 'EXCLUDED-CONFIG') {
       counts[pair.category]++
       console.log(`EXCLUDED-CONFIG ${pair.snapshot} (fork-scoped patch context; not compared)`)
@@ -267,15 +362,54 @@ function main() {
     }
   }
 
+  // Authority -> snapshot direction (REV-A-4): files this tree owns inside
+  // mirror-covered directories that the snapshot does not carry.
+  for (const rel of authorityOnlyEntries(authorityRoot, coveredDirs, knownAuthorityPaths)) {
+    counts['AUTHORITY-ONLY']++
+    console.log(`AUTHORITY-ONLY  ${rel} (authority file not present in the snapshot mirror)`)
+  }
+
+  // Snapshot plugin-track files outside PLUGIN_TRACK_MAP.
+  for (const trackDir of ['plugin/src', 'plugin/tests']) {
+    const full = join(pluginsRoot, trackDir)
+    if (!existsSync(full)) continue
+    const mapped = new Set(PLUGIN_TRACK_MAP.map(([snapshot]) => snapshot))
+    for (const entry of readdirSync(full, { withFileTypes: true })) {
+      if (!entry.isFile()) continue
+      const rel = `${trackDir}/${entry.name}`
+      if (mapped.has(rel)) continue
+      if (KNOWN_UNMAPPED_SNAPSHOT_FILES.has(rel)) {
+        counts['UNMAPPED-EXPECTED']++
+        console.log(`UNMAPPED-EXPECTED ${rel} (intentionally outside PLUGIN_TRACK_MAP; see its comment)`)
+      } else {
+        counts['PLUGIN-TRACK-UNMAPPED']++
+        console.log(`PLUGIN-TRACK-UNMAPPED ${rel} (snapshot plugin-track file absent from PLUGIN_TRACK_MAP)`)
+      }
+    }
+  }
+
   console.log('')
-  console.log(`Summary: ${counts.MATCH} match, ${counts.DRIFT} drift, ${counts['MISSING-AUTHORITY']} missing-authority, ${counts['MISSING-SNAPSHOT']} missing-snapshot, ${counts['EXCLUDED-CONFIG']} excluded-config`)
+  console.log(`Summary: ${counts.MATCH} match, ${counts.DRIFT} drift, ${counts['MISSING-AUTHORITY']} missing-authority, ${counts['MISSING-SNAPSHOT']} missing-snapshot, ${counts['EXCLUDED-CONFIG']} excluded-config, ${counts['AUTHORITY-ONLY']} authority-only, ${counts['PLUGIN-TRACK-UNMAPPED']} plugin-track-unmapped (${counts['UNMAPPED-EXPECTED']} unmapped-expected)`)
   console.log('Drift is reported only this wave; writeback generation is separately gated work (D7).')
 
-  const shapeOk = assertDualDeclareSameShape()
-  const driftFree = counts.DRIFT === 0 && counts['MISSING-AUTHORITY'] === 0 && counts['MISSING-SNAPSHOT'] === 0
+  const shapeOk = assertDualDeclareSameShape(readDualDeclareSources(authorityRoot))
+  // --strict gates the parity of the mapped/listed mirror set; AUTHORITY-ONLY is
+  // informational (see authorityOnlyEntries) and never fails the run.
+  const gaps = counts.DRIFT + counts['MISSING-AUTHORITY'] + counts['MISSING-SNAPSHOT'] + counts['PLUGIN-TRACK-UNMAPPED']
   if (!shapeOk) process.exit(1)
-  if (strict && !driftFree) process.exit(1)
+  if (strict && gaps > 0) process.exit(1)
   process.exit(0)
 }
 
-main()
+/* Run only when invoked as the entry script, so the spec can import the pure
+ * helpers (extractDeclaredEvents / assertDualDeclareSameShape) without triggering
+ * a check run or process.exit. */
+const invokedDirectly = process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+if (invokedDirectly) {
+  try {
+    main()
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : error)
+    process.exit(1)
+  }
+}
