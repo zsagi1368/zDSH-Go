@@ -35,9 +35,6 @@
     },
     {
       "path": "../compaction-tool-result-pruner"
-    },
-    {
-      "path": "../../llm/model-slots"
     }
   ]
 }
