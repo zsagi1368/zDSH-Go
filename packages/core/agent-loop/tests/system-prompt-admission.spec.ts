@@ -120,7 +120,7 @@ describe('prepared-route prompt admission', () => {
       expect(request.messages.filter(message => message.role === 'developer')).toEqual([])
     })
 
-    it.each(['explicit', 'replacement'] as const)('rebuilds prompt and declarations at a %s series start', async (reason) => {
+    it.each(['explicit', 'replacement'] as const)('retains prompt nodes and rebuilds declarations at a %s series start', async (reason) => {
       const h = await harness()
       h.capable.toolUpdate = toolUpdate
       await send(h.agent, 'first')
