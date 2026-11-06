@@ -81,4 +81,31 @@ describe('cacheMetrics reset-write cost ledger (B2 single authoritative ledger)'
     expect(apply(base, cacheLedgerEvent(Number.NaN))).toBe(base)
     expect(apply(base, cacheLedgerEvent(-5))).toBe(base)
   })
+
+  it('T3 L5-A isolation (D1P2 §5.3 ③): a cache/guard-observe event stream folds to the identical state', () => {
+    // 观测事件不进任何 fold 分支：apply 必须落到函数尾恒等返回——
+    // 记录 / 告警 / 分类结论不得触碰 Σ resetWriteTokens、命中率、压缩当量。
+    const guardObserveEvent = (attemptSeq: number): SessionEvent =>
+      ({
+        type: 'cache/guard-observe',
+        data: {
+          schemaVersion: 1,
+          attemptSeq,
+          wholeHash: `hash-${attemptSeq}`,
+          segments: {
+            systemHash: 's', toolsHash: 't', messagesHash: 'm',
+            messageHashes: ['a', 'b'], messageKinds: ['normal', 'class2'],
+          },
+          classified: true,
+          classId: 'class2-effort-synth',
+          monotonic: 'ok',
+          sharedPrefixCount: 1,
+          meta: { provider: 'p', api: 'anthropic-messages', modelId: 'm', bodyBytes: 128 },
+        },
+      }) as SessionEvent
+    const base = foldEvents([cacheLedgerEvent(1250)])
+    const guarded = [guardObserveEvent(1), guardObserveEvent(2)].reduce((state, event) => apply(state, event), base)
+    expect(guarded).toEqual(base)
+    expect(guarded).toBe(base)
+  })
 })

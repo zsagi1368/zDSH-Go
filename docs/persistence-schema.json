@@ -5452,6 +5452,341 @@
       }
     },
     {
+      "key": "event:cache/guard-observe",
+      "kind": "event",
+      "event": "cache/guard-observe",
+      "surface": false,
+      "digest": "6eef398d77ffd0e5dded6f83d89c6c9bd3989752b854b0c95f30df081345e4da",
+      "schema": {
+        "root": 0,
+        "nodes": [
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "data",
+                "type": 1,
+                "optional": false
+              },
+              {
+                "name": "ignorable",
+                "type": 3,
+                "optional": true
+              },
+              {
+                "name": "seq",
+                "type": 2,
+                "optional": false
+              },
+              {
+                "name": "time",
+                "type": 2,
+                "optional": false
+              },
+              {
+                "name": "type",
+                "type": 36,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "attemptSeq",
+                "type": 2,
+                "optional": false
+              },
+              {
+                "name": "chainGap",
+                "type": 3,
+                "optional": true
+              },
+              {
+                "name": "classId",
+                "type": 4,
+                "optional": true
+              },
+              {
+                "name": "classified",
+                "type": 9,
+                "optional": false
+              },
+              {
+                "name": "degraded",
+                "type": 10,
+                "optional": true
+              },
+              {
+                "name": "meta",
+                "type": 15,
+                "optional": false
+              },
+              {
+                "name": "monotonic",
+                "type": 17,
+                "optional": true
+              },
+              {
+                "name": "schemaVersion",
+                "type": 22,
+                "optional": false
+              },
+              {
+                "name": "segments",
+                "type": 23,
+                "optional": true
+              },
+              {
+                "name": "sharedPrefixCount",
+                "type": 2,
+                "optional": true
+              },
+              {
+                "name": "transition",
+                "type": 31,
+                "optional": true
+              },
+              {
+                "name": "wholeHash",
+                "type": 16,
+                "optional": true
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "primitive",
+            "type": "number"
+          },
+          {
+            "kind": "literal",
+            "value": true
+          },
+          {
+            "kind": "union",
+            "types": [
+              5,
+              6,
+              7,
+              8
+            ]
+          },
+          {
+            "kind": "literal",
+            "value": "class1-deferred-reorder"
+          },
+          {
+            "kind": "literal",
+            "value": "class2-effort-synth"
+          },
+          {
+            "kind": "literal",
+            "value": "class3-error-images"
+          },
+          {
+            "kind": "literal",
+            "value": "class4-strict-downgrade"
+          },
+          {
+            "kind": "primitive",
+            "type": "boolean"
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "reason",
+                "type": 11,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "union",
+            "types": [
+              12,
+              13,
+              14
+            ]
+          },
+          {
+            "kind": "literal",
+            "value": "hash-failed"
+          },
+          {
+            "kind": "literal",
+            "value": "non-string-body"
+          },
+          {
+            "kind": "literal",
+            "value": "parse-failed"
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "api",
+                "type": 16,
+                "optional": false
+              },
+              {
+                "name": "bodyBytes",
+                "type": 2,
+                "optional": false
+              },
+              {
+                "name": "modelId",
+                "type": 16,
+                "optional": false
+              },
+              {
+                "name": "provider",
+                "type": 16,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "primitive",
+            "type": "string"
+          },
+          {
+            "kind": "union",
+            "types": [
+              18,
+              19,
+              20,
+              21
+            ]
+          },
+          {
+            "kind": "literal",
+            "value": "unclassified"
+          },
+          {
+            "kind": "literal",
+            "value": "ok"
+          },
+          {
+            "kind": "literal",
+            "value": "ok-after-classification"
+          },
+          {
+            "kind": "literal",
+            "value": "ok-after-reset"
+          },
+          {
+            "kind": "literal",
+            "value": 1
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "messageHashes",
+                "type": 24,
+                "optional": false
+              },
+              {
+                "name": "messageKinds",
+                "type": 25,
+                "optional": false
+              },
+              {
+                "name": "messagesHash",
+                "type": 16,
+                "optional": false
+              },
+              {
+                "name": "systemHash",
+                "type": 16,
+                "optional": false
+              },
+              {
+                "name": "toolsHash",
+                "type": 16,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "array",
+            "element": 16
+          },
+          {
+            "kind": "array",
+            "element": 26
+          },
+          {
+            "kind": "union",
+            "types": [
+              27,
+              28,
+              29,
+              30
+            ]
+          },
+          {
+            "kind": "literal",
+            "value": "class1"
+          },
+          {
+            "kind": "literal",
+            "value": "class2"
+          },
+          {
+            "kind": "literal",
+            "value": "class3"
+          },
+          {
+            "kind": "literal",
+            "value": "normal"
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "kind",
+                "type": 32,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "union",
+            "types": [
+              33,
+              34,
+              35
+            ]
+          },
+          {
+            "kind": "literal",
+            "value": "reset-rewrite"
+          },
+          {
+            "kind": "literal",
+            "value": "route-change"
+          },
+          {
+            "kind": "literal",
+            "value": "compaction"
+          },
+          {
+            "kind": "literal",
+            "value": "cache/guard-observe"
+          }
+        ]
+      }
+    },
+    {
       "key": "event:cache/ledger",
       "kind": "event",
       "event": "cache/ledger",
@@ -22237,6 +22572,11 @@
       "sources": []
     },
     {
+      "digest": "03aeebb34da168432989b4bfe0e101b87a617c7a2032487ce326819609e08a7b",
+      "names": [],
+      "sources": []
+    },
+    {
       "digest": "045926475a46f625f84ae2be292b384817059f16927c69a9adab93717923ac19",
       "names": [
         "packages/session/session-title-llm/src/index.ts#SessionTitleLlmRequestEventData"
@@ -22263,6 +22603,11 @@
       "sources": [
         "packages/interaction/user-approval/src/index.ts:67"
       ]
+    },
+    {
+      "digest": "0652ec1eb6d381974214f7960eda1fb1229b11549ce3faf6f9588dbc04ae2fe7",
+      "names": [],
+      "sources": []
     },
     {
       "digest": "0657d3ca5ac4e7bf79b00bcf860b1c7159d01a9da137497221ec2f1776e365f7",
@@ -22377,6 +22722,11 @@
       ]
     },
     {
+      "digest": "0df48e835ec5a9ce312e390feb4e39d0e0795b9a8757ab383d69982c19373115",
+      "names": [],
+      "sources": []
+    },
+    {
       "digest": "0e10d7c096b47e61defe372a5fc8bd37d835199410eac44367f95c45082498bd",
       "names": [],
       "sources": []
@@ -22433,6 +22783,11 @@
       "sources": []
     },
     {
+      "digest": "1138722cea6cb1991111abd27640fceaf700c656aa31cba60b22af7d9fde246e",
+      "names": [],
+      "sources": []
+    },
+    {
       "digest": "11638dc58a31496fb6706ced3e23e3a2db1f3b2a8845968c810827a72b5fc811",
       "names": [],
       "sources": []
@@ -22458,6 +22813,11 @@
     },
     {
       "digest": "12a0cfa619ac4a5fc6c3e8e359c8dae15769edc61497a575935c78d5842f8e42",
+      "names": [],
+      "sources": []
+    },
+    {
+      "digest": "12c25bc5645335f957eed0d3304b064990f7fc412283c3da3b0098718f6cf581",
       "names": [],
       "sources": []
     },
@@ -22523,6 +22883,15 @@
       "sources": []
     },
     {
+      "digest": "167797bcd6159c4c15074b526f3806a393b2c1d5498c8954907cf43cc1ffaed8",
+      "names": [
+        "packages/llm/llm/src/types.ts#LlmGuardMessageKind"
+      ],
+      "sources": [
+        "packages/llm/llm/src/types.ts:517"
+      ]
+    },
+    {
       "digest": "16d0507cb94b4cfc84a87446b1ba7652d6ec1d65ee1684789e747e30d542800e",
       "names": [],
       "sources": []
@@ -22538,6 +22907,11 @@
       "sources": [
         "packages/core/session/src/types.ts:427"
       ]
+    },
+    {
+      "digest": "1899aaad7ff2a605fda29fb12730e8fb32b103dbfb2a4d9c792ad041fd5ae210",
+      "names": [],
+      "sources": []
     },
     {
       "digest": "18dc21f12bbac8ade8377e6fbb54179e20c3d955d73fba3244c57fb6bf001df0",
@@ -22556,6 +22930,11 @@
       "sources": [
         "packages/session/session-persistence-jsonl/src/format.ts:83"
       ]
+    },
+    {
+      "digest": "18f876cbc80cab816782dd49fddabf186cda14f883c83d1ad8aa0d70fa4c8e9a",
+      "names": [],
+      "sources": []
     },
     {
       "digest": "18fcdd273a2f2f9d813a3be5e71df5903a963a5c88e46b90b14de6e2db890da0",
@@ -22620,6 +22999,11 @@
     },
     {
       "digest": "1c5a58f4599bd4a9711712551ffe2442a5e5fcd0758bafe630cc4ead850bdaa7",
+      "names": [],
+      "sources": []
+    },
+    {
+      "digest": "1c985031ca7dd90f11b1c090f43afccfbbfe09b5c87cda8ba42af6aca333dd9b",
       "names": [],
       "sources": []
     },
@@ -23013,6 +23397,11 @@
       "sources": []
     },
     {
+      "digest": "35eeffdfccff43907888dd03560e1de554c23cf6a5e547294e8162ecb91c5a80",
+      "names": [],
+      "sources": []
+    },
+    {
       "digest": "36d6a9a871d949ea4f3edd919d81d66aa69218bebef38899d2a1282c39420a1f",
       "names": [],
       "sources": []
@@ -23171,7 +23560,17 @@
       ]
     },
     {
+      "digest": "400d254939d07f7bd88c1c260ffd5fda6581fe8f3aaf87a081a11ad3b7fe3f83",
+      "names": [],
+      "sources": []
+    },
+    {
       "digest": "408927267422a7b2beb6df354ff7c1406d929a5646554f48adf85eb8372f811c",
+      "names": [],
+      "sources": []
+    },
+    {
+      "digest": "4195b2f3edb24fac96cbf3a9d1f0b004885c00e91f699e404bc8ee5687022dc8",
       "names": [],
       "sources": []
     },
@@ -23179,6 +23578,13 @@
       "digest": "4208123b50df5006b181481ab45fcf1cde807b88d3fd4d340090bc2e202fac41",
       "names": [],
       "sources": []
+    },
+    {
+      "digest": "428fadb691d8ebdbaa195ade26c4bb8bbdf2327115889f47cabd0af4bd9c4d3d",
+      "names": [],
+      "sources": [
+        "packages/llm/llm/src/types.ts:587"
+      ]
     },
     {
       "digest": "42e0916e0dda5f6d1e7bb05d8514717147c036a79c9f36085683469516c1fd3f",
@@ -23222,6 +23628,15 @@
       ]
     },
     {
+      "digest": "46d7c8f6b6cdf4931abe804ebe0d0b412f98f34e6e92c2ba7aeb55d43d0f6344",
+      "names": [
+        "packages/llm/llm/src/types.ts#LlmGuardObserveDegraded"
+      ],
+      "sources": [
+        "packages/llm/llm/src/types.ts:534"
+      ]
+    },
+    {
       "digest": "477614bca595a9e7adb5a1870be446b9a8684f3ba8950259d6289f2d3b74f028",
       "names": [],
       "sources": [
@@ -23250,6 +23665,11 @@
       ]
     },
     {
+      "digest": "48dce42bf9f29c1479029a9150322ea1092becd585f27a3ae40a1929ec9beda1",
+      "names": [],
+      "sources": []
+    },
+    {
       "digest": "48e5c9861f16ac07e78cb7b5ae9dabdf7bb85c58baed5a51b4ad275050ea58e3",
       "names": [],
       "sources": []
@@ -23266,6 +23686,11 @@
     },
     {
       "digest": "49dab019d00e8c26f27ad2ccff7b604d69e323ae4d17e0d2a7b6b8a830b1ade2",
+      "names": [],
+      "sources": []
+    },
+    {
+      "digest": "49ed99b84a237a6bb80a492c49c35e913b97eb4f9d1c0655efe7602bdbab2712",
       "names": [],
       "sources": []
     },
@@ -23597,6 +24022,11 @@
       ]
     },
     {
+      "digest": "5b9c1dc56d59fbbb5ed9d1eac71e5ee95b597a1c1e128a741f00951d189c6938",
+      "names": [],
+      "sources": []
+    },
+    {
       "digest": "5bb69b88517f6214f2af4d1a6d2b771e271ad3ad695cc9c2c272069ae698c9bc",
       "names": [],
       "sources": []
@@ -23613,6 +24043,11 @@
     },
     {
       "digest": "5c45bf4c544a7211dcd8ba6ba7e5f1bc39b49e7a9df9d5cbdc8e87c22771b37b",
+      "names": [],
+      "sources": []
+    },
+    {
+      "digest": "5ca20d58bec988277bf08e1114352fef955c048e7cb9977819b21d88c6dc1f8f",
       "names": [],
       "sources": []
     },
@@ -23654,6 +24089,15 @@
       "sources": []
     },
     {
+      "digest": "5ea033520e6b079858a7a6b3e2a67b72db3959e8ad0841e594063237ceefd45b",
+      "names": [
+        "packages/llm/llm/src/types.ts#LlmGuardObserveEvent"
+      ],
+      "sources": [
+        "packages/llm/llm/src/types.ts:583"
+      ]
+    },
+    {
       "digest": "5ebce1317eacd2c148456627a09668e927ee15c204f0643f5ea76b46b54a2647",
       "names": [],
       "sources": []
@@ -23688,6 +24132,11 @@
     },
     {
       "digest": "611cae9a3539733aa0c42f66035a7d90f19dcbbdfb5d9e3b628b13705253942d",
+      "names": [],
+      "sources": []
+    },
+    {
+      "digest": "612d8348b50771a7c8c2648c288fd38128e34d960e71f4d9e836a8da29a4bc5c",
       "names": [],
       "sources": []
     },
@@ -23854,7 +24303,7 @@
       "digest": "6e3bd07c92c4e0d6445c80c9c9df001688fc1e7f2ca62f9645eb7ed282beaa4c",
       "names": [],
       "sources": [
-        "packages/llm/token-meter/src/cache-metrics.ts:32"
+        "packages/llm/token-meter/src/cache-metrics.ts:41"
       ]
     },
     {
@@ -23871,6 +24320,11 @@
     },
     {
       "digest": "6ebcc2dbec9f2dabca9f668ae6d39e877899b180740570f453409db339221df3",
+      "names": [],
+      "sources": []
+    },
+    {
+      "digest": "6eef398d77ffd0e5dded6f83d89c6c9bd3989752b854b0c95f30df081345e4da",
       "names": [],
       "sources": []
     },
@@ -23939,6 +24393,15 @@
       ]
     },
     {
+      "digest": "722d3e5fc8d3310e9c7431efcfa3ee9a72c1740aac6465452aefce7cbb896745",
+      "names": [
+        "packages/llm/llm/src/types.ts#LlmGuardObserveMeta"
+      ],
+      "sources": [
+        "packages/llm/llm/src/types.ts:539"
+      ]
+    },
+    {
       "digest": "72ec79127a9c0d0241b1106a74cc2b24c81ce467170f1c3c93f7b71a9496d227",
       "names": [],
       "sources": []
@@ -23970,6 +24433,11 @@
     },
     {
       "digest": "76632533f67879dcb346fcae640540dbc89b2472b0bce88c59f7e48fc5c0e668",
+      "names": [],
+      "sources": []
+    },
+    {
+      "digest": "76854e023a5d1dfb6cc6ef464a6aeff27ac6a89665a12e74022924fbc5ae60ca",
       "names": [],
       "sources": []
     },
@@ -24774,7 +25242,21 @@
       "sources": []
     },
     {
+      "digest": "ad292ad995232e43c2b95e92bf5a6a21d24e1d8d7ae37b100ee9916ecbc53cc0",
+      "names": [
+        "packages/llm/llm/src/types.ts#LlmGuardObserveSegments"
+      ],
+      "sources": [
+        "packages/llm/llm/src/types.ts:520"
+      ]
+    },
+    {
       "digest": "ad3b56aa2fc1ad4250e7399295d34a8eae592e1907e85852e2291b2e498a30bc",
+      "names": [],
+      "sources": []
+    },
+    {
+      "digest": "ad3d043529cbf809f939d25c82afa8ff7695e8208812bfa51fba2c7b2442997f",
       "names": [],
       "sources": []
     },
@@ -25418,6 +25900,11 @@
       "sources": []
     },
     {
+      "digest": "dc47bebc4b7a338be813c330e78f7c4d3dcb08c26016797ba5194de0f1415a95",
+      "names": [],
+      "sources": []
+    },
+    {
       "digest": "dd2780e7e07684332f7a9ab047237798d260e7eaffb1321cb38eca695d184c3d",
       "names": [],
       "sources": []
@@ -25468,6 +25955,11 @@
     },
     {
       "digest": "e0a787e6ec76c7c94fecbc501b489164ab0293db05bc947914077ad01e674f05",
+      "names": [],
+      "sources": []
+    },
+    {
+      "digest": "e18592fa5fceb05e96fbcc44271ab36deb8b7b9179bea8ac28b322813cde2e62",
       "names": [],
       "sources": []
     },
@@ -25551,6 +26043,11 @@
     },
     {
       "digest": "e6411b09c1d982f789bf741ca74e2bea69df56029847f86a6148e722039ee732",
+      "names": [],
+      "sources": []
+    },
+    {
+      "digest": "e649f8f89377afa88fc0c4be59ebff2f773b6c439f974d242efab6d0fa8769c4",
       "names": [],
       "sources": []
     },
@@ -25741,6 +26238,15 @@
       ]
     },
     {
+      "digest": "f3a67428c66d51fca39ef7ad9e732d234e291578844a1740a6c03f1d74dbbdb4",
+      "names": [
+        "packages/llm/llm/src/types.ts#LlmGuardObserveTransitionKind"
+      ],
+      "sources": [
+        "packages/llm/llm/src/types.ts:575"
+      ]
+    },
+    {
       "digest": "f4a66f654996c093aae700ea4c434ff2ee3569fea9c0e5813ccf6afdccabd163",
       "names": [],
       "sources": []
@@ -25800,6 +26306,11 @@
     },
     {
       "digest": "f789af5ab844827eb5a4f357c0afae1eeed108c6c22d8ca1a56e586b349a7c85",
+      "names": [],
+      "sources": []
+    },
+    {
+      "digest": "f7bdd56d408f4a293fc0de3e4f3b2f89fddb543692ae1ee2b22cbf57286746db",
       "names": [],
       "sources": []
     },

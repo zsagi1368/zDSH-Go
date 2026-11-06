@@ -22,6 +22,10 @@
       "types": "./lib/types/cache-guardian.d.ts",
       "default": "./lib/types/cache-guardian.js"
     },
+    "./guard-observe": {
+      "types": "./lib/types/guard-observe.d.ts",
+      "default": "./lib/types/guard-observe.js"
+    },
     "./src/*": "./src/*",
     "./package.json": "./package.json"
   },

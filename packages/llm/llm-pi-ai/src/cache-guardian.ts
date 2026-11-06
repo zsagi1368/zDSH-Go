@@ -48,6 +48,13 @@
  * 6. strict 工具 schema 的顶层附加键与 strict 标记被 {properties,required}
  * 过滤剔除（仅 compat.supportsStrictTools 生效时出现，模型变化由
  * modelChange 事件覆盖）。
+ * 7. **role:'system' 消息不建模**（T3 F1 卫生项，P-D1-4/5）：镜像不承诺
+ * 1.3.0 忠实——1.3.0 起 system 更新以 role:'system' 消息进 wire（deferred
+ * 重排 / effort 合成），normalizeMessage 对该角色返回 null（不进哈希，
+ * 防误用把 system 消息误判为 toolResult 而产出坏形态）；wire 侧形态由
+ * T3 L5-A wire 观测层（wire-observe，`@deepseek-ai/dsh-llm-pi-ai/guard-observe`）
+ * 以 messageKinds 承载。镜像对 1.3.0 wire 的忠实度不在此声明，定位以
+ * T3 落地登记为准（本条即登记）。
  */
 
 import { createHash } from 'node:crypto'
@@ -253,6 +260,13 @@ function normalizeToolResultContent(
  */
 export function normalizeMessage(message: PiMessage, options?: NormalizeOptions): unknown {
   const allowEmptySignature = options?.allowEmptySignature ?? false
+  if (message.role === 'system') {
+    // F1 卫生项（未建模清单第 7 条，T3 落地）：1.3.0 的 deferred 重排与
+    // effort 合成让 role:'system' 消息可进入消息历史；本镜像不建模该角色，
+    // 返回 null（不进哈希）。定位 = 防误用 crash（否则落到下方 toolResult
+    // 分支产出坏形态），非接线前提——wire 侧形态由 wire 观测层承载。
+    return null
+  }
   if (message.role === 'user') {
     const userMessage = message
     if (typeof userMessage.content === 'string') {

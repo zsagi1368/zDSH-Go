@@ -16,7 +16,7 @@ import type {
   RequestErrorAction,
 } from '@deepseek-ai/dsh-agent'
 import { agentEvents, assembleContextFor } from '@deepseek-ai/dsh-agent'
-import type { GenerateOptions, LlmCallConfig, Message, PreparedLlmCall } from '@deepseek-ai/dsh-llm'
+import type { GenerateOptions, LlmCallConfig, LlmGuardObserveCapture, LlmGuardObserveEvent, Message, PreparedLlmCall } from '@deepseek-ai/dsh-llm'
 import {
   LlmError,
   TRUNCATED_TOOL_CALL_CODE,
@@ -44,6 +44,7 @@ import {
 } from '@deepseek-ai/dsh-llm-pi-ai/cache-guardian'
 import type { Context } from '@deepseek-ai/cordis'
 import { ReactLoopInbox } from './inbox.ts'
+import { GuardObserver } from './guard-observe.ts'
 import { RuntimeContextProjection, type DeltaResetSink } from './runtime-context.ts'
 import { AssistantStreamAttempt } from './assistant-stream.ts'
 import { SystemPromptProjection } from './runtime-context.ts'
@@ -76,6 +77,17 @@ declare module '@deepseek-ai/dsh-session/types' {
        */
       resetWriteCost: number
     }
+    /**
+     * T3 L5-A wire-body guard 观测事件（observe-only，D1P2-whitelist-design
+     * §2.2）：每次 fetch attempt 一条 log-only 记录，承载 wire 字节事实
+     * （整包/三段哈希、逐条消息哈希与形态标签）、链式分类结论（四类已知
+     * 合法形态 / 三类合法转场 / 未分类）、前缀保留测量与 A7 降级计数。
+     * 分类判定过审前不产生 reset 判定事件（§1.1）：本事件不进
+     * `MESSAGE_PROJECTION_EVENT_TYPES`、不被任何投影 fold 分支消费（§5
+     * 台账隔离三通道），model 不可见；观测域 = 绑定会话的主链 stream，
+     * one-shot/subagent 流不带 sink、零记录。
+     */
+    'cache/guard-observe': LlmGuardObserveEvent
   }
 }
 
@@ -228,6 +240,8 @@ export class ReactLoopAgent implements Agent {
    */
   private totalResetWriteCost = 0
   private readonly systemPrompt: SystemPromptProjection
+  /** T3 L5-A wire-observation sink maintainer; present only when the agent opted in via `guardObserve`. */
+  private readonly guardObserver: GuardObserver | undefined
   /** Identities fully frozen by this loop; weak references do not retain replaced history. */
   private readonly frozenMessages = new WeakSet<Message>()
 
@@ -278,6 +292,15 @@ export class ReactLoopAgent implements Agent {
       resetSink,
       deferFoldAfterToolResult: shouldDeferFoldAfterToolResult(this.cacheProvider()),
     })
+    // T3 L5-A（观测域 = 绑定会话的主链，D1P2 §2.1）：仅在 agent 选项显式
+    // opt-in 时装观测 sink；one-shot 流不经 agent，subagent 驱动不 opt-in，
+    // 二者零记录。链状态纯进程内：resume 后首条记录即 RECORD_ONLY。
+    this.guardObserver = this.options.guardObserve === true
+      ? new GuardObserver(session, (message) => {
+        // oxlint-disable-next-line typescript/no-unnecessary-condition -- logger is ambient on every live composition root.
+        this.loopCtx.logger?.warn(`agent "${this.id}": ${message}`)
+      })
+      : undefined
     this.systemPrompt = new SystemPromptProjection(session)
   }
 
@@ -901,12 +924,18 @@ export class ReactLoopAgent implements Agent {
       this.frozenMessages.add(message)
     }
     Object.freeze(boundaryMessages)
+    const guardObserver = this.guardObserver
     const request = markAgentLoopRequest(Object.freeze({
       ...header.config,
       messages: boundaryMessages,
       toolHistory: session.toolHistory(),
       ...header.tools !== undefined ? { tools: header.tools } : {},
       sessionId: this.session.id,
+      // T3 L5-A: the session-bound main chain carries the observation sink
+      // when this agent opted in. The adapter installs its wrapper only when
+      // its own guardObserve switch is also on, so an opted-in chain under the
+      // default-off switch stays byte-identical to the baseline.
+      ...guardObserver === undefined ? {} : { onGuardObserve: (capture: LlmGuardObserveCapture) => { guardObserver.observe(capture) } },
       signal,
     }))
     return request

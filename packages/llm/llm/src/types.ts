@@ -507,6 +507,88 @@ export interface ToolHistory {
   }[]
 }
 
+/**
+ * Wire-form label for one observed request message (T3 L5-A wire observation,
+ * D1P2-whitelist-design §2.2 `messageKinds`). `class1` marks the deferred
+ * system-update form pi-ai flushes around assistant boundaries, `class2` the
+ * managed-effort synthetic system message, `class3` the error toolResult image
+ * split; everything else is `normal`.
+ */
+export type LlmGuardMessageKind = 'normal' | 'class1' | 'class2' | 'class3'
+
+/** Three-segment hash capture of one attempt's wire body (D1P2 §2.2 `segments`). */
+export interface LlmGuardObserveSegments {
+  /** SHA-256 hex of `params.system` after cache_control stripping. */
+  systemHash: string
+  /** SHA-256 hex of `params.tools` after cache_control stripping. */
+  toolsHash: string
+  /** SHA-256 hex of the whole stripped `params.messages` array. */
+  messagesHash: string
+  /** Per-message SHA-256 hex (stableStringify, stripped; class-2 messages stay in place). */
+  messageHashes: string[]
+  /** Wire-form label per message; same length and order as {@link messageHashes}. */
+  messageKinds: LlmGuardMessageKind[]
+}
+
+/** Why one attempt produced no comparable capture (D1P2 §6 A7 paths). */
+export interface LlmGuardObserveDegraded {
+  reason: 'parse-failed' | 'non-string-body' | 'hash-failed'
+}
+
+/** Request identity carried by every observation record (D1P2 §2.2 `meta`). */
+export interface LlmGuardObserveMeta {
+  provider: string
+  api: string
+  modelId: string
+  bodyBytes: number
+}
+
+/**
+ * One attempt's wire capture, produced by the adapter's hash-then-passthrough
+ * fetch wrapper and delivered synchronously to the host sink at fetch time
+ * (D1P2 §2.1). Absent `segments` means the attempt yielded no comparable
+ * capture: an A7 degradation, or the whole-package fallback for a body this
+ * surface does not three-segment.
+ */
+export interface LlmGuardObserveCapture {
+  schemaVersion: 1
+  /** 1-based attempt counter inside one logical request (per-wrapper closure). */
+  attemptSeq: number
+  /** SHA-256 hex of the raw wire body; absent only on a hash-failed or non-string capture. */
+  wholeHash?: string
+  segments?: LlmGuardObserveSegments
+  degraded?: LlmGuardObserveDegraded
+  meta: LlmGuardObserveMeta
+}
+
+/** Known-legal wire classes an observation record can be labeled with (D1P2 §4). */
+export type LlmGuardObserveClassId =
+  | 'class1-deferred-reorder'
+  | 'class2-effort-synth'
+  | 'class3-error-images'
+  | 'class4-strict-downgrade'
+
+/** Chain-comparison outcome of one segmented record (D1P2 §2.2 `monotonic`). */
+export type LlmGuardObserveMonotonic = 'ok' | 'ok-after-classification' | 'ok-after-reset' | 'unclassified'
+
+/** Known-legal context rewrite a transition-guard record is labeled with (D1P2 §4.5). */
+export type LlmGuardObserveTransitionKind = 'compaction' | 'reset-rewrite' | 'route-change'
+
+/**
+ * The `cache/guard-observe` session event payload: one attempt's capture plus
+ * the host-side classification. Log-only — not in
+ * `MESSAGE_PROJECTION_EVENT_TYPES`, consumed by no projection fold branch
+ * (D1P2 §5 ledger isolation).
+ */
+export interface LlmGuardObserveEvent extends LlmGuardObserveCapture {
+  classified: boolean
+  classId?: LlmGuardObserveClassId
+  monotonic?: LlmGuardObserveMonotonic
+  transition?: { kind: LlmGuardObserveTransitionKind }
+  chainGap?: true
+  sharedPrefixCount?: number
+}
+
 /** A single model request, fully assembled. */
 export interface GenerateOptions {
   /** Registered provider route selecting the adapter instance. */
@@ -550,4 +632,13 @@ export interface GenerateOptions {
    * requests leave it unset.
    */
   purpose?: 'compaction' | 'session-title'
+  /**
+   * Session-bound main-chain wire-observation sink (T3 L5-A, observe-only).
+   * When the llm-pi-ai `guardObserve` switch is on, the adapter wraps this
+   * request's fetch with a hash-then-passthrough wrapper and invokes the sink
+   * synchronously once per attempt with the wire capture (D1P2 §2.1). One-shot
+   * and subagent requests leave it unset, and no sink means no wrapper and
+   * zero observation records — the pass-through invariant is the absence.
+   */
+  onGuardObserve?: (capture: LlmGuardObserveCapture) => void
 }

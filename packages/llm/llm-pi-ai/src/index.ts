@@ -13,6 +13,10 @@
  * - id: llm
  *   name: '@deepseek-ai/dsh-llm-pi-ai'
  *   config:
+ *     # T3 L5-A wire-body guard observation (observe-only; off by default).
+ *     # Requires the session-bound main chain to carry a sink (AgentOptions
+ *     # `guardObserve`) and pi-ai >= 1.3.0 (asserted fail-loud on enable).
+ *     guardObserve: false
  *     providers:
  *       # Catalog route: everything but the credential comes from pi-ai.
  *       openai:
@@ -89,6 +93,27 @@ export type {
 } from './config.ts'
 export { recordKeyFor } from './auth.ts'
 export { supportedProtocols } from './provider.ts'
+export {
+  assertGuardObserveSupport,
+  buildGuardSegments,
+  classifyDeferredReorder,
+  classifyGuardObserve,
+  createGuardFetchWrapper,
+  isMessagesCreateBody,
+  recognizeDeferredReorderSystem,
+  recognizeEffortSynth,
+  recognizeErrorImageSplit,
+  recognizeMessageKind,
+  stripCacheControl,
+} from './guard-observe.ts'
+export type {
+  AttemptEqualityVerdict,
+  DeferredReorderResult,
+  GuardFetchWrapperArgs,
+  GuardObserveChainRecord,
+  GuardObserveChainView,
+  GuardObserveDecision,
+} from './guard-observe.ts'
 
 export const name = 'llm-pi-ai'
 export const inject = ['llm']
@@ -213,6 +238,7 @@ export function apply(ctx: Context, config: Config): void {
     profiles,
     resolveApiKey,
     auth,
+    guardObserve: () => config.guardObserve.get() === true,
     resolveAttachments: () => ctx.get('attachments'),
     resolveImageAccess: (attachments, ref) => resolveImageAttachmentAccess(
       attachments,
