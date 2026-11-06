@@ -54,6 +54,9 @@ export function pruningFromMeta(meta: unknown): ToolResultPruning | undefined {
 /**
  * Derive a tool-result byte cap from a budget toolCap token limit.
  * The design's L3 rule: 字节上限 = toolCap × 3.5 字符 (UTF-8 bytes).
+ * Consumer note: the cap is applied on a **code-point domain** by the pruner
+ * (`byteCapPerResult`), which under-counts multi-byte content (CJK ≈3×) — a
+ * fail-safe bias (may prune less, never more). See CTX-IMP-20261104 T4 evidence §3-4.
  * @param toolCapTokens - single tool-result token cap from the budget table.
  * @returns the UTF-8 byte cap (`floor(toolCap × 3.5)`), at least 1.
  */
