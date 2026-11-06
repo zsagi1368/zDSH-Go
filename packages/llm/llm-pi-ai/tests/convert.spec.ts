@@ -723,8 +723,11 @@ describe('toStreamChunks', () => {
     const requested = getBuiltinModels('anthropic').find(model => model.id === requestedModel)
     if (requested === undefined) throw new Error('missing Anthropic catalog model')
     expect(transformMessages(context.messages, requested)[0]).toMatchObject({ content: native.content })
+    // pi-ai 1.3.0 drops cross-model thinking instead of degrading it to text:
+    // signatures only replay on their producing model, and readable thinking
+    // sent as plain text would read as part of the visible reply.
     expect(transformMessages(context.messages, { ...requested, id: 'other-model' })[0]).toMatchObject({
-      content: [{ type: 'text', text: 'reason' }],
+      content: [],
     })
   })
 
