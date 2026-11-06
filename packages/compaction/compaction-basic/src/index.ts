@@ -11,6 +11,10 @@ import type { CompactionResult, CompactionTrigger } from '@deepseek-ai/dsh-compa
 import type { EpochHeader, Session, SessionSeq } from '@deepseek-ai/dsh-session'
 import { CONTEXT_WINDOW_EXCEEDED_CODE, LlmError } from '@deepseek-ai/dsh-llm'
 import type { LlmCallConfig } from '@deepseek-ai/dsh-llm'
+// The L3 per-result byte cap follows the routed model's budget row so declared
+// results honor the same toolCap the trigger and retention math derive from.
+import { DEFAULT_OUTPUT_CAP, computeBudget } from '@deepseek-ai/dsh-model-slots'
+import { toolCapToByteLimit } from '@deepseek-ai/dsh-tools'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 import type { Agent, PreStepDecision } from '@deepseek-ai/dsh-agent'
 import type { CommandId } from '@deepseek-ai/dsh-commands/brand'
@@ -342,9 +346,20 @@ export class BasicCompactionEngine extends CompactionEngine {
     if (measurement.totalTokens < spec.thresholdTokens) return null
 
     // Once pressure qualifies, land the model-free pass before choosing a
-    // summary range, then remeasure through the singleton replay fold.
+    // summary range, then remeasure through the singleton replay fold. Results
+    // declaring `l3.pruning` are capped by the routed model's budget toolCap
+    // (CONTEXT-CACHE-MANAGEMENT.md §2 L3, via toolCapToByteLimit) with the same
+    // request-factual output budget `reservedCompletionTokens` resolves; the
+    // context-overflow trigger keeps the uniform threshold because no budget is
+    // resolved on that recovery path.
     if (prune !== undefined) {
-      prune.pruneSession(agent.session)
+      const budget = computeBudget(
+        info.context.contextWindow,
+        header.config.maxTokens ?? info.defaultMaxTokens ?? DEFAULT_OUTPUT_CAP,
+      )
+      prune.pruneSession(agent.session, {
+        byteCapPerResult: toolCapToByteLimit(budget.toolCap),
+      })
       measurement = meter.measure(agent.session, header)
     }
     if (measurement.totalTokens < spec.thresholdTokens) return null

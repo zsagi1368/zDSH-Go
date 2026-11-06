@@ -228,23 +228,36 @@ measureContent(blocks: readonly ContentBlock[]): number
  * Text slicing is by Unicode code point, not UTF-16 code unit, so a retained
  * boundary cannot split a surrogate pair. Grapheme clusters may still split.
  * @param blocks - original tool-result content.
+ * @param limitChars - effective threshold in Unicode code points; defaults
+ *   to the configured `thresholdChars`.
  * @returns pruned content, or `null` when the text is within budget.
+ * @throws when the budget cannot produce a strictly smaller replacement
+ *   within `limitChars` (a caller limit below `headChars + marker +
+ *   tailChars`).
  */
-pruneContent(blocks: readonly ContentBlock[]): ContentBlock[] | null
+pruneContent(blocks: readonly ContentBlock[], limitChars: number = this.config.thresholdChars): ContentBlock[] | null
 
 /**
  * Prune every over-budget tool result from one stable current-surface snapshot.
- * Each replacement preserves the complete event data except for `content`,
- * cites the shadowed node so replay can recover the replacement input, and is
- * immediately preceded by a `compaction/prune` shadow-price event pricing the
- * shadowed node through the injected token meter, so pure consumers can
- * subtract it without per-node state.
+ * Results carrying an `l3.pruning` declaration follow that vocabulary instead
+ * of the uniform threshold: a `prunable: false` result is exempt from
+ * pruning entirely, and a prunable one is capped by `opts.byteCapPerResult`
+ * (applied as the Unicode-code-point threshold; the L3 rule derives it as
+ * `toolCapToByteLimit(toolCap)`). Undeclared results keep the configured
+ * `thresholdChars`, so passes without declarations behave exactly like the
+ * uniform pruner. Each replacement preserves the complete event data except
+ * for `content`, cites the shadowed node so replay can recover the
+ * replacement input, and is immediately preceded by a `compaction/prune`
+ * shadow-price event pricing the shadowed node through the injected token
+ * meter, so pure consumers can subtract it without per-node state.
  * @param session - session whose current surface is rewritten.
+ * @param opts - optional per-pass budgets; omitted budgets keep the
+ *   configured thresholds.
  * @returns landed replacements and aggregate Unicode-code-point savings.
  * @throws when the session rejects a replacement; replacements committed
  * earlier in the pass remain durable.
  */
-pruneSession(session: Session): PruneResult
+pruneSession(session: Session, opts: PruneSessionOptions = {}): PruneResult
 ```
 
 Types: [ContentBlock](llm-streaming.zh.md) · [Session](session.zh.md)

@@ -88,6 +88,15 @@ function appendCompactionSummary(session: Session, shadowedTokenCount: number): 
   })
 }
 
+/** Append a compaction/prune shadow-price event with a given token count. */
+function appendCompactionPrune(session: Session, shadowedTokenCount: number): void {
+  session.append('compaction/prune', {
+    shadowedRange: { start: SessionSeq(0), end: SessionSeq(0) },
+    shadowedSeqs: [SessionSeq(0)],
+    shadowedTokenCount,
+  })
+}
+
 describe('cacheMetrics projection', () => {
   it('serves zeros for an empty log', async () => {
     const { ctx, session } = await harness()
@@ -247,6 +256,40 @@ describe('cacheMetrics projection', () => {
     // Hit rate already computed; no compaction yet
     expect(mBefore.compressionEquivalenceRounds).toBe(0)
     expect(compressionEquivalenceWithinBudget(mBefore)).toBe(true)
+  })
+
+  // Spec pin (P-D2-1, CTX-IMP-20261104): model-free prune replacements join the
+  // compression-equivalence ledger. A later summary only prices the already
+  // pruned replacement, so the two shadow-price sources add up without
+  // double-counting the original mass.
+  it('folds compaction/prune shadow prices into the compression-equivalence ledger', async () => {
+    const { ctx, session } = await harness()
+    appendHeader(session, 'initial')
+    appendAssistant(session, 1, 1, { inputTokens: 1000, outputTokens: 500 }) // warm-up
+    appendHeader(session, 'resume')
+    appendAssistant(session, 2, 1, { inputTokens: 1000, outputTokens: 500 }) // main-chain
+    appendCompactionPrune(session, 600)
+    const m = projected(ctx, session)
+    expect(m.compactionEvents).toBe(1)
+    expect(m.compactionInputTokens).toBe(600)
+    // avgMainInput = 1000 / 1 = 1000; equivalenceRounds = 600 / 1000 = 0.6
+    expect(m.compressionEquivalenceRounds).toBeCloseTo(0.6, 10)
+  })
+
+  it('folds summary and prune shadow prices additively and skips zero-shadow prunes', async () => {
+    const { ctx, session } = await harness()
+    appendHeader(session, 'initial')
+    appendAssistant(session, 1, 1, { inputTokens: 1000, outputTokens: 500 }) // warm-up
+    appendHeader(session, 'resume')
+    appendAssistant(session, 2, 1, { inputTokens: 1000, outputTokens: 500 }) // main-chain
+    session.append('compaction/start', { compactionId: CompactionId('c1'), turn: null })
+    appendCompactionPrune(session, 600)
+    appendCompactionSummary(session, 4000)
+    session.append('compaction/end', { compactionId: CompactionId('c1'), turn: null })
+    appendCompactionPrune(session, 0)
+    const m = projected(ctx, session)
+    expect(m.compactionEvents).toBe(2)
+    expect(m.compactionInputTokens).toBe(4600)
   })
 
   it('exposes SLO targets from the budget r_min value', () => {

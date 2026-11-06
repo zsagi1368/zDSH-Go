@@ -18,6 +18,7 @@ import ToolResultPruner, {
   resolveConfig,
 } from '@deepseek-ai/dsh-compaction-tool-result-pruner'
 import type { ToolResultPruneConfig } from '@deepseek-ai/dsh-compaction-tool-result-pruner'
+import { PRUNING_META_KEY, toolCapToByteLimit } from '@deepseek-ai/dsh-tools'
 
 const MODEL = 'test-model'
 const SMALL: ToolResultPruneConfig = {
@@ -276,5 +277,107 @@ describe('ToolResultPruner session transaction', () => {
     const replay = Session.create(session.id, session.snapshotEvents())
     expect(replay.deriveMessages()).toEqual(session.deriveMessages())
     expect(replay.surface.replaceGeneration).toBe(session.surface.replaceGeneration)
+  })
+})
+
+describe('ToolResultPruner L3 vocabulary hook', () => {
+  // Same shape the production tools attach (read.ts/grep.ts/tool-bash): the
+  // declaration rides the tool/result meta under PRUNING_META_KEY.
+  const declared = (prunable: boolean, bytes: number) => ({
+    [PRUNING_META_KEY]: { prunable, bytes },
+  })
+
+  it('exempts prunable:false results and leaves no shadow-price events', () => {
+    const session = Session.create(SessionId('l3-exempt'))
+    const seq = appendToolStep(session, 1, 'kept', [{ type: 'text', text: 'x'.repeat(100) }], {
+      meta: declared(false, 100),
+    })
+    const result = service().pruneSession(session, { byteCapPerResult: toolCapToByteLimit(20) })
+    expect(result).toEqual({ pruned: [], charsRemoved: 0 })
+    expect(session.snapshotEvents().some(event => event.type === 'compaction/prune')).toBe(false)
+    expect(session.surface.nodes).toContain(seq)
+  })
+
+  it('caps declared prunable results by the byte cap and skips results within it', () => {
+    const cap = toolCapToByteLimit(20)
+    const session = Session.create(SessionId('l3-capped'))
+    const within = appendToolStep(session, 1, 'within', [{ type: 'text', text: 'y'.repeat(55) }], {
+      meta: declared(true, 55),
+    })
+    appendToolStep(session, 2, 'over', [{ type: 'text', text: 'z'.repeat(100) }], {
+      meta: declared(true, 100),
+    })
+    const first = service().pruneSession(session, { byteCapPerResult: cap })
+    expect(first.pruned.map(entry => entry.callId)).toEqual([ToolCallId('over')])
+    expect(first.pruned[0]!.charsAfter).toBeLessThanOrEqual(cap)
+    // The declared result within its per-tool budget survives even though it
+    // exceeds the uniform threshold: the declaration outranks thresholdChars.
+    expect(session.surface.nodes).toContain(within)
+    const second = service().pruneSession(session, { byteCapPerResult: cap })
+    expect(second).toEqual({ pruned: [], charsRemoved: 0 })
+  })
+
+  it('keeps the shadow-price protocol and event-data preservation on declared results', () => {
+    const session = Session.create(SessionId('l3-shadow'))
+    const originalSeq = appendToolStep(session, 1, 'a', [{ type: 'text', text: 'A'.repeat(100) }], {
+      meta: declared(true, 100),
+    })
+    const result = service().pruneSession(session, { byteCapPerResult: toolCapToByteLimit(20) })
+    expect(result.pruned).toHaveLength(1)
+    const events = session.snapshotEvents()
+    const original = events[originalSeq]!
+    if (original.type !== 'tool/result') throw new Error('original is not a tool/result')
+    const replacementSeq = result.pruned[0]!.replacementSeq
+    // C1/C2/C6: the metering event sits directly before the replacement,
+    // prices the shadowed node with the shared estimator, and is log-only.
+    expect(events[replacementSeq - 1]).toMatchObject({
+      type: 'compaction/prune',
+      data: {
+        shadowedRange: { start: originalSeq, end: originalSeq },
+        shadowedSeqs: [originalSeq],
+        shadowedTokenCount: METER.estimateMessage(original.data.message),
+      },
+    })
+    expect((events[replacementSeq - 1] as { surfaceOp?: unknown }).surfaceOp).toBeUndefined()
+    // C3/C4/N6: the replacement is the only surface change and the declared
+    // meta rides `...event.data` through it.
+    expect(events[replacementSeq]).toMatchObject({
+      type: 'tool/result',
+      surfaceOp: { op: 'replace', startSeq: originalSeq, endSeq: originalSeq },
+      sourceEventSeqs: [originalSeq],
+      data: { meta: declared(true, 100) },
+    })
+  })
+
+  it('falls back to the uniform threshold when the meta is absent or malformed', () => {
+    const session = Session.create(SessionId('l3-fallback'))
+    const plain = appendToolStep(session, 1, 'plain', [{ type: 'text', text: 'B'.repeat(55) }])
+    const malformed = appendToolStep(session, 2, 'malformed', [{ type: 'text', text: 'C'.repeat(55) }], {
+      meta: { [PRUNING_META_KEY]: 'garbage' },
+    })
+    const result = service().pruneSession(session, { byteCapPerResult: toolCapToByteLimit(20) })
+    expect(result.pruned.map(entry => entry.callId)).toEqual([
+      ToolCallId('plain'),
+      ToolCallId('malformed'),
+    ])
+    expect(session.surface.nodes).not.toContain(plain)
+    expect(session.surface.nodes).not.toContain(malformed)
+  })
+
+  it('falls back to the uniform threshold when the cap cannot represent a replacement', () => {
+    const session = Session.create(SessionId('l3-small-cap'))
+    appendToolStep(session, 1, 'a', [{ type: 'text', text: 'D'.repeat(100) }], {
+      meta: declared(true, 100),
+    })
+    // A cap below head + marker + tail cannot hold a valid replacement, so the
+    // uniform budget applies instead of throwing mid-pass; without opts the
+    // declared result also lands on the uniform budget.
+    const tiny = service().pruneSession(session, { byteCapPerResult: 10 })
+    expect(tiny.pruned[0]).toMatchObject({
+      charsBefore: 100,
+      charsAfter: 4 + codePointLength(PRUNE_MARKER) + 3,
+    })
+    const noOpts = service().pruneSession(session)
+    expect(noOpts).toEqual({ pruned: [], charsRemoved: 0 })
   })
 })
