@@ -29,6 +29,8 @@ import SessionStore, { Session, SessionId, SessionSeq } from '@deepseek-ai/dsh-s
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import TokenMeter from '@deepseek-ai/dsh-token-meter'
 import { agentEvents, type Agent, type RequestErrorAction } from '@deepseek-ai/dsh-agent'
+import type { JsonValue } from '@deepseek-ai/dsh-util-values'
+import { PRUNING_META_KEY } from '@deepseek-ai/dsh-tools'
 import ToolResultPruner from '@deepseek-ai/dsh-compaction-tool-result-pruner'
 
 declare module '@deepseek-ai/dsh-llm' {
@@ -160,7 +162,7 @@ function conversation(turns = 4, text = 'fixture '.repeat(40).trim(), system?: s
   return session
 }
 
-function toolConversation(): Session {
+function toolConversation(firstResultMeta?: JsonValue): Session {
   const session = Session.create(SessionId('tools'))
   for (let turn = 1; turn <= 3; turn += 1) {
     const callId = ToolCallId(`call-${turn}`)
@@ -201,6 +203,7 @@ function toolConversation(): Session {
         content: [{ type: 'text', text: `result ${turn} `.repeat(300) }],
         isError: false,
       }),
+      ...(turn === 1 && firstResultMeta !== undefined ? { meta: firstResultMeta } : {}),
     }, { surfaceOp: 'append' })
     session.append('step/end', { turn, step: 1 })
     session.append('turn/end', { turn, reason: { kind: 'completed' } })
@@ -2101,6 +2104,44 @@ describe('automatic listener and loader composition', () => {
     expect(session.surface.replaceGeneration).toBe(1)
     expect(session.snapshotEvents().some(event => event.type === 'compaction/summary')).toBe(false)
     expect(compact.calls).toHaveLength(0)
+  })
+
+  // Spec pin (T4 REV-T4 SUG-4): the context-overflow recovery path calls
+  // pruneSession bare — no byte-cap opts — and the L3 hook still applies: a
+  // `prunable: false` result is exempt even in recovery, so the bare pass
+  // prunes strictly less than the pre-hook uniform pass (fail-safe direction).
+  it('keeps the bare overflow prune L3-aware: prunable:false survives recovery unpruned', async () => {
+    const ctx = createContext(10_000)
+    void new ToolResultPruner(ctx, {
+      thresholdChars: 100,
+      headChars: 20,
+      tailChars: 10,
+    })
+    const compact = new TestCompactionEngine(ctx, {
+      headroomTokens: 0,
+      maxTokens: 8192,
+      thresholdRatio: 1,
+      retainTokens: 900,
+    })
+    const session = toolConversation({
+      [PRUNING_META_KEY]: { prunable: false, bytes: 2_700 },
+    })
+
+    expect(await recover(ctx, agent(session, MODEL), overflow())).toBe(true)
+    const events = session.snapshotEvents()
+    const results = events.filter(event => event.type === 'tool/result')
+    // 1 exempt original (turn 1) + 2 originals + 2 replacements (turns 2-3).
+    expect(results).toHaveLength(5)
+    // The declared non-prunable result keeps its full original body in the
+    // log while its undeclared siblings were replaced.
+    expect(results[0]!.data.message.content).toEqual([
+      { type: 'text', text: 'result 1 '.repeat(300) },
+    ])
+    // Exactly the two undeclared results carry shadow-price pairs.
+    expect(events.filter(event => event.type === 'compaction/prune')).toHaveLength(2)
+    // Recovery still lands through summarization on the unpruned surface.
+    expect(events.some(event => event.type === 'compaction/summary')).toBe(true)
+    expect(compact.calls).toHaveLength(1)
   })
 
   it('continues overflow recovery with summarization on the pruned surface', async () => {

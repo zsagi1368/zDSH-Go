@@ -234,9 +234,11 @@ export const cacheMetricsProjectionDefinition = {
       return state
     }
 
-    // Compaction events join the compression-equivalence ledger. They are
-    // already covered by the reset latch via compaction/start, so this is the
-    // ledger half only. `compaction/prune` shadow prices are model-free
+    // Compaction events join the compression-equivalence ledger — the ledger
+    // half only. A summary rides a compaction/start..end window, so its reset
+    // side is latched; a prune can land with no window at all (a prune-only
+    // pass that remeasures below threshold), making this fold its only
+    // accounting. `compaction/prune` shadow prices are model-free
     // reductions of the same surface (P-D2-1): each landed prune prices its
     // shadowed node with the shared estimator, and a later summary only prices
     // the already-pruned replacement, so the two sources add up without
