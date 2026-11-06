@@ -27,6 +27,9 @@
       "path": "../../client/connection/tsconfig.host.json"
     },
     {
+      "path": "../../context/harness-dev-context"
+    },
+    {
       "path": "../../host/frontend-static"
     },
     {

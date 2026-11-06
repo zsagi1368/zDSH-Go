@@ -3,12 +3,14 @@
  * plus the bundle patch (`cordis.patch.yml`, declared by the `dsh.bundle.patch`
  * manifest field). The plugin owns the browser-surface glue: it resolves
  * the built frontend dist (workspace knowledge of this bundle, never user
- * config), mounts the `frontend-static` fallback owner over it, registers the
- * harness-source and web-surface prompt sections, the bash-visible web runtime
- * variable, the process-token URL line, and the default-browser handoff. An
- * advertised `publicUrl` replaces the published bind-address URL. Non-loopback
- * HTTP binds trigger an exposure warning. App command-line values arrive
- * through the `webStartup` service expressions in the bundle patch.
+ * config), mounts the `frontend-static` fallback owner over it, provides the
+ * `webApp` service the model context reads, mounts the harness-dev-context
+ * prompt sections and runtime-context values under its `surfaceContext`
+ * switch, registers the bash-visible web runtime variable, the process-token
+ * URL line, and the default-browser handoff. An advertised `publicUrl`
+ * replaces the published bind-address URL. Non-loopback HTTP binds trigger an
+ * exposure warning. App command-line values arrive through the `webStartup`
+ * service expressions in the bundle patch.
  * @module @deepseek-ai/dsh-web-app
  */
 
@@ -16,12 +18,13 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import { createRequire } from 'node:module'
 import { isIP } from 'node:net'
 import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-import { addHarnessSourceSection, auditStartupEntries } from '@deepseek-ai/dsh-app-boot'
+import { auditStartupEntries } from '@deepseek-ai/dsh-app-boot'
 import type {} from '@deepseek-ai/dsh-client-connection'
 import * as FrontendStatic from '@deepseek-ai/dsh-host-frontend-static'
+import * as HarnessDevContext from '@deepseek-ai/dsh-harness-dev-context'
+import type { WebApp } from '@deepseek-ai/dsh-harness-dev-context'
 import { isLoopbackHost, normalizeBindAddress } from '@deepseek-ai/dsh-host-webserver'
 import { launchedThroughSsh, launchEnvironmentOf } from '@deepseek-ai/dsh-launch-environment'
 import { scrubbedParentEnv } from '@deepseek-ai/dsh-subprocess'
@@ -32,8 +35,6 @@ import { parsePublicUrl } from './public-url.ts'
 /** Stable Cordis plugin name. */
 export const name = 'web-app'
 
-/** This dsh installation's root, from either this package's source or built entry. */
-const SOURCE_ROOT = fileURLToPath(new URL('../../../..', import.meta.url))
 const ANNOUNCED_ROOTS = new WeakSet<Context>()
 
 /** Services required before the web runtime can mount. */
@@ -46,18 +47,19 @@ export interface Config {
   /** Print the URL line on activation; a non-interactive layer can turn it off. */
   printUrl: boolean
   /**
-   * Register the model-visible surface context (the `app:web-surface` prompt
-   * section and the `DSH_WEB_URL` bash variable). A one-shot non-interactive
-   * layer can turn it off when its user is not in the GUI, so the
-   * orientation text would be false.
+   * Mount the model-visible surface context (the harness-dev-context prompt
+   * sections and runtime-context values, plus the `DSH_WEB_URL` bash
+   * variable). A one-shot non-interactive layer can turn it off when its user
+   * is not in the GUI, so the orientation text would be false.
    */
   surfaceContext: boolean
   /**
    * Canonical HTTP(S) root to advertise in the printed and opened URL,
-   * `DSH_WEB_URL`, and the web-surface orientation, e.g.
-   * `https://app.example/ui/`, normalized to end in `/`. Configures no routing
-   * or authentication; see [public deployments](../README.md#public-deployments).
-   * Absent or YAML `null` advertises the bind-address URL.
+   * `DSH_WEB_URL`, `webApp.getAdvertisedUrl()`, and the web-surface runtime
+   * context, e.g. `https://app.example/ui/`, normalized to end in `/`.
+   * Configures no routing or authentication; see
+   * [public deployments](../README.md#public-deployments). Absent or YAML
+   * `null` advertises the bind-address URL.
    */
   publicUrl?: string
 }
@@ -148,20 +150,6 @@ function appRootUrl(ctx: Context, publicUrl: string | undefined): string {
   return localWebUrl(ctx)
 }
 
-/** Model-visible orientation and acceptance boundary for sessions created through `dsh web`. */
-function webSurfacePrompt(webUrl: string): string {
-  const updateContract = 'The client-plugin HMR receiver is active, but client-plugin changes reload without a refresh only while '
-    + '`pnpm run dev:web` is also running from this same checkout to rebuild their bundles; verify that watcher before promising automatic updates. '
-    + 'Every other change — the apps/web shell and plain packages — requires rebuilding the affected Web artifacts and verifying this existing URL after a page refresh. '
-  return `You are interacting with the user through the DeepSeek Harness Web GUI at ${webUrl}. `
-    + 'When the user refers to "this page", "this GUI", or "this app" without naming another target, they mean this GUI. '
-    + 'The browser provides no implicit DOM, route, or screenshot context. '
-    + updateContract
-    + 'Starting another server does not update this GUI. '
-    + 'The apps/web Vite entry builds the shell but is not a standalone application because only dsh web injects window.__DSH_BOOT__. '
-    + 'Do not start a replacement server unless the user asks; if one is needed, use a managed background job and verify its exact URL.'
-}
-
 /**
  * Dist location is workspace knowledge of this bundle: anchored on the
  * frontend package manifest, not configured. Existence is a request-time
@@ -227,8 +215,9 @@ export const internals: {
 } = { resolveDistIndex, openBrowser }
 
 /**
- * Mount the Web runtime: dist serving, surface prompt, the bash runtime
- * variable, the URL line, and the default-browser handoff.
+ * Mount the Web runtime: dist serving, the advertised-URL service, the model
+ * context under the surface switch, the bash runtime variable, the URL line,
+ * and the default-browser handoff.
  * @param ctx - plugin context carrying the webServer service.
  * @param config - validated {@link Config}.
  */
@@ -244,16 +233,10 @@ export function apply(ctx: Context, config: Config): void {
   // The bind URL belongs to this host. Under SSH, the operator reaches it
   // through a local forwarding address that this process cannot derive.
   const handoffBrowser = config.openBrowser && !launchedThroughSsh(launchEnvironmentOf(ctx))
+  ctx.provide('webApp', { getAdvertisedUrl: () => appRootUrl(ctx, publicUrl) } satisfies WebApp)
   ctx.plugin(FrontendStatic, { distIndex: internals.resolveDistIndex() })
   if (config.surfaceContext) {
-    ctx.inject(['systemPrompt'], (promptCtx) => {
-      addHarnessSourceSection(promptCtx, SOURCE_ROOT)
-      promptCtx.systemPrompt.section({
-        name: 'app:web-surface',
-        order: promptCtx.systemPrompt.getSectionOrder('WEB_SURFACE'),
-        text: () => webSurfacePrompt(appRootUrl(promptCtx, publicUrl)),
-      })
-    })
+    ctx.plugin(HarnessDevContext)
     ctx.inject(['shellEnv'], (runtimeCtx) => {
       runtimeCtx.shellEnv.register({
         name: 'web-runtime',
