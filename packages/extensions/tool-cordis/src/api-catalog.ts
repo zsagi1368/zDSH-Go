@@ -1722,7 +1722,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the detail, or `plugin-not-found`.',
       },
       {
-        signature: '@Remote(\'install\') async install(request: InstallPluginRequest): Promise<GovernanceResult<GovernanceAcknowledgement>>',
+        signature: '@Remote(\'add\') async add(request: InstallPluginRequest): Promise<GovernanceResult<GovernanceAcknowledgement>>',
         description: 'Install a plugin from a local directory or an npm registry source (L3 admission pipeline). Local sources must be existing directories with a readable `package.json`; `npm:<name>[@<exact-version>]` sources are resolved against the configured registry, integrity-checked, and extracted into the governance storage area before the same manifest construction runs over them. The constructed manifest is admitted through the governance registry and the roster snapshot persists before the receipt returns.\n\nFail closed: a manifest whose permission posture requests an admission decision (`requiresAdmission`) registers **disabled** unless the approvals ledger already holds a decision, so installed code never runs before the operator approves it; `approve` + `enable` then activate it.',
         parameters: [{ name: 'request', description: 'local source directory or `npm:` spec of the plugin.' }],
         returns: 'a receipt, or `request-invalid` / `registry-unavailable` / `persistence-failed`.',
@@ -2254,6 +2254,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'acknowledgement that cancellation was requested.',
       },
       {
+        signature: '@Remote(\'delete\') delete(request: SessionDeleteRequest): Promise<SessionDeleteValue>',
+        description: 'Delete one Session irreversibly: its live Agent is torn down, it leaves every Workspace accounting surface, and its durable log and artifacts are removed. A Session with running work is refused as `session/active` unless `stopActivity` asks the Host to stop that work first. Attachments are kept: they are content-addressed and shared between Sessions.',
+        parameters: [{ name: 'request', description: 'Session identity and whether its running work is stopped.' }],
+        returns: 'receipt after the durable artifacts are gone.',
+      },
+      {
         signature: '@Remote(\'page\') page(request: SessionPageRequest, signal: AbortSignal): Promise<SessionPage>',
         description: 'Read one cold-safe, message-aligned Session history page.',
         parameters: [{ name: 'request', description: 'durable address, backward cursor, and page budget.' }, { name: 'signal', description: 'cancellation for persistence reads.' }],
@@ -2347,6 +2353,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'List every stored session visible to this process, in no promised order.',
         parameters: [{ name: 'options', description: 'optional cancellation.' }],
         returns: 'one snapshot per stored session.',
+      },
+      {
+        signature: 'abstract purge(id: SessionId, options?: SessionPersistencePurgeOptions): Promise<boolean>',
+        description: 'Remove one stored session\'s durable artifacts, irreversibly.\n\nThe removal is destructive and never reversible: the stored event log and every backend-owned artifact of that session are gone afterwards. A backend MUST refuse while another writer holds the session\'s write ownership, so a live append can never race the removal.',
+        parameters: [{ name: 'id', description: 'the stored session to remove.' }, { name: 'options', description: 'optional cancellation.' }],
+        returns: '`true` when the session existed and its artifacts are gone, `false` when it did not exist.',
       },
     ],
   },
@@ -3738,6 +3750,19 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Retrieve one URL through the selected provider. Resolves the provider at call time with the selection rules above; throws WebError when the capability cannot run. A non-2xx response is a result, not a throw.',
         parameters: [{ name: 'request', description: 'the URL plus retrieval options.' }, { name: 'signal', description: 'optional cancellation signal forwarded to the provider.' }],
         returns: 'the retrieval outcome; non-2xx responses resolve descriptively.',
+      },
+    ],
+  },
+  {
+    key: 'webApp',
+    summary: 'The Web GUI this process serves.',
+    description: 'The Web GUI this process serves. The web runtime\'s glue plugin provides the service; this package owns the contract so the dependency graph stays acyclic (the glue imports this plugin to mount it under its `surfaceContext` switch).',
+    methods: [
+      {
+        signature: 'getAdvertisedUrl(): string',
+        description: 'The URL this GUI advertises, also used for `DSH_WEB_URL` and the startup URL line.',
+        parameters: [],
+        returns: 'the configured `publicUrl`, otherwise the listener origin.',
       },
     ],
   },
@@ -6057,7 +6082,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'LlmConfigurableProvider',
-    declaration: 'export interface LlmConfigurableProvider {\n    provider: string;\n    displayName: string;\n    settingsNs: string;\n    settingsPath: readonly string[];\n    declared?: boolean;\n    error?: string;\n}',
+    declaration: 'export interface LlmConfigurableProvider {\n    provider: string;\n    displayName: string;\n    settingsNs: string;\n    settingsPath: readonly string[];\n    declared?: boolean;\n    defaultBaseUrl?: string;\n    error?: string;\n}',
   },
   {
     name: 'LlmDiscoveredModel',
@@ -7208,6 +7233,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface SessionCreateValue {\n    readonly sessionId: SessionId;\n    readonly agentPreset?: string;\n}',
   },
   {
+    name: 'SessionDeleteRequest',
+    declaration: 'export interface SessionDeleteRequest {\n    readonly sessionId: SessionId;\n    readonly stopActivity?: boolean;\n}',
+  },
+  {
+    name: 'SessionDeleteValue',
+    declaration: 'export interface SessionDeleteValue {\n    readonly deleted: true;\n}',
+  },
+  {
     name: 'SessionEndInput',
     declaration: 'export interface SessionEndInput {\n    reason: \'clear\' | \'logout\' | \'prompt_input_exit\' | \'resume\' | \'other\';\n    sessionId: string;\n}',
   },
@@ -7442,6 +7475,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'SessionPersistenceOpenOptions',
     declaration: 'export interface SessionPersistenceOpenOptions {\n    readonly signal?: AbortSignal;\n}',
+  },
+  {
+    name: 'SessionPersistencePurgeOptions',
+    declaration: 'export interface SessionPersistencePurgeOptions {\n    readonly signal?: AbortSignal;\n}',
   },
   {
     name: 'SessionPersistenceRevision',
