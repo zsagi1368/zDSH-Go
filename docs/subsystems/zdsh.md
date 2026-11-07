@@ -83,7 +83,7 @@ The host governance service. It owns one PluginRegistry and one PluginPersistenc
  * @returns a receipt, or `request-invalid` / `registry-unavailable` /
  * `persistence-failed`.
  */
-@Remote('install') async install(request: InstallPluginRequest): Promise<GovernanceResult<GovernanceAcknowledgement>>
+@Remote('add') async add(request: InstallPluginRequest): Promise<GovernanceResult<GovernanceAcknowledgement>>
 
 /**
  * Uninstall a plugin: unregister it from the governance registry, purge its

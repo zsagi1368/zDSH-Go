@@ -961,6 +961,17 @@ workspaceDesktop(): { name: string; available: boolean; fileManager: 'finder' | 
 @Remote('cancel') cancel(request: SessionCancelRequest): SessionCancelValue
 
 /**
+ * Delete one Session irreversibly: its live Agent is torn down, it leaves
+ * every Workspace accounting surface, and its durable log and artifacts are
+ * removed. A Session with running work is refused as `session/active`
+ * unless `stopActivity` asks the Host to stop that work first. Attachments
+ * are kept: they are content-addressed and shared between Sessions.
+ * @param request - Session identity and whether its running work is stopped.
+ * @returns receipt after the durable artifacts are gone.
+ */
+@Remote('delete') delete(request: SessionDeleteRequest): Promise<SessionDeleteValue>
+
+/**
  * Read one cold-safe, message-aligned Session history page.
  * @param request - durable address, backward cursor, and page budget.
  * @param signal - cancellation for persistence reads.

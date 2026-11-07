@@ -143,6 +143,22 @@ authenticatedUrl(baseUrl: string): string
 
 Source: [`packages/client/connection/src/rpc.ts`](../../packages/client/connection/src/rpc.ts)
 
+<a id="ctxwebapp--webapp"></a>
+
+### `ctx.webApp` — `WebApp`
+
+The Web GUI this process serves. The web runtime's glue plugin provides the service; this package owns the contract so the dependency graph stays acyclic (the glue imports this plugin to mount it under its `surfaceContext` switch).
+
+```ts cordis-catalog
+/**
+ * The URL this GUI advertises, also used for `DSH_WEB_URL` and the startup URL line.
+ * @returns the configured `publicUrl`, otherwise the listener origin.
+ */
+getAdvertisedUrl(): string
+```
+
+Source: [`packages/context/harness-dev-context/src/index.ts`](../../packages/context/harness-dev-context/src/index.ts)
+
 <a id="ctxwebserver--webserver"></a>
 
 ### `ctx.webServer` — `WebServer`
