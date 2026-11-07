@@ -226,6 +226,15 @@ export interface Config {
    * and registers them the moment a settings section supplies profiles.
    */
   providers: Volatile<Record<string, PiAiProviderProfile>>
+  /**
+   * Wire-body guard observation switch (T3 L5-A, observe-only per
+   * D1P2-whitelist-design). Default off: with it off, observed requests behave
+   * byte-identically to the unwired baseline — the runtime rollback is
+   * flipping this back to false. Enabling additionally requires the request to
+   * carry a host sink (session-bound main chain) and the installed pi-ai to
+   * forward the `fetch` option (asserted fail-loud, A6).
+   */
+  guardObserve: Volatile<boolean>
 }
 
 /** Plain options accepted by the provider resolver. */
@@ -351,6 +360,7 @@ const profile = z.object({
 /** Runtime schema for {@link Config}. */
 export const Config = z.object({
   providers: z.dict(profile).default({}).volatile(),
+  guardObserve: z.boolean().default(false).volatile(),
 })
 
 /**

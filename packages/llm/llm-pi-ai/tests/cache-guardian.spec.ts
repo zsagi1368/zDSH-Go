@@ -24,6 +24,8 @@ import {
   hashSegment,
   isAllowedReset,
   isOneShotExempt,
+  normalizeMessage,
+  normalizeMessages,
   registerResetEvent,
   resolveCacheEconomics,
   serializeLedger,
@@ -674,5 +676,36 @@ describe('guard-state seq (exemption window input)', () => {
     expect(plain.seq).toBeUndefined()
     expect(computeGuardState(context({}), 42).seq).toBe(42)
     expect(computeGuardState(context({}), 42).messagesHash).toBe(plain.messagesHash)
+  })
+})
+
+// F1 卫生项（T3 落地，未建模清单第 7 条）：role:'system' 消息不进镜像哈希。
+// 1.3.0 起 deferred 重排 / effort 合成让 system 消息可进入消息历史；本镜像
+// 对其返回 null（不进哈希），防误用把 system 消息误判为 toolResult 产出坏形态。
+describe('F1 hygiene: role system messages are not modeled (T3)', () => {
+  const systemDeferred = { role: 'system', content: [{ type: 'text', text: 'todo update' }] } as never
+  const systemSynth = { role: 'system', content: [], output_config: { effort: 'high' } } as never
+  const user = { role: 'user', content: 'hi', timestamp: 0 } as never
+
+  it('normalizeMessage returns null for a system message (deferred-reorder form)', () => {
+    expect(normalizeMessage(systemDeferred)).toBeNull()
+  })
+
+  it('normalizeMessage returns null for the effort-synth system form too', () => {
+    expect(normalizeMessage(systemSynth)).toBeNull()
+  })
+
+  it('normalizeMessages drops system entries and keeps the rest in order', () => {
+    const serialized = normalizeMessages([user, systemDeferred, user])
+    // 两条 user 都在，system 被剔除：序列化含 2 条消息。
+    expect(serialized.match(/"role":"user"/g)).toHaveLength(2)
+    expect(serialized).not.toContain('"role":"system"')
+  })
+
+  it('mixed-history hashing stays stable when system entries come and go (compat-blind)', () => {
+    const withSystem = normalizeMessages([user, systemDeferred])
+    const withoutSystem = normalizeMessages([user])
+    // system 不进哈希 ⇒ 其出现/消失不影响镜像哈希（wire 侧由 T3 观测层承载）。
+    expect(withSystem).toBe(withoutSystem)
   })
 })

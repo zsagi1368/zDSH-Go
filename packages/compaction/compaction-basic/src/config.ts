@@ -6,14 +6,6 @@
 
 import type { LlmCallConfig } from '@deepseek-ai/dsh-llm'
 import { deepFreeze } from '@deepseek-ai/dsh-util-values'
-import {
-  BATCH_CAP,
-  DEFAULT_OUTPUT_CAP,
-  MIN_OUTPUT_CAP,
-  MIN_WINDOW,
-  computeBudget,
-} from '@deepseek-ai/dsh-model-slots'
-import type { BudgetRow } from '@deepseek-ai/dsh-model-slots'
 import type {
   BasicCompactionConfig,
   CompactionPolicyConfig,
@@ -33,9 +25,6 @@ const DEFAULT_RETAIN_RATIO = 0.16
 /** Fields shared by top-level defaults and exact-target overrides. */
 const POLICY_CONFIG_KEYS = [
   'thresholdRatio',
-  'proactiveTrigger',
-  'batchCap',
-  'outputCap',
   'headroomTokens',
   'retainRatio',
   'retainTokens',
@@ -108,9 +97,6 @@ export function resolveConfig(config: BasicCompactionConfig = {}): ResolvedConfi
 
   return deepFreeze({
     thresholdRatio,
-    proactiveTrigger: config.proactiveTrigger ?? false,
-    batchCap: config.batchCap ?? BATCH_CAP,
-    outputCap: config.outputCap ?? DEFAULT_OUTPUT_CAP,
     headroomTokens,
     ...retention,
     summarizationProvider: config.summarizationProvider ?? '',
@@ -142,9 +128,6 @@ export function resolveTargetPolicy(
   return deepFreeze({
     target: { provider: target.provider, model: target.model },
     thresholdRatio: override?.thresholdRatio ?? config.thresholdRatio,
-    proactiveTrigger: override?.proactiveTrigger ?? config.proactiveTrigger,
-    batchCap: override?.batchCap ?? config.batchCap,
-    outputCap: override?.outputCap ?? config.outputCap,
     headroomTokens: override?.headroomTokens ?? config.headroomTokens,
     ...resolveRetention(override ?? {}, inheritedRetention),
     summarizationProvider: override?.summarizationProvider ?? config.summarizationProvider,
@@ -166,18 +149,6 @@ export function resolveTargetPolicy(
  * @param contextWindow - positive adapter-owned capacity for that target.
  * @param reservedCompletionTokens - output tokens one routed request reserves.
  * @returns detached immutable pressure and retention budgets.
- *
- * With `proactiveTrigger` the pressure line is the proactive L4 trigger
- * `W − R_pess` from `model-slots` `computeBudget` (CONTEXT-CACHE-MANAGEMENT.md
- * §1.2/§2 L4), replacing `thresholdRatio × W`. R_pess =
- * maxTokens + batchCap×toolCap + 4096, with maxTokens = min(C, floor(W×0.10)),
- * toolCap = max(1024, floor(0.25×(reserve−maxTokens))), reserve =
- * ceil(maxTokens×1.25)+4096 — formula-for-formula identical to
- * `scripts/budget-table.py` v3. The legal domain starts at W = 32768; a
- * window below it rejects the proactive mode and falls back to
- * `thresholdRatio` with a warning. `batchCap` (BATCH_CAP, default 2) is read
- * from configuration only: a session-level rolling observation of the largest
- * parallel tool batch may suggest raising it, but never rewrites it.
  */
 export function resolveCompactSpec(
   policy: ResolvedTargetPolicy,
@@ -217,32 +188,13 @@ export function resolveCompactSpec(
       + 'compaction headroomTokens, or configure a larger adapter model contextWindow',
     )
   }
+  const thresholdTokens = Math.floor(Math.min(
+    contextWindow * policy.thresholdRatio,
+    pressureBudgetTokens,
+  ))
   const retainTokens = policy.retainTokens === undefined
     ? Math.floor(messageBudgetTokens * policy.retainRatio)
     : policy.retainTokens
-
-  let proactiveTrigger = policy.proactiveTrigger
-  let thresholdTokens: number
-  let budget: BudgetRow | undefined
-  let warning: string | undefined
-  if (proactiveTrigger) {
-    if (contextWindow < MIN_WINDOW) {
-      // Legal-domain rejection (design §1.1: W < 32768 is the 16k reject domain).
-      proactiveTrigger = false
-      thresholdTokens = Math.floor(Math.min(contextWindow * policy.thresholdRatio, pressureBudgetTokens))
-      warning = `BasicCompactionConfig: ${targetKey} requested the proactive trigger `
-        + `for window ${contextWindow} below the legal domain ${MIN_WINDOW}; fell back to `
-        + 'thresholdRatio mode (16k domain rejected: r_min=76% and compression storm)'
-    } else {
-      budget = computeBudget(contextWindow, policy.outputCap, policy.batchCap)
-      // Go 触发线（W − R_pess）不得突破官方的容量硬上限（窗口 − 真实预留 − headroom）。
-      thresholdTokens = Math.min(budget.trigger, pressureBudgetTokens)
-    }
-  } else {
-    // Go 触发线之外仍保留官方的容量硬上限（窗口 − 真实预留 − headroom）。
-    thresholdTokens = Math.floor(Math.min(contextWindow * policy.thresholdRatio, pressureBudgetTokens))
-  }
-
   if (retainTokens >= thresholdTokens) {
     throw new TargetPressureConfigError(
       targetKey,
@@ -254,9 +206,6 @@ export function resolveCompactSpec(
     target: { ...policy.target },
     contextWindow,
     thresholdRatio: policy.thresholdRatio,
-    proactiveTrigger,
-    batchCap: policy.batchCap,
-    outputCap: policy.outputCap,
     thresholdTokens,
     retainTokens,
     summarizationProvider: policy.summarizationProvider,
@@ -264,8 +213,6 @@ export function resolveCompactSpec(
     maxTokens: policy.maxTokens,
     compactionRetries: policy.compactionRetries,
     maxOverflowRetries: policy.maxOverflowRetries,
-    ...budget === undefined ? {} : { rPess: budget.rPess },
-    ...warning === undefined ? {} : { warning },
   })
 }
 
@@ -332,9 +279,6 @@ function validatePolicy(
   name: string,
 ): void {
   const thresholdRatio = config.thresholdRatio
-  const proactiveTrigger = config.proactiveTrigger
-  const batchCap = config.batchCap
-  const outputCap = config.outputCap
   const headroomTokens = config.headroomTokens
   const retainRatio = config.retainRatio
   const retainTokens = config.retainTokens
@@ -342,29 +286,6 @@ function validatePolicy(
   const compactionRetries = config.compactionRetries
   const maxOverflowRetries = config.maxOverflowRetries
   if (thresholdRatio !== undefined) assertRatio(`${name}.thresholdRatio`, thresholdRatio)
-  if (proactiveTrigger !== undefined && typeof proactiveTrigger !== 'boolean') {
-    throw new Error(`${name}.proactiveTrigger must be a boolean`)
-  }
-  if (batchCap !== undefined) assertPositiveInteger(`${name}.batchCap`, batchCap)
-  if (outputCap !== undefined && (
-    typeof outputCap !== 'number'
-    || !Number.isInteger(outputCap)
-    || outputCap < MIN_OUTPUT_CAP
-  )) {
-    // Diagnostics only: `outputCap` is untyped on the external config face, so
-    // render primitives with their own toString and everything else as JSON —
-    // a total formatter that never throws inside this validator.
-    const shown = outputCap === null
-      || typeof outputCap === 'string'
-      || typeof outputCap === 'number'
-      || typeof outputCap === 'boolean'
-      || typeof outputCap === 'bigint'
-      ? String(outputCap)
-      : JSON.stringify(outputCap)
-    throw new Error(
-      `${name}.outputCap (${shown}) must be an integer >= ${MIN_OUTPUT_CAP}`,
-    )
-  }
   if (headroomTokens !== undefined) assertNonNegativeInteger(`${name}.headroomTokens`, headroomTokens)
   if (retainRatio !== undefined) assertRatio(`${name}.retainRatio`, retainRatio)
   if (retainTokens !== undefined) assertNonNegativeInteger(`${name}.retainTokens`, retainTokens)

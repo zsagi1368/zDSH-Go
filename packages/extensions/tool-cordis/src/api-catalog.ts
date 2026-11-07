@@ -3494,15 +3494,16 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'total Unicode code points across text blocks.',
       },
       {
-        signature: 'pruneContent(blocks: readonly ContentBlock[]): ContentBlock[] | null',
+        signature: 'pruneContent(blocks: readonly ContentBlock[], limitChars: number = this.config.thresholdChars): ContentBlock[] | null',
         description: 'Replace an over-budget text middle while retaining rich-block order. Text slicing is by Unicode code point, not UTF-16 code unit, so a retained boundary cannot split a surrogate pair. Grapheme clusters may still split.',
-        parameters: [{ name: 'blocks', description: 'original tool-result content.' }],
+        parameters: [{ name: 'blocks', description: 'original tool-result content.' }, { name: 'limitChars', description: 'effective threshold in Unicode code points; defaults to the configured `thresholdChars`.' }],
         returns: 'pruned content, or `null` when the text is within budget.',
+        throws: ['when the budget cannot produce a strictly smaller replacement within `limitChars` (a caller limit below `headChars + marker + tailChars`).'],
       },
       {
-        signature: 'pruneSession(session: Session): PruneResult',
-        description: 'Prune every over-budget tool result from one stable current-surface snapshot. Each replacement preserves the complete event data except for `content`, cites the shadowed node so replay can recover the replacement input, and is immediately preceded by a `compaction/prune` shadow-price event pricing the shadowed node through the injected token meter, so pure consumers can subtract it without per-node state.',
-        parameters: [{ name: 'session', description: 'session whose current surface is rewritten.' }],
+        signature: 'pruneSession(session: Session, opts: PruneSessionOptions = {}): PruneResult',
+        description: 'Prune every over-budget tool result from one stable current-surface snapshot. Results carrying an `l3.pruning` declaration follow that vocabulary instead of the uniform threshold: a `prunable: false` result is exempt from pruning entirely, and a prunable one is capped by `opts.byteCapPerResult` (applied as the Unicode-code-point threshold; the L3 rule derives it as `toolCapToByteLimit(toolCap)`). Undeclared results keep the configured `thresholdChars`, so passes without declarations behave exactly like the uniform pruner. Each replacement preserves the complete event data except for `content`, cites the shadowed node so replay can recover the replacement input, and is immediately preceded by a `compaction/prune` shadow-price event pricing the shadowed node through the injected token meter, so pure consumers can subtract it without per-node state.',
+        parameters: [{ name: 'session', description: 'session whose current surface is rewritten.' }, { name: 'opts', description: 'optional per-pass budgets; omitted budgets keep the configured thresholds.' }],
         returns: 'landed replacements and aggregate Unicode-code-point savings.',
         throws: ['when the session rejects a replacement; replacements committed earlier in the pass remain durable.'],
       },
@@ -4796,7 +4797,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'AgentOptions',
-    declaration: 'export interface AgentOptions {\n    provider?: string;\n    model?: string;\n    reasoningEffort?: ReasoningEffortId;\n    maxTokens?: number;\n}',
+    declaration: 'export interface AgentOptions {\n    provider?: string;\n    model?: string;\n    reasoningEffort?: ReasoningEffortId;\n    maxTokens?: number;\n    guardObserve?: true;\n}',
   },
   {
     name: 'AgentPresetComposition',
@@ -5652,7 +5653,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'GenerateOptions',
-    declaration: 'export interface GenerateOptions {\n    provider: string;\n    model: string;\n    reasoningEffort?: ReasoningEffortId;\n    messages: RequestMessage[];\n    system?: string;\n    tools?: ToolSchema[];\n    toolHistory?: ToolHistory;\n    temperature?: number;\n    maxTokens?: number;\n    stop?: string[];\n    signal?: AbortSignal;\n    sessionId?: Branded<\'SessionId\'>;\n    purpose?: \'compaction\' | \'session-title\';\n}',
+    declaration: 'export interface GenerateOptions {\n    provider: string;\n    model: string;\n    reasoningEffort?: ReasoningEffortId;\n    messages: RequestMessage[];\n    system?: string;\n    tools?: ToolSchema[];\n    toolHistory?: ToolHistory;\n    temperature?: number;\n    maxTokens?: number;\n    stop?: string[];\n    signal?: AbortSignal;\n    sessionId?: Branded<\'SessionId\'>;\n    purpose?: \'compaction\' | \'session-title\';\n    onGuardObserve?: (capture: LlmGuardObserveCapture) => void;\n}',
   },
   {
     name: 'GenericCallView',
@@ -6065,6 +6066,26 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'LlmFailure',
     declaration: 'export interface LlmFailure {\n    readonly message: string;\n    readonly code: string;\n    readonly status?: number;\n    readonly providerRetryAfterMs?: number;\n    readonly requestId?: ProviderRequestId;\n    readonly offloadImages?: number;\n}',
+  },
+  {
+    name: 'LlmGuardMessageKind',
+    declaration: 'export type LlmGuardMessageKind = \'normal\' | \'class1\' | \'class2\' | \'class3\';',
+  },
+  {
+    name: 'LlmGuardObserveCapture',
+    declaration: 'export interface LlmGuardObserveCapture {\n    schemaVersion: 1;\n    attemptSeq: number;\n    wholeHash?: string;\n    segments?: LlmGuardObserveSegments;\n    degraded?: LlmGuardObserveDegraded;\n    meta: LlmGuardObserveMeta;\n}',
+  },
+  {
+    name: 'LlmGuardObserveDegraded',
+    declaration: 'export interface LlmGuardObserveDegraded {\n    reason: \'parse-failed\' | \'non-string-body\' | \'hash-failed\';\n}',
+  },
+  {
+    name: 'LlmGuardObserveMeta',
+    declaration: 'export interface LlmGuardObserveMeta {\n    provider: string;\n    api: string;\n    modelId: string;\n    bodyBytes: number;\n}',
+  },
+  {
+    name: 'LlmGuardObserveSegments',
+    declaration: 'export interface LlmGuardObserveSegments {\n    systemHash: string;\n    toolsHash: string;\n    messagesHash: string;\n    messageHashes: string[];\n    messageKinds: LlmGuardMessageKind[];\n}',
   },
   {
     name: 'LlmImageRequestPrice',
@@ -6753,6 +6774,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'PruneResult',
     declaration: 'export interface PruneResult {\n    readonly pruned: readonly PrunedEntry[];\n    readonly charsRemoved: number;\n}',
+  },
+  {
+    name: 'PruneSessionOptions',
+    declaration: 'export interface PruneSessionOptions {\n    readonly byteCapPerResult?: number;\n}',
   },
   {
     name: 'PtcBindingErrorClass',

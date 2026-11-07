@@ -287,6 +287,10 @@ const RESPONSES_COMPAT_GATE = {
   supportsToolSearch: 'withhold',
   supportsExplicitPromptCacheMode: 'withhold',
   supportsMidConvoSystemMessages: 'withhold',
+  // pi-ai 1.3.0 added the key to `OpenAIResponsesCompatSchema`; mid-conversation
+  // effort synthesis stays an anthropic-messages concept here, so the OpenAI
+  // Responses route keeps withholding it (sibling of the entry above).
+  supportsMidConvoEffort: 'withhold',
 } as const satisfies Record<keyof OpenAIResponsesCompat, CompatDisposition>
 
 /** Disposition of every `AnthropicMessagesCompat` field; a drift gate like the one above. */

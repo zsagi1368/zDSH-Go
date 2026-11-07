@@ -10,7 +10,20 @@
  *
  * Compression equivalence (S2′) is the design's own acceptance yardstick:
  * 压缩当量 = Σ 每次压缩的摘要输入 / 平均轮增量
- * and the acceptance rule is `压缩当量 ≤ 总轮数 × 20%`.
+ * and the acceptance rule is `压缩当量 ≤ 总轮数 × 20%`. The numerator folds
+ * both compaction shadow-price sources — `compaction/summary` and the
+ * model-free `compaction/prune` replacements (P-D2-1, CTX-IMP-20261104) — so
+ * prune's shadowed mass cannot vanish from the ledger while the L3 hook
+ * increases prune volume.
+ *
+ * oneShotCount is pinned at 0 as a REGISTERED EXEMPTION (D6, CTX-OPT-20261104):
+ * the one-shot domains — summary, branch summary, and subagent one-shot calls
+ * (CONTEXT-CACHE-MANAGEMENT.md §2 L0 semantics) — structurally never enter the
+ * parent session's event stream, so no increment branch exists by design, and
+ * fresh-session single rounds are counted as warm-up instead. This is not a
+ * defect; it is accepted maintenance debt, not a zero-cost solution. The field
+ * and stateSchema stay in place (removal would force a stateVersion migration
+ * with no offsetting benefit). Pinned by tests/cache-metrics.spec.ts.
  *
  * @module @deepseek-ai/dsh-token-meter/cache-metrics
  */
@@ -53,13 +66,14 @@ export interface CacheMetricsProjection {
   readonly hitRate: number
   /** Warm-up requests excluded from hit-rate (first request after each reset). */
   readonly warmUpCount: number
-  /** One-shot requests excluded from hit-rate (fresh sessionId, disposable). */
+  /** One-shot requests excluded from hit-rate (fresh sessionId, disposable).
+   * Always 0 — registered exemption, not a defect (see module header). */
   readonly oneShotCount: number
   /** Registered reset events (compaction, model change, session recovery, seed boundary). */
   readonly resetCount: number
-  /** Compaction events recorded in the ledger. */
+  /** Compaction events recorded in the ledger (summary and prune shadow prices). */
   readonly compactionEvents: number
-  /** Accumulated compaction input tokens (Σ 摘要输入). */
+  /** Accumulated compaction input tokens (Σ 摘要输入 + prune 影子量). */
   readonly compactionInputTokens: number
   /**
    * Accumulated cache-write cost from registered reset events (Σ η×context,
@@ -220,10 +234,16 @@ export const cacheMetricsProjectionDefinition = {
       return state
     }
 
-    // Compaction events join the compression-equivalence ledger. They are
-    // already covered by the reset latch via compaction/start, so this is the
-    // ledger half only.
-    if (event.type === 'compaction/summary') {
+    // Compaction events join the compression-equivalence ledger — the ledger
+    // half only. A summary rides a compaction/start..end window, so its reset
+    // side is latched; a prune can land with no window at all (a prune-only
+    // pass that remeasures below threshold), making this fold its only
+    // accounting. `compaction/prune` shadow prices are model-free
+    // reductions of the same surface (P-D2-1): each landed prune prices its
+    // shadowed node with the shared estimator, and a later summary only prices
+    // the already-pruned replacement, so the two sources add up without
+    // double-counting the original mass.
+    if (event.type === 'compaction/summary' || event.type === 'compaction/prune') {
       const shadowed = event.data.shadowedTokenCount
       if (shadowed === 0) return state
       return {

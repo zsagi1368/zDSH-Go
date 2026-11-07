@@ -19,6 +19,9 @@
       "path": "../../llm/llm"
     },
     {
+      "path": "../../llm/model-slots"
+    },
+    {
       "path": "../../llm/token-meter"
     },
     {
@@ -37,7 +40,7 @@
       "path": "../compaction-tool-result-pruner"
     },
     {
-      "path": "../../llm/model-slots"
+      "path": "../../core/tools"
     }
   ]
 }

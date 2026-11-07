@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { createSystemMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
+import { createAssistantMessage, createSystemMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
 import SessionStore, { SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { Session, SurfaceIntent } from '@deepseek-ai/dsh-session'
 import { SystemPromptProjection } from '../src/runtime-context.ts'
+import { RuntimeContextProjection } from '../src/runtime-context.ts'
 import type { SystemPromptCommit, SystemPromptDecisionInput } from '../src/runtime-context.ts'
 
 declare module '@deepseek-ai/dsh-llm' {
@@ -218,5 +219,97 @@ describe('SystemPromptProjection', () => {
     expect(session.deriveMessages().map(message => message.role)).toEqual(['user'])
     expect(projection.project('', CONTINUING)).toEqual([])
     expect(projection.project('v3', REPLACING).map(commit => commit.message.content)).toEqual([[{ type: 'text', text: 'v3' }]])
+  })
+})
+
+/** The four series-shape quadrants around the series-start same-text discipline. */
+describe('SystemPromptProjection series-start quadrants', () => {
+  it('emits nothing at a series start whose latest surviving node already holds the rendering', async () => {
+    const ctx = await sessionStore()
+    const session = ctx.sessions.create(SessionId('system-prompt-series-same-text'))
+    const projection = new SystemPromptProjection(session)
+    commit(session, 1, projection.project('v1', CONTINUING)[0])
+    appendUser(session, 'hello')
+    commit(session, 2, projection.project('v2', CONTINUING)[0])
+    const before = [...session.surface.nodes]
+
+    // A new series whose effective text already sits on the latest surviving
+    // node must not re-baseline node 0: that would rewrite the request prefix
+    // without changing the prompt.
+    expect(projection.project('v2', NEW_SERIES)).toEqual([])
+    expect(session.surface.nodes).toEqual(before)
+  })
+
+  it('re-baselines node 0 at a series start whose effective text differs (appended node survives the log)', async () => {
+    const ctx = await sessionStore()
+    const session = ctx.sessions.create(SessionId('system-prompt-series-diff-text'))
+    const projection = new SystemPromptProjection(session)
+    commit(session, 1, projection.project('v1', CONTINUING)[0])
+    appendUser(session, 'hello')
+    const appended = commit(session, 2, projection.project('v2', CONTINUING)[0])
+
+    const updates = projection.project('v3', NEW_SERIES)
+    expect(updates.map(update => update.intent)).toEqual([replaceOf(appended.seq), replaceOf(session.surface.nodes[0]!)])
+  })
+
+  it('normalizes at a series start with an empty rendering: empties active tails and clears the head', async () => {
+    const ctx = await sessionStore()
+    const session = ctx.sessions.create(SessionId('system-prompt-series-empty-render'))
+    const projection = new SystemPromptProjection(session)
+    commit(session, 1, projection.project('v1', CONTINUING)[0])
+    appendUser(session, 'hello')
+    const appended = commit(session, 2, projection.project('v2', CONTINUING)[0])
+
+    const updates = projection.project('', NEW_SERIES)
+    expect(updates.map(update => update.intent)).toEqual([replaceOf(appended.seq), replaceOf(session.surface.nodes[0]!)])
+    for (const update of updates) commit(session, 3, update)
+    expect(session.deriveMessages().map(message => message.role)).toEqual(['user'])
+  })
+
+  it('keeps a capable continuing series inert on unchanged text and appending on changed text', async () => {
+    const ctx = await sessionStore()
+    const session = ctx.sessions.create(SessionId('system-prompt-series-continuing'))
+    const projection = new SystemPromptProjection(session)
+    commit(session, 1, projection.project('v1', CONTINUING)[0])
+    appendUser(session, 'hello')
+
+    expect(projection.project('v1', CONTINUING)).toEqual([])
+    const update = projection.project('v2', CONTINUING)[0]
+    expect(update?.intent).toEqual({ surfaceOp: 'append' })
+  })
+})
+
+/** A1 × A7 interaction: an inert system prompt never blocks the L2 delta channel. */
+describe('SystemPromptProjection with the runtime-context delta channel', () => {
+  it('delivers a runtime-context delta while the same-text series start emits no prompt commit', async () => {
+    const ctx = await sessionStore()
+    const session = ctx.sessions.create(SessionId('system-prompt-series-delta'))
+    const projection = new SystemPromptProjection(session)
+    commit(session, 1, projection.project('v1', CONTINUING)[0])
+    appendUser(session, 'hello')
+    commit(session, 2, projection.project('v2', CONTINUING)[0])
+
+    // Same-text series start: the prompt side is inert.
+    expect(projection.project('v2', NEW_SERIES)).toEqual([])
+
+    // The L2 delta side still registers its section change; the fold waits
+    // for the next assistant boundary (the defer rule), then rides the next
+    // real user message's text prefix — the inert prompt consumed nothing.
+    const runtimeContext = new RuntimeContextProjection(ctx, session)
+    runtimeContext.register('Current runtime context.\n\nMode: read-only.', [{ name: 'policy', text: 'Mode: read-only.' }])
+    session.append('assistant/message', {
+      turn: 2, step: 1, stream: [],
+      message: createAssistantMessage({ content: [{ type: 'text', text: 'done' }], source: { provider: 'mock', model: 'mock' } }),
+    }, { surfaceOp: 'append' })
+    const folded = runtimeContext.foldInto([createUserMessage({
+      content: [{ type: 'text', text: 'next' }],
+      source: { kind: 'user' },
+    })])
+    expect(folded).toHaveLength(1)
+    const [message] = folded
+    expect(message?.content[0]).toEqual({
+      type: 'text',
+      text: 'Current runtime context.\n\nMode: read-only.\n\nnext',
+    })
   })
 })

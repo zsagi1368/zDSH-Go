@@ -11,6 +11,7 @@ import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import * as AppBoot from '@deepseek-ai/dsh-app-boot'
 import { createLaunchEnvironmentSnapshot, DSH_LAUNCH_ENVIRONMENT_KEY } from '@deepseek-ai/dsh-launch-environment'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import type { WebServer } from '@deepseek-ai/dsh-host-webserver'
 import { apply, Config, internals } from '../src/index.ts'
@@ -127,6 +128,7 @@ describe('web-app runtime glue', () => {
     internals.openBrowser = openBrowser
     apply(ctx, new Config({ openBrowser: true, printUrl: true, surfaceContext: true }))
     await ctx.plugin(SystemPrompt, { personaPrefix: '' })
+    await ctx.plugin(SessionProjectionRegistry)
     await vi.waitFor(() => { expect(openBrowser).toHaveBeenCalled() })
 
     expect(log).toHaveBeenCalledWith('dsh web: http://127.0.0.1:4567/?token=test-token')
@@ -140,7 +142,10 @@ describe('web-app runtime glue', () => {
     const assembly = await ctx.systemPrompt.assemble()
     expect(assembly.sections.find(entry => entry.name === 'harness:source')?.text).toContain('DeepSeek Harness implementation checkout')
     const section = assembly.sections.find(entry => entry.name === 'app:web-surface')
-    expect(section?.text).toContain('http://127.0.0.1:4567')
+    // The sections carry no process values; the URL arrives as runtime context.
+    expect(section?.text).not.toContain('http://127.0.0.1:4567')
+    expect(assembly.contexts.find(entry => entry.name === 'app:web-surface')?.text)
+      .toContain('Current DeepSeek Harness Web GUI URL: "http://127.0.0.1:4567".')
     // The single update contract: the receiver is always on; no-refresh
     // reloads additionally need the rebuild watcher.
     expect(section?.text).toContain('pnpm run dev:web')
@@ -174,6 +179,7 @@ describe('web-app runtime glue', () => {
       publicUrl: 'https://proxy.example:8443/web',
     }))
     await ctx.plugin(SystemPrompt, { personaPrefix: '' })
+    await ctx.plugin(SessionProjectionRegistry)
     await vi.waitFor(() => { expect(openBrowser).toHaveBeenCalled() })
 
     expect(lifecycle).toEqual([
@@ -183,8 +189,9 @@ describe('web-app runtime glue', () => {
     ])
     const assembly = await ctx.systemPrompt.assemble()
     const section = assembly.sections.find(entry => entry.name === 'app:web-surface')
-    expect(section?.text).toContain('https://proxy.example:8443/web/')
     expect(section?.text).not.toContain('127.0.0.1')
+    expect(assembly.contexts.find(entry => entry.name === 'app:web-surface')?.text)
+      .toContain('Current DeepSeek Harness Web GUI URL: "https://proxy.example:8443/web/".')
     const urlContribution = contributions.find(contribution => contribution.name === 'web-runtime')
     expect(urlContribution?.resolve()).toEqual({ DSH_WEB_URL: 'https://proxy.example:8443/web/' })
   })
@@ -199,6 +206,7 @@ describe('web-app runtime glue', () => {
     internals.openBrowser = openBrowser
     apply(ctx, new Config({ openBrowser: false, printUrl: false, surfaceContext: true }))
     await ctx.plugin(SystemPrompt, { personaPrefix: '' })
+    await ctx.plugin(SessionProjectionRegistry)
     await new Promise(resolve => setTimeout(resolve, 0))
     expect(log).not.toHaveBeenCalled()
     expect(openBrowser).not.toHaveBeenCalled()
@@ -222,6 +230,7 @@ describe('web-app runtime glue', () => {
     } as never)
     apply(ctx, new Config({ openBrowser: false, printUrl: false, surfaceContext: false }))
     await ctx.plugin(SystemPrompt, { personaPrefix: '' })
+    await ctx.plugin(SessionProjectionRegistry)
     await new Promise(resolve => setTimeout(resolve, 0))
     const assembly = await ctx.systemPrompt.assemble()
     expect(assembly.sections.some(entry => entry.name === 'app:web-surface')).toBe(false)
@@ -465,17 +474,19 @@ describe('web-app runtime glue', () => {
     }
   })
 
-  it('fails loud when the prompt section resolves against a portless webserver', async () => {
+  it('fails loud when the model context resolves against a portless webserver', async () => {
     stageDist()
     const ctx = new Context()
     // A webserver whose bound port is gone (torn down mid-request): the
-    // section must throw, never render a URL with an undefined port.
+    // advertised-URL context must throw, never render a URL with an
+    // undefined port.
     const { server } = fakeHttpServer()
     Object.defineProperty(server, 'port', { get: () => undefined })
     ctx.provide('webServer', server)
     provideConnection(ctx)
     apply(ctx, new Config({ openBrowser: false, printUrl: false, surfaceContext: true }))
     await ctx.plugin(SystemPrompt, { personaPrefix: '' })
+    await ctx.plugin(SessionProjectionRegistry)
     await new Promise(resolve => setTimeout(resolve, 0))
     await expect(ctx.systemPrompt.assemble()).rejects.toThrow('webServer service missing')
     await ctx.fiber.dispose()

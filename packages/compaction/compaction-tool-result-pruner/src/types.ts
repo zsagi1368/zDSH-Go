@@ -39,3 +39,17 @@ export interface PruneResult {
   /** Total Unicode code points removed across replacements. */
   readonly charsRemoved: number
 }
+
+/** Optional per-call budgets for one pruning pass. */
+export interface PruneSessionOptions {
+  /**
+   * Per-result byte cap derived from the routed model's `toolCap` budget row
+   * through `toolCapToByteLimit` (the L3 rule: byte cap = toolCap × 3.5
+   * characters). Applied as the Unicode-code-point prune threshold for results
+   * carrying an `l3.pruning` declaration; results without a declaration keep
+   * the configured `thresholdChars`. Caps that cannot represent a valid
+   * replacement (below `headChars + marker + tailChars`, or not a positive
+   * finite number) fall back to the configured `thresholdChars`.
+   */
+  readonly byteCapPerResult?: number
+}

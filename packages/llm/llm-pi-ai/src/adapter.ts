@@ -60,6 +60,7 @@ import type { AttachmentStore, ImageAttachmentRef } from '@deepseek-ai/dsh-attac
 import { idleWatchdog, timeoutOf } from '@deepseek-ai/dsh-timeout'
 import type { ResolvedPiAiProviderProfile } from './config.ts'
 import { toPiContext } from './context.ts'
+import { assertGuardObserveSupport, createGuardFetchWrapper } from './guard-observe.ts'
 import { conversationUpdates, createModels, getSupportedThinkingLevels } from './models.ts'
 import { toStreamChunks } from './stream.ts'
 
@@ -112,6 +113,14 @@ export interface PiAiAdapterOptions {
    * conversion because its stored replay state is unusable by this build.
    */
   onReplayDegrade?: (detail: { provider: string; model: string; reason: string }) => void
+  /**
+   * Whether the wire-body guard observation surface is switched on (T3 L5-A,
+   * D1P2-whitelist-design). Default off: requests then flow byte-identical to
+   * the unwired baseline even when one carries an observation sink. Read per
+   * request so an operator flipping the switch reaches the next request
+   * without touching the route set.
+   */
+  guardObserve?: () => boolean
 }
 
 /** The two auth injectables a pi-ai collection is built with. */
@@ -399,6 +408,13 @@ export class PiAiAdapter extends LlmAdapter {
             maxBytes: profile.requestImageMaxBytes,
           },
         }, onReplayDegrade)
+      // T3 L5-A (A1): the observation surface installs only when the switch is
+      // on AND the request carries a host sink — one-shot/subagent requests
+      // carry none, so their fetch stays unwired and produces zero records
+      // (the pass-through invariant is the absence, D1P2 §2.1). Enabled
+      // wrapping asserts the installed pi-ai forwards `fetch` (A6, fail loud).
+      const guardSink = this.config.guardObserve?.() === true ? options.onGuardObserve : undefined
+      if (guardSink !== undefined) assertGuardObserveSupport()
       const events = snapshot.models.streamSimple(model, context, {
         ...profileOptions(profile, reasoning, apiKey),
         ...options.temperature === undefined ? {} : { temperature: options.temperature },
@@ -408,6 +424,9 @@ export class PiAiAdapter extends LlmAdapter {
         // Profile headers are deployment-owned; attribution names are
         // Harness-owned and therefore win collisions.
         headers: requestHeaders(profile.headers),
+        // Hash-then-passthrough per attempt: the wrapper never touches
+        // init.body, it captures and releases the original bytes (D1P2 §2.1).
+        ...guardSink === undefined ? {} : { fetch: createGuardFetchWrapper({ model, sink: guardSink }) },
       })
       const iterator = toStreamChunks(events, model.contextWindow, options.signal, model.id)[Symbol.asyncIterator]()
       let exhausted = false
