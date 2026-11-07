@@ -1,0 +1,34 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/context/harness-dev-context/README.md
+/:
+  en: 8fed567b18e9dfa2
+  zh: 1a1b879e53f591c0
+/deepseek-ai-dsh-harness-dev-context:
+  en: b47701c093269adb
+  zh: e147a06ec0d6047f
+/deepseek-ai-dsh-harness-dev-context/table-of-contents:
+  en: 3ccb7b69fc225e7c
+  zh: 3dd3240779ed838b
+/deepseek-ai-dsh-harness-dev-context/summary:
+  en: daf618174270461e
+  zh: fdf7dce396df6162
+/deepseek-ai-dsh-harness-dev-context/use-this-package:
+  en: abe8ff4de0f5b56d
+  zh: a2bc0f5c3e49b1f9
+/deepseek-ai-dsh-harness-dev-context/use-this-package/what-the-model-gets:
+  en: 14ac979c9c380b85
+  zh: 7125561ce88f6a6e
+/deepseek-ai-dsh-harness-dev-context/use-this-package/sessions-from-earlier-releases:
+  en: a6506f2c31855646
+  zh: bf2b075cf2c55b6f
+/deepseek-ai-dsh-harness-dev-context/frozen-legacy-wording-maintenance-duty:
+  en: 80f9bd57157b5fde
+  zh: 23440061ffc8d36f
+/deepseek-ai-dsh-harness-dev-context/adaptations-from-the-official-package:
+  en: 3a721563064f2998
+  zh: 8328df0bac180c75
+/deepseek-ai-dsh-harness-dev-context/adaptations-from-the-official-package/dev-note:
+  en: a920110dbda620d3
+  zh: 2f160512cfaa3149

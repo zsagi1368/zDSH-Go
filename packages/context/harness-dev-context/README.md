@@ -5,6 +5,8 @@ kind: "package-reference"
 
 # @deepseek-ai/dsh-harness-dev-context
 
+English | [中文](README.zh.md)
+
 ## Table of Contents
 
 - [Summary](#summary)
