@@ -203,6 +203,15 @@ interface AgentOptions {
   reasoningEffort?: ReasoningEffortId
   /** Maximum output tokens for each conversation-model request. */
   maxTokens?: number
+  /**
+   * Opt this session-bound main chain into wire-body guard observation
+   * (T3 L5-A, observe-only; the llm-pi-ai `guardObserve` switch must also be
+   * on, and it is that switch the operator flips). Main-chain requests then
+   * carry an observation sink; one-shot and subagent creation paths omit this
+   * key, so no sink reaches the adapter and its wrapper never installs — the
+   * pass-through invariant is the absence (D1P2 §2.1).
+   */
+  guardObserve?: true
 }
 ```
 

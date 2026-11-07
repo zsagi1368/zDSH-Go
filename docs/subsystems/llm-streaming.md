@@ -510,6 +510,20 @@ interface LlmConfigurableProvider {
    * from outside.
    */
   declared?: boolean
+  /**
+   * The endpoint this route's requests go to when its profile names none —
+   * the address the owning adapter ships for this provider. Absent means the
+   * adapter has no default to offer: either the route is one configuration
+   * declared (a gateway the adapter knows nothing about), or the provider's
+   * address is built per deployment and cannot be stated once.
+   *
+   * A configuration surface shows this as the endpoint field's default, so
+   * picking a provider fills the address the provider actually serves rather
+   * than making the user look it up. It is a DISPLAY default, not a stored
+   * value: the adapter keeps resolving the endpoint itself, so a profile that
+   * names none still follows the provider's own address.
+   */
+  defaultBaseUrl?: string
   /** Configuration diagnostic for repair; unaffected models may remain serviceable. */
   error?: string
 }
@@ -650,6 +664,15 @@ interface GenerateOptions {
    * requests leave it unset.
    */
   purpose?: 'compaction' | 'session-title'
+  /**
+   * Session-bound main-chain wire-observation sink (T3 L5-A, observe-only).
+   * When the llm-pi-ai `guardObserve` switch is on, the adapter wraps this
+   * request's fetch with a hash-then-passthrough wrapper and invokes the sink
+   * synchronously once per attempt with the wire capture (D1P2 §2.1). One-shot
+   * and subagent requests leave it unset, and no sink means no wrapper and
+   * zero observation records — the pass-through invariant is the absence.
+   */
+  onGuardObserve?: (capture: LlmGuardObserveCapture) => void
 }
 ```
 
