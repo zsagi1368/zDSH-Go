@@ -238,7 +238,7 @@ export function apply(ctx: Context, config: Config): void {
     profiles,
     resolveApiKey,
     auth,
-    guardObserve: () => config.guardObserve.get() === true,
+    guardObserve: () => config.guardObserve.get(),
     resolveAttachments: () => ctx.get('attachments'),
     resolveImageAccess: (attachments, ref) => resolveImageAttachmentAccess(
       attachments,

@@ -65,7 +65,6 @@ import type {
   TextContent,
   ThinkingContent,
   Tool as PiTool,
-  ToolResultMessage,
 } from '@earendil-works/pi-ai'
 
 // ---------------------------------------------------------------------------
@@ -347,7 +346,8 @@ export function normalizeMessage(message: PiMessage, options?: NormalizeOptions)
 
   // toolResult → tool_result 块（convertToolResult :1120-1153）：整条永不
   // 剔除；toolName 不在 wire 上，保留为原地改写纵深检测（未建模清单第 4 条）。
-  const result = message as ToolResultMessage
+  // （TS 在此分支已收窄为 ToolResultMessage——显式断言冗余，oxlint no-unnecessary-type-assertion。）
+  const result = message
   return {
     role: 'toolResult',
     toolCallId: result.toolCallId,
