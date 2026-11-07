@@ -687,7 +687,7 @@ export type ThemePreference = typeof THEME_PREFERENCES[number]
 ## `@deepseek-ai/dsh-compaction-basic`
 
 - `inject`: `llm` · `tokenMeter` · `sessions`
-- `source`: [`packages/compaction/compaction-basic/src/types.ts:52`](../packages/compaction/compaction-basic/src/types.ts)
+- `source`: [`packages/compaction/compaction-basic/src/types.ts:46`](../packages/compaction/compaction-basic/src/types.ts)
 
 ```ts config-catalog
 /** Basic compaction configuration with an optional exact-target policy table. */
@@ -704,18 +704,6 @@ export interface CompactionPolicyConfig {
   thresholdRatio?: number
   /** Additional pressure headroom beyond the routed output reservation. Non-negative integer; defaults to `65536`. */
   headroomTokens?: number
-  /**
-   * Use the proactive L4 trigger line `W − R_pess` instead of
-   * `thresholdRatio × W` (CONTEXT-CACHE-MANAGEMENT.md §1.2/§2 L4). Defaults to
-   * `false` so the legacy ratio mode stays the fallback; when enabled it is the
-   * recommended trigger. Below the legal domain (`W < 32768`) it falls back to
-   * `thresholdRatio` mode with a warning.
-   */
-  proactiveTrigger?: boolean
-  /** Parallel tool-result batch cap (BATCH_CAP) for the proactive trigger. Defaults to `2`. */
-  batchCap?: number
-  /** Max output hard cap (C) of the model, used by the proactive trigger. Defaults to `32768`. */
-  outputCap?: number
   /** Recent context retained as a fraction of context window minus reserved output tokens. Defaults to `0.16`. */
   retainRatio?: number
   /** Absolute recent-context budget; mutually exclusive with `retainRatio`. */
@@ -1788,6 +1776,15 @@ export interface Config {
    * and registers them the moment a settings section supplies profiles.
    */
   providers: Volatile<Record<string, PiAiProviderProfile>>
+  /**
+   * Wire-body guard observation switch (T3 L5-A, observe-only per
+   * D1P2-whitelist-design). Default off: with it off, observed requests behave
+   * byte-identically to the unwired baseline — the runtime rollback is
+   * flipping this back to false. Enabling additionally requires the request to
+   * carry a host sink (session-bound main chain) and the installed pi-ai to
+   * forward the `fetch` option (asserted fail-loud, A6).
+   */
+  guardObserve: Volatile<boolean>
 }
 
 /** Configuration for one pi-ai provider route; the `providers` dict key IS the route. */
@@ -3606,7 +3603,7 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-system-prompt`
 
-- `source`: [`packages/core/system-prompt/src/index.ts:254`](../packages/core/system-prompt/src/index.ts)
+- `source`: [`packages/core/system-prompt/src/index.ts:257`](../packages/core/system-prompt/src/index.ts)
 
 ```ts config-catalog
 /** Plugin config: the deployment-authored fragment of the system prompt (see {@link Config.personaPrefix} for its contract). */
@@ -4407,7 +4404,7 @@ export interface WebRuntimeConfig {
 ## `@deepseek-ai/dsh-web-app`
 
 - `inject`: `webServer`
-- `source`: [`packages/bundle/web-app/src/index.ts:43`](../packages/bundle/web-app/src/index.ts)
+- `source`: [`packages/bundle/web-app/src/index.ts:44`](../packages/bundle/web-app/src/index.ts)
 
 ```ts config-catalog
 /** Plugin config: composed deployment settings plus per-invocation command-line values. */
@@ -4417,18 +4414,19 @@ export interface Config {
   /** Print the URL line on activation; a non-interactive layer can turn it off. */
   printUrl: boolean
   /**
-   * Register the model-visible surface context (the `app:web-surface` prompt
-   * section and the `DSH_WEB_URL` bash variable). A one-shot non-interactive
-   * layer can turn it off when its user is not in the GUI, so the
-   * orientation text would be false.
+   * Mount the model-visible surface context (the harness-dev-context prompt
+   * sections and runtime-context values, plus the `DSH_WEB_URL` bash
+   * variable). A one-shot non-interactive layer can turn it off when its user
+   * is not in the GUI, so the orientation text would be false.
    */
   surfaceContext: boolean
   /**
    * Canonical HTTP(S) root to advertise in the printed and opened URL,
-   * `DSH_WEB_URL`, and the web-surface orientation, e.g.
-   * `https://app.example/ui/`, normalized to end in `/`. Configures no routing
-   * or authentication; see [public deployments](../README.md#public-deployments).
-   * Absent or YAML `null` advertises the bind-address URL.
+   * `DSH_WEB_URL`, `webApp.getAdvertisedUrl()`, and the web-surface runtime
+   * context, e.g. `https://app.example/ui/`, normalized to end in `/`.
+   * Configures no routing or authentication; see
+   * [public deployments](../README.md#public-deployments). Absent or YAML
+   * `null` advertises the bind-address URL.
    */
   publicUrl?: string
 }
@@ -4716,6 +4714,7 @@ export interface Config {
 | `@deepseek-ai/dsh-fs-observation-policy` | — | [`packages/fs/fs-observation-policy/src/index.ts`](../packages/fs/fs-observation-policy/src/index.ts) |
 | `@deepseek-ai/dsh-fs-ssh` | `ssh` · `sandboxPolicy` | [`packages/ssh/fs-ssh/src/index.ts`](../packages/ssh/fs-ssh/src/index.ts) |
 | `@deepseek-ai/dsh-goal-round-driver` | `agents` · `goals` · `sessions` | [`packages/goal/goal-round-driver/src/index.ts`](../packages/goal/goal-round-driver/src/index.ts) |
+| `@deepseek-ai/dsh-harness-dev-context` | `systemPrompt` · `sessionProjections` · `webApp` | [`packages/context/harness-dev-context/src/index.ts`](../packages/context/harness-dev-context/src/index.ts) |
 | `@deepseek-ai/dsh-host-directory-picker-auto` | `webServer` · `connection` · `loader` | [`packages/host/directory-picker-auto/src/index.ts`](../packages/host/directory-picker-auto/src/index.ts) |
 | `@deepseek-ai/dsh-host-directory-picker-native` | — | [`packages/host/directory-picker-native/src/index.ts`](../packages/host/directory-picker-native/src/index.ts) |
 | `@deepseek-ai/dsh-host-plugin-inventory` | `loader` | [`packages/host/plugin-inventory/src/index.ts`](../packages/host/plugin-inventory/src/index.ts) |
