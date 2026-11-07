@@ -78,8 +78,8 @@ const RESERVED_BASH_ENV_KEYS = new Set<DshEnvironmentKey>([
   // The other two distribution homes are host-resolved facts like DSH_HOME:
   // a contributor that could own them could point a nested `dsh` command at
   // another distribution, which is the whole thing this registry prevents.
-  `${DSH_ENV_PREFIX}BRANCH_HOME` as DshEnvironmentKey,
-  `${DSH_ENV_PREFIX}AGENTS_HOME` as DshEnvironmentKey,
+  `${DSH_ENV_PREFIX}BRANCH_HOME`,
+  `${DSH_ENV_PREFIX}AGENTS_HOME`,
   DSH_SHELL_KEY,
   DSH_SESSION_ID_KEY,
   DSH_PROFILE_KEY,
