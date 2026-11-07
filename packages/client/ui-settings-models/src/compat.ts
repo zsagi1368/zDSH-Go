@@ -38,7 +38,9 @@ function isBrowserSpecifierRefusal(error: unknown): boolean {
   // refusal can sit anywhere on the cause chain rather than on the outer error.
   let current: unknown = error
   for (let depth = 0; depth < 5 && current !== undefined && current !== null; depth += 1) {
-    const message = current instanceof Error ? current.message : String(current)
+    const message = typeof current === 'string'
+      ? current
+      : current instanceof Error ? current.message : JSON.stringify(current)
     if (message.includes('Failed to resolve module specifier')) return true
     current = current instanceof Error ? current.cause : undefined
   }

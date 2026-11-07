@@ -1050,7 +1050,7 @@ export class PluginGovernanceGateway extends TypertRemoteService {
       await entry.update({ disabled })
     } catch (cause) {
       this.warn(
-        `live ${disabled ? 'disable' : 'enable'} of ${String(pluginId)} failed (${cause instanceof Error ? cause.message : String(cause)}); the registry holds the decision and a restart will apply it`,
+        `live ${disabled ? 'disable' : 'enable'} of ${pluginId} failed (${cause instanceof Error ? cause.message : String(cause)}); the registry holds the decision and a restart will apply it`,
       )
     }
   }
