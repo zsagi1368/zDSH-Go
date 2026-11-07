@@ -48,3 +48,18 @@ This package ports `dsh-v0.2.2-alpha.3`'s `packages/context/harness-dev-context`
 ### Dev Note
 
 This Dev Note is non-authoritative working context: undecided directions and notes for maintainers. Shipped behavior and accepted rationale live in the sections above, the package code, and the porting record (CTX-IMP-20261104 T5 evidence: `zDSH-docs/R&D/ctx-imp-20261104/artifacts/T5-evidence.md`). Open maintenance items: the regression checklist for the four-quadrant A1 alignment lives with the spec; the收益量级 estimate (P-D5-7) is a product-gate input, not yet backed by session-level samples.
+## Model Experience
+
+Indirectly, through the Web runtime glue (`@deepseek-ai/dsh-web-app`) that mounts it under its `surfaceContext` switch; the plugin itself adds no tool, schema, or model call. Its two prompt sections join the system prompt ahead of the cached history, and its two runtime-context lines ride the L2 delta channel.
+
+#### KV Cache effect
+
+No direct invalidation: sections repeat verbatim and values append after the cached history, so the request prefix over earlier messages is preserved.
+
+## Known Limitations and Deferred Work
+
+These limits define where the port stops and future work begins.
+
+- **The fork's L2 delta channel is an intentional divergence (A7)** — the official alpha.3 package appends isolated snapshot user messages, this fork folds values into the next real user message's text prefix; the prefix effect is equivalent, and the equivalence argument plus the four-quadrant spec live with the porting record (CTX-IMP-20261104 T5 evidence).
+- **`webApp.getAdvertisedUrl()` is the only consumed Web-runtime fact** — a future harness-dev field that needs more of the runtime (e.g. window or tab state) is out of scope here and belongs to the glue plugin.
+- **Legacy-wording matching is exact-byte** — a future release that changes the current guidance wording must add the outgoing paragraphs as a new frozen pair instead of editing the existing one (see the Frozen legacy wording section).

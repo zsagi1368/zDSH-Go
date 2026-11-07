@@ -32,3 +32,12 @@
 /deepseek-ai-dsh-harness-dev-context/adaptations-from-the-official-package/dev-note:
   en: a920110dbda620d3
   zh: 2f160512cfaa3149
+/deepseek-ai-dsh-harness-dev-context/model-experience:
+  en: 8a623b78f0e49bbe
+  zh: d7503a33e6f95bee
+/deepseek-ai-dsh-harness-dev-context/model-experience/kv-cache-effect:
+  en: f76c2f535a10c43a
+  zh: 3995239b4d4617b0
+/deepseek-ai-dsh-harness-dev-context/known-limitations-and-deferred-work:
+  en: 391f2658f45ef759
+  zh: 8b6a00a72119dd45
