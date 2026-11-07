@@ -5,6 +5,14 @@ kind: "package-reference"
 
 # @deepseek-ai/dsh-harness-dev-context
 
+## Table of Contents
+
+- [Summary](#summary)
+- [Use this package](#use-this-package)
+- [Frozen legacy wording — maintenance duty](#frozen-legacy-wording--maintenance-duty)
+- [Adaptations from the official package](#adaptations-from-the-official-package)
+- [Dev Note](#dev-note)
+
 ## Summary
 
 `dsh-harness-dev-context` tells an agent running behind the DeepSeek Harness Web GUI where the harness implementation checkout lives, how the GUI relates to "this page", and which URL serves it. The system prompt carries only value-free guidance; the current checkout path and GUI URL arrive as runtime context, so starting the process from another checkout, port, or installation never rewrites a Session's logged system prompt. Sessions whose prompt still embeds those values from earlier releases keep that text verbatim.
@@ -34,3 +42,7 @@ This package ports `dsh-v0.2.2-alpha.3`'s `packages/context/harness-dev-context`
 1. **Synchronous projection registry** — the official alpha.3 registry registers asynchronously and returns a handle (`Promise<Handle>` with `handle.stateOf(session)`); this fork's registry registers synchronously and reads through `sessionProjections.stateOf(session, key)`. `apply` is therefore synchronous, and registration still completes before the section registrations that read it.
 2. **Projection key declaration** — this fork's `SessionProjectionStateMap` requires a merge-extensible key entry, declared by module augmentation (`harnessDevLegacyPrompt`); the official alpha.3 host-only overload accepts any string key.
 3. **`webApp` contract ownership** — the official web-app bundle owns the `WebApp` interface and Context declaration, and the official bundle patch mounts the plugin as an unconditional row. This fork's type-check graph is acyclic project references and the mount is config-gated in the glue plugin's `surfaceContext` branch, so this package owns the `WebApp` interface and Context declaration, and the glue plugin imports this package to provide the service and mount the plugin.
+
+### Dev Note
+
+This Dev Note is non-authoritative working context: undecided directions and notes for maintainers. Shipped behavior and accepted rationale live in the sections above, the package code, and the porting record (CTX-IMP-20261104 T5 evidence: `zDSH-docs/R&D/ctx-imp-20261104/artifacts/T5-evidence.md`). Open maintenance items: the regression checklist for the four-quadrant A1 alignment lives with the spec; the收益量级 estimate (P-D5-7) is a product-gate input, not yet backed by session-level samples.

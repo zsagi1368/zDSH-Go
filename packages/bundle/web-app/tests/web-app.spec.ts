@@ -537,7 +537,10 @@ describe('web-app runtime glue', () => {
     expect(args?.[2]).toContain("if (process.platform === 'win32')")
     expect(args?.[2]).toContain('launcher.ref()')
     expect(options?.env).not.toHaveProperty('DEEPSEEK_API_KEY')
-    expect(options?.env).not.toHaveProperty('DSH_HOME')
+    // R10 (f3e3045591): the harness home family names the distribution a nested
+    // `dsh` command belongs to — scrubbed no more, only other DSH_* keys are.
+    expect(options?.env).toHaveProperty('DSH_HOME', '/must-not-reach-browser')
+    expect(options?.env).not.toHaveProperty('DSH_WEB_URL')
     expect(options?.env?.PATH).toBe(process.env.PATH)
     expect(options?.stdio).toEqual(['ignore', 'inherit', 'pipe'])
     completed.emit('close', 0)
