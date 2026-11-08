@@ -14,7 +14,7 @@
  * @see CONTEXT-CACHE-MANAGEMENT.md §2 L2 — 追加历史层（v2.3 M4′ 三项闭合）
  */
 
-import { createSystemMessage, freezeMessage } from '@deepseek-ai/dsh-llm'
+import { createSystemMessage, createUserMessage, freezeMessage } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, ContextFormed, ContextSnapshotSection, Message, UserMessage } from '@deepseek-ai/dsh-llm'
 import type { Session, SurfaceIntent, SystemMessage } from '@deepseek-ai/dsh-session'
 import { isReplacementSurfaceEvent, SessionSeq } from '@deepseek-ai/dsh-session'
@@ -273,6 +273,20 @@ export class RuntimeContextProjection {
    * 固定初值会漏出 `[toolResult, user(delta)]` 相邻对触发 400。
    */
   private deferFoldAfterToolResult: boolean
+  /**
+   * 已投递上下文载体的会话 seq（A″ 载体 = 折叠前缀所在的真实 user 消息，或压缩后
+   * 重发的独立快照消息）。替换面（压缩）覆盖该 seq ⇒ 载体从发送视图消失，登记
+   * {@link restorePending}（TD-2 修复：surface 感知重发，见 {@link takeRestoreSnapshot}）。
+   */
+  private retainedSeq: SessionSeq | undefined
+  /**
+   * foldInto 刚折叠出的载体前缀文本（= 消费掉的 delta）。append 事件是 data 的
+   * JSON 快照（非调用者对象引用），故按「真实 user 追加消息文本以此为前缀」对号
+   * 回填 {@link retainedSeq}；折叠未发生（推迟/拒绝）时立即清除。
+   */
+  private awaitingCarrierPrefix: string | undefined
+  /** 载体已被替换面吃掉、等待下一次请求准入重发完整快照。 */
+  private restorePending = false
 
   /**
    * 恢复投影状态并跟随权威 session 事件。
@@ -290,15 +304,44 @@ export class RuntimeContextProjection {
     // 新格式从折叠进真实 user 消息的 delta 前缀提取，见 restoreBaseline）。
     const restored = this.restoreBaseline(session)
     this.baseline = restored?.text
+    this.retainedSeq = restored?.seq
     if (restored?.sections !== undefined) {
       for (const section of restored.sections) this.sectionBaseline.set(section.name, section.text)
     }
 
     ctx.on('session/event', (subject, event) => {
       if (subject !== session) return
+      if (event.type === 'user/message') {
+        // A″ 折叠载体回填：append 事件的 data 是 JSON 快照（非调用者对象引用），
+        // 故按「真实 user 消息文本以刚折叠的 delta 为前缀」对号，记录载体 seq。
+        // 折叠目标是 decision.messages 中第一条真实 user 消息，append 循环保序，
+        // 故首个前缀命中的真实 user 追加即折叠载体。
+        if (this.awaitingCarrierPrefix !== undefined && isRealUserMessage(event.data)) {
+          const text = textOf(event.data)
+          if (text !== undefined && text.startsWith(this.awaitingCarrierPrefix)) {
+            this.awaitingCarrierPrefix = undefined
+            this.retainedSeq = event.seq
+            return
+          }
+        }
+        // 独立快照载体（压缩后重发投递，或旧格式 owned 消息被外部直接 append）。
+        if (isOwned(event.data) && textOf(event.data) !== undefined) {
+          this.retainedSeq = event.seq
+          return
+        }
+      }
       // 压缩边界回收：替换事件（压缩）把边界前的 delta 并入摘要，
       // 随边界从发送视图消失——会话投影层保证压缩后 delta 区间被清空。
-      if (isReplacementSurfaceEvent(event)) this.reclaimAtBoundary(event.surfaceOp.endSeq)
+      if (isReplacementSurfaceEvent(event)) {
+        this.reclaimAtBoundary(event.surfaceOp.endSeq)
+        // TD-2 修复（surface 感知）：替换面覆盖已投递载体 ⇒ 载体从发送视图消失，
+        // 下一次请求准入重发完整快照（压缩后必需上下文不丢，df655fd11e 官方语义
+        // 的 A″ 等价面）。sourceEventSeqs 由 session 层强制覆盖全部被遮蔽节点。
+        if (this.retainedSeq !== undefined && event.sourceEventSeqs?.includes(this.retainedSeq) === true) {
+          this.retainedSeq = undefined
+          this.restorePending = true
+        }
+      }
     })
   }
 
@@ -318,6 +361,8 @@ export class RuntimeContextProjection {
   private restoreBaseline(session: Session): {
     text: string | undefined
     sections: readonly ContextSnapshotSection[] | undefined
+    /** 载体消息的会话 seq（初始化 {@link retainedSeq}）；无法定位载体时 undefined。 */
+    seq: SessionSeq | undefined
   } | undefined {
     const surface = new Set(session.surface.nodes)
     for (let index = session.seq - 1; index >= 0; index -= 1) {
@@ -331,7 +376,8 @@ export class RuntimeContextProjection {
       const sections = event.data.source.kind === SOURCE && event.data.source.form === 'snapshot'
         ? event.data.source.sections
         : undefined
-      return { text: textOf(event.data), sections }
+      const text = textOf(event.data)
+      return { text, sections, seq: text === undefined ? undefined : event.seq }
     }
     for (let index = session.seq - 1; index >= 0; index -= 1) {
       // oxlint-disable-next-line typescript/no-deprecated -- Existing Session history read; migration deferred.
@@ -352,7 +398,7 @@ export class RuntimeContextProjection {
       // delta/原文歧义解析风险），保守重发即安全。
       const prefix = text.slice(0, separator)
       if (prefix === CLEARED) return undefined
-      return { text: prefix, sections: undefined }
+      return { text: prefix, sections: undefined, seq: event.seq }
     }
     return undefined
   }
@@ -436,6 +482,8 @@ export class RuntimeContextProjection {
    * @returns 折叠后的新消息数组；未折叠时返回原消息（浅拷贝）。
    */
   foldInto(messages: readonly UserMessage[]): UserMessage[] {
+    // 新一次折叠求值：清除上一轮（可能因 pre-step reject / 推迟而未 append 的）前缀候选。
+    this.awaitingCarrierPrefix = undefined
     if (this.deltas.length === 0 || messages.length === 0) return [...messages]
     const derived = this.session.deriveMessages()
     const targetIndex = messages.findIndex(isRealUserMessage)
@@ -447,7 +495,44 @@ export class RuntimeContextProjection {
     const result = [...messages]
     // oxlint-disable-next-line typescript/no-non-null-assertion -- targetIndex comes from canFoldAfter's validated sequence
     result[targetIndex] = foldDeltaPrefix(messages[targetIndex]!, delta)
+    // 折叠载体前缀候选：agent.ts 紧随的 append 事件按「真实 user 文本以此为前缀」
+    // 对号回填 retainedSeq（append data 是 JSON 快照，对象身份不可用）。
+    this.awaitingCarrierPrefix = delta
     return result
+  }
+
+  /**
+   * 压缩边界重发（TD-2 修复，df655fd11e 官方语义的 A″ 等价面）：载体（折叠前缀的
+   * 真实 user 消息，或上一次重发的快照）被替换面覆盖后，在下一次请求准入取走完整
+   * 快照消息并 append 进会话——压缩吃掉的必需上下文由此回到发送视图。
+   *
+   * 与官方 project() 语义的差异（A″ 单载体）：首次投递与后续变更仍走 delta 折叠
+   * （`register`/`foldInto`），本方法**只**在载体丢失后补偿一次完整快照；
+   * `restorePending` 消费即清，不重复投递。
+   *
+   * 调用时序（agent.ts）：在 `register` 之后、`foldInto` 之前取走——快照文本为
+   * 当前完整上下文（pending delta 的超集），取走时清空 pending delta，避免同一次
+   * 准入「折叠 + 快照」双重投递；当前上下文为空（压缩后活动集清空）时不投递，
+   * 交由 `register('')` 的 CLEARED delta 走既有折叠路径。
+   *
+   * @param current - 当前完整渲染上下文（`joinContextSections` 结果）。
+   * @param sections - 形成该快照的命名贡献（节），按渲染顺序；独立快照携带节表，
+   *   resume 由 {@link restoreBaseline} 的 `form === 'snapshot'` 分支恢复节级基线。
+   * @returns 待 append 的快照 user 消息；无需重发时 undefined。
+   */
+  takeRestoreSnapshot(current: string, sections: readonly ContextSnapshotSection[]): UserMessage | undefined {
+    if (!this.restorePending) return undefined
+    this.restorePending = false
+    if (current.length === 0) return undefined
+    // 完整快照已包含全部 pending 变更：清空待出站 delta，防止同一次准入双投递。
+    this.takeDeltas()
+    return createUserMessage({
+      content: [{ type: 'text', text: current }],
+      // 与官方 project() 同口径：无节可归属时退化为裸 runtime-context 源。
+      source: sections.length === 0
+        ? { kind: SOURCE }
+        : { kind: SOURCE, form: 'snapshot', sections },
+    })
   }
 
   /**

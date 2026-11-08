@@ -624,6 +624,10 @@ export class ReactLoopAgent implements Agent {
       // 变成刚提交的 system 消息 → 静默推迟折叠（首轮上下文不上线）。放在提交前
       // 求值，前驱集合与 Go 原 pre-step 一致。
       this.runtimeContext.register(joinContextSections(sections), sections)
+      // TD-2 修复（surface 感知重发，df655fd11e 官方语义的 A″ 等价面）：压缩边界
+      // 吃掉已投递载体后，本次准入重发完整快照。先于 foldInto 求值——快照文本是
+      // pending delta 的超集，取走时清空 delta，避免「折叠 + 快照」双重投递。
+      const restore = this.runtimeContext.takeRestoreSnapshot(joinContextSections(sections), sections)
       // 注记②：折叠只在 firstAttempt 生效（append 槽位只在首 attempt 存在）；
       // register 每 attempt 执行（单调登记，重试期变更成为 pending delta，随下次折叠投递）。
       const folded = firstAttempt ? this.runtimeContext.foldInto(decision.messages) : decision.messages
@@ -641,6 +645,13 @@ export class ReactLoopAgent implements Agent {
         for (const message of folded) {
           this.session.append('user/message', message, { surfaceOp: 'append' })
         }
+      }
+      // 压缩后重发：独立快照 user 消息（source.kind='runtime-context'，form='snapshot'）
+      // 持久化进会话，deriveMessages 天然纳入后续请求视图；resume 由投影的
+      // restoreBaseline `form === 'snapshot'` 分支恢复节级基线。载体未被压缩时
+      // （常规路径）恒为 undefined，零额外消息——A″ 单载体 wire 形态不变。
+      if (restore !== undefined) {
+        this.session.append('user/message', restore, { surfaceOp: 'append' })
       }
       firstAttempt = false
       const request = this.buildRequest(config, preparedCall, assembly.tools, { turn, step }, startsRequestSeries, signal)
