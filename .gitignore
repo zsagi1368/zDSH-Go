@@ -66,3 +66,6 @@ native/system/test/bin/
 
 # zDSH: 官方 stagehand worker env:{} 在 win32 的 os.tmpdir() 退化残留（上游申报在案：DEBT-ledger B5），防工作树污染
 undefined/
+
+# Local plugin artifact copies (factory install runtime state; rebuilt from pins)
+packages/plugins/
