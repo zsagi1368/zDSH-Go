@@ -29,16 +29,6 @@
       ]
     },
     {
-      "path": "apps/desktop/tests/windows-cli-signals.spec.ts",
-      "lane": "github-windows-ci",
-      "reason": "环境态：`delivers SIGINT before process exit` 在 Windows 控制台信号面上超时（另有 afterAll 套件级超时）；对照树同点同败，属继承环境面而非 Go 语义差异。",
-      "evidence": [
-        "P6-GATE-MATRIX.md §3.1（命令/环境族行：`windows-cli-signals.spec.ts`(1+afterAll 套件)，「全部同败」）",
-        "P6-logs/gate04-full-test-run1.log（`FAIL thread-safe apps/desktop/tests/windows-cli-signals.spec.ts > Windows Electron console signals`）",
-        "TC-CI-GREEN.md 背景（实测）「CI 失败集②」"
-      ]
-    },
-    {
       "path": "packages/boot/hmr/tests/package-manifest.spec.ts",
       "lane": "workstation",
       "reason": "环境态：`terminates scope lookup after invalidating the filesystem root without modifying it` 在子进程 `node:internal/modules/run_main:107` 处崩溃（Node 24 子进程原型/启动面本机行为）；对照树同点同败。",
