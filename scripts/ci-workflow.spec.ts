@@ -218,9 +218,12 @@ describe('CI known-failure roster (Windows quality gate)', () => {
     // Explicit pins: both numbers move only with a reviewed roster edit (the
     // campaign's reverse verification replayed the original failure set against
     // a cleared roster; CTX-REL-20261108 W2 removed the TD-2 row and the
-    // windows-cli-signals row after both files turned green: 10 registered / 2 hosted).
-    expect(local).toHaveLength(10)
-    expect(hosted).toHaveLength(2)
+    // windows-cli-signals row after both files turned green locally, then the
+    // hosted runner re-redded windows-cli-signals (run 42652025042) and the row
+    // was re-admitted under admission rule 1 (environment face, evidenced):
+    // 11 registered / 3 hosted).
+    expect(local).toHaveLength(11)
+    expect(hosted).toHaveLength(3)
 
     // Lane semantics, stated independently of the counts: the local lane
     // excludes every registered entry in file order, while `GITHUB_ACTIONS=true`

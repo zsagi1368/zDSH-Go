@@ -100,6 +100,16 @@
         "P6-GATE-MATRIX.md §3.1（tar 族行：`local-bundle-registry.spec.ts`(15)，「`tar -czf C:\\...` → exited 2（同一 PATH 环境）」，对照树 15F 同败）",
         "CIGREEN-logs/v1-local-measure.log:9620（本卡实测复现同族失败）"
       ]
+    },
+    {
+      "path": "apps/desktop/tests/windows-cli-signals.spec.ts",
+      "lane": "github-windows-ci",
+      "reason": "Windows hosted-runner console 信号投递环境面：SIGINT 用例在 GitHub 托管 runner 的 console 会话上不达（W2 修复 76abf45161 重启 Ctrl+C 处理后本机 2/2 全绿、SIGINT 562ms 送达，runner 上同代码仍超时——代码正确性与 runner 信号环境正交）。CTY-REL-20261108 W2 归因三证：修复前本机超时/修复后本机绿/同提交 runner 红；同族 B-T2-C1（runtime-context-admission :66）已同波修复转绿非豁免。",
+      "evidence": [
+        "CTX-REL-20261108 W2-evidence.md (apps/desktop SIGINT 三轮实证)",
+        "CI run 42652025042 FAIL vs local 2/2 green (76abf45161)",
+        "CI run 42325510967 same-file red pre-dating the campaign merge"
+      ]
     }
   ]
 }
