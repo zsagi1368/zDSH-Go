@@ -69,9 +69,10 @@ function hostEmitEntry(member: string): string {
  * before that pass, so this producer must skip them.
  */
 function isClientFaceMember(root: string, member: string): boolean {
-  const loaded = ts.readConfigFile(join(root, member, 'tsconfig.json'), ts.sys.readFile)
-  const extendsField = loaded.config?.extends
-  return typeof extendsField === 'string' && extendsField.includes('tsconfig.base.client.json')
+  const loaded = ts.readConfigFile(join(root, member, 'tsconfig.json'), (path: string) => ts.sys.readFile(path))
+  const config = (loaded.config ?? {}) as { extends?: unknown }
+  const extendsField = typeof config.extends === 'string' ? config.extends : ''
+  return extendsField.includes('tsconfig.base.client.json')
 }
 
 /** Compile one member's Host TypeScript entry with the repository compiler. */
