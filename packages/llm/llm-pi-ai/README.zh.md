@@ -240,6 +240,15 @@ pi-ai 事件变成 harness 的推理、文本、工具调用、用量与 finish 
 <a id="dev-note"></a>
 ### 开发备注
 
+#### 线体观测（T3 L5-A）——kill 判据复核操作单（L-4）
+
+`guardObserve` 开关**默认关闭**。操作员开启并积累真实流量后、放宽暴露面前，按本操作单复核（判据来自 D1P2 设计门；固化于此保证复核可复现）：
+
+1. **降级捕获率**——开启开关跑混合负载（工具调用、压缩、模型切换）至少 20 个请求，检查 `cache/guard-observe` 台账事件：降级捕获（A7 三路径）必须低于尝试数的 1%。超限：关闭开关，把失败形态按 `guard-observe.ts` 建单。
+2. **解析成本**——wrapper 每次尝试 JSON 解析线体（三段捕获）。对比开关关/开的 p95 墙钟；超出设计门预算的 p95 回退意味着观测面保持 opt-in 直到解析路径惰性化。
+3. **误报率**——观测仅记录；跨尝试重复出现的未分类形态是白名单缺口而非操作员告警——把反复出现的形态回流进等价类清单（设计 §4.5），不放宽告警路径。
+
+
 <details>
 <summary>维护者的工作上下文——点击展开</summary>
 
@@ -250,3 +259,4 @@ pi-ai 事件变成 harness 的推理、文本、工具调用、用量与 finish 
 - ContextManagement 镜像自本仓治理（2026-11-04 权威侧声明，CTX-OPT-20261104 D7）：插件仓（zDSH-plugins/ContextManagement）`plugin/` 与 `packages/` 轨中的 guardian / L3 / L0 / budget / return-cap 副本是只读、单向生成的快照，唯一权威是本仓。禁双头同步——只改本树，不改快照；用 `node scripts/generate-plugin-snapshots.mjs --check` 对账（含 cache/ledger 双 `declare module` 同形断言），完整声明见该脚本头部。
 
 </details>
+

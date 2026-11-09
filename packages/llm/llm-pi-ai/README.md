@@ -240,6 +240,14 @@ These limits define where the adapter stops and future work begins. They are cur
 <a id="dev-note"></a>
 ### Dev Note
 
+#### Wire-body observation (T3 L5-A) — kill-criteria recheck worksheet (L-4)
+
+The `guardObserve` switch ships **off**. When the operator turns it on and real traffic accumulates, run this worksheet before widening exposure (kill criteria from the D1P2 design gate; recorded here so the recheck is reproducible):
+
+1. **Degraded-count rate** — turn the switch on for a working session, run a mixed workload (tool calls, compaction, model switch) for at least 20 requests, then inspect the `cache/guard-observe` ledger events: degraded captures (A7 paths: parse-failed / non-string-body / hash-failed) must stay under 1% of attempts. Above that: close the switch, file the failing shape against `guard-observe.ts`.
+2. **Parse cost** — the wrapper JSON-parses the wire body per attempt (three-segment capture). Compare p95 wall time with the switch off vs on; a p95 regression beyond the budget recorded in the design gate means the observe-only surface stays opt-in until the parse path is lazy.
+3. **False-alarm rate** — observations are log-only; an unclassified form that repeats across attempts is a whitelist gap, not an operator alarm. Feed recurring forms back into the equivalence-class list (design §4.5) instead of widening the alarm path.
+
 <details>
 <summary>Working context for maintainers — click to expand</summary>
 
