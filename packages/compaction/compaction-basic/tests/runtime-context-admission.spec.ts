@@ -82,8 +82,12 @@ it('retains required cwd in the first request after proactive compaction with op
     // form='snapshot' 回到发送视图；常规路径（载体未被压缩）不产生该消息。
     const restored = events.filter(event => event.type === 'user/message' && event.data.source.kind === 'runtime-context')
     expect(restored).toHaveLength(1)
-    expect(restored[0]?.data.source.kind === 'runtime-context' && restored[0]?.data.source.form === 'snapshot').toBe(true)
-    expect(restored[0]?.data.content.some(block => block.type === 'text' && block.text.includes(JSON.stringify(root)))).toBe(true)
+    type RestoredSnapshotData = { source: { kind: string; form: string }; content: Array<{ type: string; text: string }> }
+    const restoredSnapshot = restored.find(e => (e.data as RestoredSnapshotData).source?.kind === 'runtime-context')
+    expect(restoredSnapshot).toBeDefined()
+    const restoredData = restoredSnapshot!.data as RestoredSnapshotData
+    expect(restoredData.source.form).toBe('snapshot')
+    expect(restoredData.content.some(block => block.type === 'text' && block.text.includes(JSON.stringify(root)))).toBe(true)
     expect(adapter.summaries).toHaveLength(1)
     expect(adapter.conversation).toHaveLength(2)
     // 功能不变式（df655fd11e）：压缩前后两个请求的 wire 视图都带必需 cwd——
