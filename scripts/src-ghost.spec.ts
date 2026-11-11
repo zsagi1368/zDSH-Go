@@ -53,8 +53,10 @@ describe('src ghost guard (R6 dual-instance)', () => {
         continue
       }
       for (const entry of entries) {
-        // `vite-env.d.ts` is authored source (Vite client types), not an emit artifact.
-        if (/\.(js|js\.map|d\.ts|d\.ts\.map)$/.test(entry) && entry !== 'vite-env.d.ts') offenders.push(`${member}/src/${entry}`)
+        // Only `.js`/`.js.map` shadows poison runtime resolution (dual
+        // instances). Generated `*.d.ts` (css-modules, vite-env) are declared
+        // type-only artifacts that authored sources legitimately carry.
+        if (/\.(js|js\.map)$/.test(entry)) offenders.push(`${member}/src/${entry}`)
       }
     }
     expect(offenders).toEqual([])
