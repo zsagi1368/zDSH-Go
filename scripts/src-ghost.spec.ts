@@ -53,7 +53,8 @@ describe('src ghost guard (R6 dual-instance)', () => {
         continue
       }
       for (const entry of entries) {
-        if (/\.(js|js\.map|d\.ts|d\.ts\.map)$/.test(entry)) offenders.push(`${member}/src/${entry}`)
+        // `vite-env.d.ts` is authored source (Vite client types), not an emit artifact.
+        if (/\.(js|js\.map|d\.ts|d\.ts\.map)$/.test(entry) && entry !== 'vite-env.d.ts') offenders.push(`${member}/src/${entry}`)
       }
     }
     expect(offenders).toEqual([])
