@@ -37,7 +37,7 @@ function memberDirs(): string[] {
       for (const pkg of pkgs) out.push(`${base}/${group}/${pkg}`)
     }
   }
-  out.push('apps/cli', 'apps/web')
+  out.push('apps/cli', 'apps/web', 'apps/desktop')
   return out
 }
 
